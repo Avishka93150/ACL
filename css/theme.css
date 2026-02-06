@@ -606,7 +606,7 @@ select.form-control {
     visibility: visible;
 }
 
-.modal {
+.modal-overlay .modal {
     background: white;
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-2xl);
@@ -789,13 +789,13 @@ select.form-control {
         grid-template-columns: 1fr;
     }
     
-    .modal {
+    .modal-overlay .modal {
         max-width: calc(100vw - 32px);
         max-height: calc(100vh - 32px);
         margin: var(--space-4);
     }
-    
-    .modal-body {
+
+    .modal-overlay .modal-body {
         max-height: calc(100vh - 180px);
     }
     
