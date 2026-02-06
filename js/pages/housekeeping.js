@@ -50,7 +50,7 @@ async function loadHousekeeping(container) {
         container.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-broom"></i> Module Gouvernante</h3>
+                    <h3 class="card-title"><i class="fas fa-broom"></i> ${t('housekeeping.title')}</h3>
                     <div class="header-controls">
                         <select id="hk-hotel" onchange="hkChangeHotel(this.value)">
                             ${hkHotels.map(h => `<option value="${h.id}" ${h.id == hkHotelId ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}
@@ -61,10 +61,10 @@ async function loadHousekeeping(container) {
 
                 <div class="tabs">
                     <button class="tab-btn ${hkTab === 'dispatch' ? 'active' : ''}" onclick="hkSwitchTab('dispatch')">
-                        <i class="fas fa-tasks"></i> Dispatch
+                        <i class="fas fa-tasks"></i> ${t('housekeeping.dispatch')}
                     </button>
                     <button class="tab-btn ${hkTab === 'control' ? 'active' : ''}" onclick="hkSwitchTab('control')">
-                        <i class="fas fa-clipboard-check"></i> Contrôle
+                        <i class="fas fa-clipboard-check"></i> ${t('housekeeping.control')}
                     </button>
                     <button class="tab-btn ${hkTab === 'reports' ? 'active' : ''}" onclick="hkSwitchTab('reports')">
                         <i class="fas fa-file-pdf"></i> Rapports
@@ -166,16 +166,16 @@ async function hkLoadDispatch(container) {
 
     container.innerHTML = `
         <div class="dispatch-stats">
-            <div class="stat-item"><span class="stat-number">${stats.total}</span><span class="stat-label">🏠 Chambres</span></div>
-            <div class="stat-item"><span class="stat-number">${stats.dispatched}</span><span class="stat-label">📋 Dispatchées</span></div>
-            <div class="stat-item stat-warning"><span class="stat-number">${stats.pending}</span><span class="stat-label">⏳ En cours</span></div>
-            <div class="stat-item stat-info"><span class="stat-number">${stats.completed}</span><span class="stat-label">🧹 Nettoyées</span></div>
-            <div class="stat-item stat-success"><span class="stat-number">${stats.controlled}</span><span class="stat-label">✅ Contrôlées</span></div>
+            <div class="stat-item"><span class="stat-number">${stats.total}</span><span class="stat-label">${t('housekeeping.total_rooms')}</span></div>
+            <div class="stat-item"><span class="stat-number">${stats.dispatched}</span><span class="stat-label">${t('housekeeping.assigned')}</span></div>
+            <div class="stat-item stat-warning"><span class="stat-number">${stats.pending}</span><span class="stat-label">${t('housekeeping.to_clean')}</span></div>
+            <div class="stat-item stat-info"><span class="stat-number">${stats.completed}</span><span class="stat-label">${t('housekeeping.cleaned')}</span></div>
+            <div class="stat-item stat-success"><span class="stat-number">${stats.controlled}</span><span class="stat-label">${t('housekeeping.controlled')}</span></div>
         </div>
 
         <div class="batch-actions">
-            ${hasPermission('dispatch.create') ? '<button class="btn btn-primary" onclick="hkBatchModal()"><i class="fas fa-layer-group"></i> Dispatch en lot</button>' : ''}
-            ${hasPermission('dispatch.complete') && stats.pending > 0 ? '<button class="btn btn-success" onclick="hkBatchCompleteModal()"><i class="fas fa-check-double"></i> Marquer nettoyées</button>' : ''}
+            ${hasPermission('dispatch.create') ? '<button class="btn btn-primary" onclick="hkBatchModal()"><i class="fas fa-layer-group"></i> ' + t('housekeeping.auto_dispatch') + '</button>' : ''}
+            ${hasPermission('dispatch.complete') && stats.pending > 0 ? '<button class="btn btn-success" onclick="hkBatchCompleteModal()"><i class="fas fa-check-double"></i> ' + t('housekeeping.mark_clean') + '</button>' : ''}
             ${hasPermission('dispatch.create') ? '<button class="btn btn-outline" onclick="hkSelectAll(\'blanc\')">Tout à blanc</button>' : ''}
             ${hasPermission('dispatch.create') ? '<button class="btn btn-outline" onclick="hkSelectAll(\'recouche\')">Tout recouche</button>' : ''}
             ${hasPermission('dispatch.create') ? '<button class="btn btn-outline" onclick="hkClearAll()"><i class="fas fa-eraser"></i> Effacer</button>' : ''}
@@ -191,7 +191,7 @@ async function hkLoadDispatch(container) {
             ${sortedFloors.map(floor => `
                 <div class="floor-section">
                     <div class="floor-header">
-                        <h4><i class="fas fa-layer-group"></i> Étage ${floor} <span class="floor-room-count">(${roomsByFloor[floor].length} chambres)</span></h4>
+                        <h4><i class="fas fa-layer-group"></i> ${t('housekeeping.floor')} ${floor} <span class="floor-room-count">(${roomsByFloor[floor].length})</span></h4>
                         <div class="floor-actions">
                             <button class="btn-sm" onclick="hkSelectFloor('${floor}', 'blanc')" title="Tout à blanc">🧹</button>
                             <button class="btn-sm" onclick="hkSelectFloor('${floor}', 'recouche')" title="Tout recouche">🛏️</button>
@@ -230,7 +230,7 @@ async function hkLoadDispatch(container) {
             `).join('')}
         </div>
 
-        ${rooms.length === 0 ? '<div class="empty-state"><i class="fas fa-door-open"></i><h3>Aucune chambre configurée</h3><p>Ajoutez des chambres dans le module Hôtels</p></div>' : ''}
+        ${rooms.length === 0 ? '<div class="empty-state"><i class="fas fa-door-open"></i><h3>' + t('housekeeping.no_rooms') + '</h3></div>' : ''}
     `;
 }
 
@@ -241,7 +241,7 @@ function hkRoomActions(dispatchId, status, roomNumber) {
     if (status === 'pending') {
         actions = `
             <button class="btn btn-success btn-block" onclick="hkMarkComplete(${dispatchId})">
-                <i class="fas fa-check"></i> Marquer nettoyage terminé
+                <i class="fas fa-check"></i> ${t('housekeeping.mark_clean')}
             </button>
             <button class="btn btn-outline btn-block" onclick="hkClearRoom(${dispatchId}); closeModal();">
                 <i class="fas fa-times"></i> Annuler le dispatch
@@ -275,7 +275,7 @@ function hkRoomActions(dispatchId, status, roomNumber) {
 async function hkMarkComplete(dispatchId) {
     try {
         await API.completeDispatch(dispatchId);
-        toast('Chambre marquée comme nettoyée', 'success');
+        toast(t('housekeeping.mark_clean'), 'success');
         closeModal();
         await hkLoadTab();
     } catch (e) {
@@ -304,7 +304,7 @@ async function hkSelectAll(type) {
         for (const r of (res.rooms || []).filter(r => r.status === 'active')) {
             try { await API.createDispatch({ room_id: r.id, dispatch_date: hkDate, cleaning_type: type }); } catch(e) {}
         }
-        toast('Chambres assignées', 'success');
+        toast(t('housekeeping.assigned'), 'success');
         await hkLoadTab();
     } catch (e) { toast(e.message, 'error'); }
 }
@@ -315,7 +315,7 @@ async function hkSelectFloor(floor, type) {
         for (const r of (res.rooms || []).filter(r => r.status === 'active' && r.floor == floor)) {
             try { await API.createDispatch({ room_id: r.id, dispatch_date: hkDate, cleaning_type: type }); } catch(e) {}
         }
-        toast(`Étage ${floor} assigné`, 'success');
+        toast(`${t('housekeeping.floor')} ${floor} - ${t('housekeeping.assigned')}`, 'success');
         await hkLoadTab();
     } catch (e) { toast(e.message, 'error'); }
 }
@@ -333,7 +333,7 @@ async function hkClearAll() {
 }
 
 function hkBatchModal() {
-    openModal('Dispatch en lot', `
+    openModal(t('housekeeping.auto_dispatch'), `
         <form onsubmit="hkBatchSubmit(event)">
             <div class="form-group">
                 <label>Type de ménage</label>
@@ -354,8 +354,8 @@ function hkBatchModal() {
             </div>
             <div class="modal-footer">
                 <span id="batch-count">0 sélectionnée(s)</span>
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Appliquer</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.save')}</button>
             </div>
         </form>
     `);
@@ -390,9 +390,9 @@ async function hkLoadBatchRooms() {
             <div class="batch-floor">
                 <div class="batch-floor-header">
                     <label>
-                        <input type="checkbox" onchange="hkToggleFloor(this, '${floor}')"> 
-                        <strong>Étage ${floor}</strong>
-                        <span class="floor-count">(${byFloor[floor].length} chambres)</span>
+                        <input type="checkbox" onchange="hkToggleFloor(this, '${floor}')">
+                        <strong>${t('housekeeping.floor')} ${floor}</strong>
+                        <span class="floor-count">(${byFloor[floor].length})</span>
                     </label>
                 </div>
                 <div class="batch-floor-rooms" data-floor="${floor}">
@@ -428,7 +428,7 @@ async function hkBatchSubmit(e) {
     e.preventDefault();
     const type = new FormData(e.target).get('cleaning_type');
     const ids = [...document.querySelectorAll('input[name="rooms"]:checked')].map(c => +c.value);
-    if (!ids.length) { toast('Sélectionnez des chambres', 'warning'); return; }
+    if (!ids.length) { toast(t('housekeeping.select_rooms'), 'warning'); return; }
     
     try {
         for (const id of ids) {
@@ -443,16 +443,16 @@ async function hkBatchSubmit(e) {
 // ========== BATCH COMPLETE (Marquer plusieurs chambres nettoyées) ==========
 
 async function hkBatchCompleteModal() {
-    openModal('Marquer les chambres nettoyées', `
+    openModal(t('housekeeping.mark_clean'), `
         <p class="text-muted mb-20">Sélectionnez les chambres à passer en "Nettoyées" pour le contrôle.</p>
         <div class="batch-rooms-list" id="batch-complete-rooms">
             <div class="loading"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>
         </div>
         <div class="modal-footer">
             <span id="batch-complete-count">0 sélectionnée(s)</span>
-            <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+            <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
             <button type="button" class="btn btn-success" onclick="hkBatchCompleteSubmit()">
-                <i class="fas fa-check-double"></i> Marquer nettoyées
+                <i class="fas fa-check-double"></i> ${t('housekeeping.mark_clean')}
             </button>
         </div>
     `);

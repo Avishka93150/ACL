@@ -19,7 +19,7 @@ async function loadMyData(container) {
         
         container.innerHTML = `
             <div class="page-header">
-                <h2><i class="fas fa-user-shield"></i> Mes données personnelles</h2>
+                <h2><i class="fas fa-user-shield"></i> ${t('rgpd.my_data')}</h2>
             </div>
             
             <div class="rgpd-info-banner">
@@ -87,7 +87,7 @@ async function loadMyData(container) {
             
             <div class="card mt-20">
                 <div class="card-header">
-                    <h4><i class="fas fa-history"></i> Historique de mes accès</h4>
+                    <h4><i class="fas fa-history"></i> ${t('rgpd.access_logs')}</h4>
                 </div>
                 <div class="card-body">
                     ${accessLogs.length === 0 ? `
@@ -122,11 +122,11 @@ async function loadMyData(container) {
             
             <div class="card mt-20">
                 <div class="card-header">
-                    <h4><i class="fas fa-clipboard-list"></i> Mes demandes RGPD</h4>
+                    <h4><i class="fas fa-clipboard-list"></i> ${t('rgpd.requests')}</h4>
                 </div>
                 <div class="card-body">
                     ${requests.length === 0 ? `
-                        <p class="text-muted">Aucune demande RGPD en cours.</p>
+                        <p class="text-muted">${t('rgpd.no_requests')}</p>
                     ` : `
                         <div class="table-responsive">
                             <table class="table">
@@ -153,16 +153,16 @@ async function loadMyData(container) {
                     `}
                     
                     <div class="rgpd-actions mt-20">
-                        <h5>Effectuer une demande</h5>
+                        <h5>${t('rgpd.new_request')}</h5>
                         <div class="btn-group-vertical">
                             <button class="btn btn-outline" onclick="rgpdRequestAccess()">
-                                <i class="fas fa-eye"></i> Demande d'accès complet
+                                <i class="fas fa-eye"></i> ${t('rgpd.access_request')}
                             </button>
                             <button class="btn btn-outline" onclick="rgpdRequestPortability()">
-                                <i class="fas fa-file-export"></i> Demande de portabilité
+                                <i class="fas fa-file-export"></i> ${t('rgpd.portability_request')}
                             </button>
                             <button class="btn btn-danger" onclick="rgpdRequestErasure()">
-                                <i class="fas fa-trash-alt"></i> Demande de suppression de compte
+                                <i class="fas fa-trash-alt"></i> ${t('rgpd.deletion_request')}
                             </button>
                         </div>
                     </div>
@@ -284,8 +284,8 @@ function rgpdManageConsents() {
             </div>
             
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Enregistrer</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.save')}</button>
             </div>
         </form>
     `);
@@ -398,45 +398,45 @@ function convertToCSV(data) {
 // ==================== DEMANDES RGPD ====================
 
 function rgpdRequestAccess() {
-    openModal('Demande d\'accès aux données', `
+    openModal(t('rgpd.access_request'), `
         <form onsubmit="rgpdSubmitRequest(event, 'access')">
             <p>Vous souhaitez obtenir une copie complète de toutes les données personnelles que nous détenons à votre sujet.</p>
             <p class="text-muted">Cette demande sera traitée dans un délai maximum de 30 jours.</p>
             
             <div class="form-group">
-                <label>Précisions (optionnel)</label>
+                <label>${t('rgpd.reason')}</label>
                 <textarea name="reason" rows="3" placeholder="Précisez votre demande si nécessaire..."></textarea>
             </div>
-            
+
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Envoyer la demande</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('rgpd.new_request')}</button>
             </div>
         </form>
     `);
 }
 
 function rgpdRequestPortability() {
-    openModal('Demande de portabilité des données', `
+    openModal(t('rgpd.portability_request'), `
         <form onsubmit="rgpdSubmitRequest(event, 'portability')">
             <p>Vous souhaitez recevoir vos données dans un format structuré et lisible par machine (JSON) pour les transférer à un autre service.</p>
             <p class="text-muted">Cette demande sera traitée dans un délai maximum de 30 jours.</p>
             
             <div class="form-group">
-                <label>Précisions (optionnel)</label>
+                <label>${t('rgpd.reason')}</label>
                 <textarea name="reason" rows="3" placeholder="Précisez votre demande si nécessaire..."></textarea>
             </div>
-            
+
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Envoyer la demande</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('rgpd.new_request')}</button>
             </div>
         </form>
     `);
 }
 
 function rgpdRequestErasure() {
-    openModal('Demande de suppression de compte', `
+    openModal(t('rgpd.deletion_request'), `
         <form onsubmit="rgpdSubmitRequest(event, 'erasure')">
             <div class="alert alert-danger">
                 <i class="fas fa-exclamation-triangle"></i>
@@ -454,7 +454,7 @@ function rgpdRequestErasure() {
             </ul>
             
             <div class="form-group">
-                <label>Motif de la demande *</label>
+                <label>${t('rgpd.reason')} *</label>
                 <textarea name="reason" rows="3" required placeholder="Veuillez indiquer la raison de votre demande..."></textarea>
             </div>
             
@@ -466,8 +466,8 @@ function rgpdRequestErasure() {
             </div>
             
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-danger">Confirmer la suppression</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-danger">${t('common.delete')}</button>
             </div>
         </form>
     `);
@@ -480,7 +480,7 @@ async function rgpdSubmitRequest(e, type) {
     
     try {
         await API.post('/rgpd/request', { type, reason });
-        toast('Demande envoyée. Vous recevrez une réponse sous 30 jours.', 'success');
+        toast(t('rgpd.request_created'), 'success');
         closeModal();
         loadMyData(document.getElementById('page-content'));
     } catch (e) {
@@ -491,7 +491,7 @@ async function rgpdSubmitRequest(e, type) {
 // ==================== PAGES LEGALES ====================
 
 function showPrivacyPolicy() {
-    openModal('Politique de confidentialité', `
+    openModal(t('rgpd.privacy_policy'), `
         <div class="legal-content">
             <h4>1. Introduction</h4>
             <p>La présente politique de confidentialité décrit comment ACL GESTION collecte, utilise et protège vos données personnelles conformément au Règlement Général sur la Protection des Données (RGPD).</p>
@@ -560,7 +560,7 @@ function showPrivacyPolicy() {
 }
 
 function showLegalNotice() {
-    openModal('Mentions légales', `
+    openModal(t('rgpd.legal_notice'), `
         <div class="legal-content">
             <h4>1. Éditeur du site</h4>
             <p>
@@ -695,7 +695,7 @@ async function loadRgpdAdmin(container) {
         
         container.innerHTML = `
             <div class="page-header">
-                <h2><i class="fas fa-user-shield"></i> Administration RGPD</h2>
+                <h2><i class="fas fa-user-shield"></i> ${t('rgpd.title')}</h2>
             </div>
             
             <div class="stats-row mb-20">
@@ -724,13 +724,13 @@ async function loadRgpdAdmin(container) {
             
             <div class="card">
                 <div class="card-header">
-                    <h4><i class="fas fa-clipboard-list"></i> Demandes RGPD</h4>
+                    <h4><i class="fas fa-clipboard-list"></i> ${t('rgpd.requests')}</h4>
                 </div>
                 <div class="card-body">
                     ${requests.length === 0 ? `
                         <div class="empty-state">
                             <i class="fas fa-inbox"></i>
-                            <p>Aucune demande RGPD</p>
+                            <p>${t('rgpd.no_requests')}</p>
                         </div>
                     ` : `
                         <div class="table-responsive">
@@ -800,7 +800,7 @@ async function rgpdViewRequest(requestId) {
         const res = await API.get(`/rgpd/admin/requests/${requestId}`);
         const req = res.request;
         
-        openModal('Détail de la demande RGPD', `
+        openModal(t('rgpd.details'), `
             <div class="rgpd-request-detail">
                 <div class="form-row">
                     <div class="form-group">
@@ -808,7 +808,7 @@ async function rgpdViewRequest(requestId) {
                         <p><strong>${esc(req.user_name)}</strong> (${esc(req.user_email)})</p>
                     </div>
                     <div class="form-group">
-                        <label>Type de demande</label>
+                        <label>${t('rgpd.request_type')}</label>
                         <p>${getRequestTypeLabel(req.request_type)}</p>
                     </div>
                 </div>
@@ -825,7 +825,7 @@ async function rgpdViewRequest(requestId) {
                 </div>
                 
                 <div class="form-group">
-                    <label>Motif de la demande</label>
+                    <label>${t('rgpd.reason')}</label>
                     <p>${esc(req.reason) || '<em>Non renseigné</em>'}</p>
                 </div>
                 
@@ -847,9 +847,9 @@ async function rgpdViewRequest(requestId) {
                             <label>Action</label>
                             <select name="status" required>
                                 <option value="">-- Sélectionner --</option>
-                                <option value="processing">Marquer en cours</option>
-                                <option value="completed">Marquer comme traitée</option>
-                                <option value="rejected">Rejeter</option>
+                                <option value="processing">${t('rgpd.process')}</option>
+                                <option value="completed">${t('rgpd.request_processed')}</option>
+                                <option value="rejected">${t('rgpd.reject')}</option>
                             </select>
                         </div>
                         <div class="modal-footer">
@@ -879,7 +879,7 @@ async function rgpdUpdateRequest(e, requestId) {
     
     try {
         await API.put(`/rgpd/admin/requests/${requestId}`, data);
-        toast('Demande mise à jour', 'success');
+        toast(t('rgpd.request_processed'), 'success');
         closeModal();
         loadRgpdAdmin(document.getElementById('page-content'));
     } catch (e) {
@@ -890,7 +890,7 @@ async function rgpdUpdateRequest(e, requestId) {
 async function rgpdProcessRequest(requestId) {
     try {
         await API.put(`/rgpd/admin/requests/${requestId}`, { status: 'processing' });
-        toast('Demande marquée en cours de traitement', 'success');
+        toast(t('rgpd.process'), 'success');
         loadRgpdAdmin(document.getElementById('page-content'));
     } catch (e) {
         toast(e.message, 'error');

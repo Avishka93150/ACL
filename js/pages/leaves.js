@@ -10,8 +10,8 @@ const TRIMESTRES = [
 ];
 
 const LEAVE_TYPES = [
-    { value: 'cp', label: 'Congés payés', icon: 'umbrella-beach', color: '#3498db' },
-    { value: 'maladie', label: 'Arrêt maladie', icon: 'notes-medical', color: '#e74c3c', requiresJustificatif: true }
+    { value: 'cp', label: t('leaves.paid_leave'), icon: 'umbrella-beach', color: '#3498db' },
+    { value: 'maladie', label: t('leaves.sick_leave'), icon: 'notes-medical', color: '#e74c3c', requiresJustificatif: true }
 ];
 
 let lvHotels = [];
@@ -55,8 +55,8 @@ async function loadLeaves(container) {
         container.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-calendar-alt"></i> Gestion des congés</h3>
-                    ${canCreate ? '<button class="btn btn-primary" onclick="lvNewLeaveModal()"><i class="fas fa-plus"></i> Nouvelle demande</button>' : ''}
+                    <h3 class="card-title"><i class="fas fa-calendar-alt"></i> ${t('leaves.title')}</h3>
+                    ${canCreate ? '<button class="btn btn-primary" onclick="lvNewLeaveModal()"><i class="fas fa-plus"></i> ' + t('leaves.new_request') + '</button>' : ''}
                 </div>
 
                 <!-- Info trimestres -->
@@ -88,7 +88,7 @@ async function loadLeaves(container) {
                         <span class="badge badge-warning">${toValidate.length}</span>
                     </div>
                     <table>
-                        <thead><tr><th>Employé</th><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Justificatif</th><th>Demandé le</th><th>Actions</th></tr></thead>
+                        <thead><tr><th>${t('leaves.requested_by')}</th><th>${t('leaves.type')}</th><th>${t('leaves.start_date')}</th><th>${t('leaves.end_date')}</th><th>${t('leaves.days')}</th><th>${t('leaves.attachment')}</th><th>Demandé le</th><th>Actions</th></tr></thead>
                         <tbody>
                             ${toValidate.map(l => `
                                 <tr class="${l.leave_type === 'maladie' ? 'row-maladie' : ''}">
@@ -104,16 +104,16 @@ async function loadLeaves(container) {
                                     <td>${l.days_count || '-'}</td>
                                     <td>
                                         ${l.justificatif_url ? `
-                                            <a href="${l.justificatif_url}" target="_blank" class="btn btn-xs btn-outline" title="Voir le justificatif">
-                                                <i class="fas fa-file-pdf"></i> Voir
+                                            <a href="${l.justificatif_url}" target="_blank" class="btn btn-xs btn-outline" title="${t('leaves.view_attachment')}">
+                                                <i class="fas fa-file-pdf"></i> ${t('leaves.view_attachment')}
                                             </a>
                                         ` : '<span class="text-muted">-</span>'}
                                     </td>
                                     <td>${formatDateFR(l.created_at)}</td>
                                     <td>
                                         <div class="table-actions">
-                                            <button onclick="lvApprove(${l.id})" class="btn-action-success" title="Approuver"><i class="fas fa-check"></i></button>
-                                            <button onclick="lvRejectModal(${l.id})" class="btn-action-danger" title="Refuser"><i class="fas fa-times"></i></button>
+                                            <button onclick="lvApprove(${l.id})" class="btn-action-success" title="${t('leaves.approve')}"><i class="fas fa-check"></i></button>
+                                            <button onclick="lvRejectModal(${l.id})" class="btn-action-danger" title="${t('leaves.reject')}"><i class="fas fa-times"></i></button>
                                         </div>
                                     </td>
                                 </tr>
@@ -126,7 +126,7 @@ async function loadLeaves(container) {
             <!-- Mon historique personnel -->
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-user-clock"></i> Mon historique</h3>
+                    <h3 class="card-title"><i class="fas fa-user-clock"></i> ${t('leaves.my_leaves')}</h3>
                 </div>
                 
                 <!-- Statistiques personnelles -->
@@ -174,8 +174,8 @@ async function loadLeaves(container) {
                     <div class="filter-group">
                         <select id="my-history-type" class="form-control" onchange="lvFilterMyHistory()">
                             <option value="">Tous les types</option>
-                            <option value="cp">Congés payés</option>
-                            <option value="maladie">Arrêts maladie</option>
+                            <option value="cp">${t('leaves.paid_leave')}</option>
+                            <option value="maladie">${t('leaves.sick_leave')}</option>
                         </select>
                     </div>
                     <div class="filter-group">
@@ -196,7 +196,7 @@ async function loadLeaves(container) {
 
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-users"></i> Congés validés - Mes hôtels</h3>
+                    <h3 class="card-title"><i class="fas fa-users"></i> ${t('leaves.team_leaves')}</h3>
                 </div>
                 <div class="leaves-filters">
                     <div class="filter-row">
@@ -230,10 +230,10 @@ async function loadLeaves(container) {
             ${canValidate ? `
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-user-plus"></i> Poser des congés pour un collaborateur</h3>
+                        <h3 class="card-title"><i class="fas fa-user-plus"></i> ${t('leaves.enter_leaves')}</h3>
                     </div>
                     <p class="text-muted mb-20">En tant que responsable, vous pouvez saisir des congés pour les collaborateurs de vos hôtels sans restriction de délai.</p>
-                    <button class="btn btn-outline" onclick="lvNewLeaveForOtherModal()"><i class="fas fa-user-plus"></i> Saisir pour un collaborateur</button>
+                    <button class="btn btn-outline" onclick="lvNewLeaveForOtherModal()"><i class="fas fa-user-plus"></i> ${t('leaves.enter_leaves')}</button>
                 </div>
                 
                 <div class="card">
@@ -281,7 +281,7 @@ async function loadLeaves(container) {
                     <div class="card-header">
                         <h3 class="card-title"><i class="fas fa-history"></i> Historique des absences - Équipe</h3>
                         <button class="btn btn-sm btn-outline" onclick="lvExportHistory()">
-                            <i class="fas fa-download"></i> Exporter
+                            <i class="fas fa-download"></i> ${t('leaves.export')}
                         </button>
                     </div>
                     <div class="card-body">
@@ -297,11 +297,11 @@ async function loadLeaves(container) {
                                     </div>
                                 ` : ''}
                                 <div class="filter-group">
-                                    <label><i class="fas fa-filter"></i> Type</label>
+                                    <label><i class="fas fa-filter"></i> ${t('leaves.type')}</label>
                                     <select id="history-type" class="form-control" onchange="lvLoadHistory()">
                                         <option value="">Tous les types</option>
-                                        <option value="cp">Congés payés</option>
-                                        <option value="maladie">Arrêts maladie</option>
+                                        <option value="cp">${t('leaves.paid_leave')}</option>
+                                        <option value="maladie">${t('leaves.sick_leave')}</option>
                                     </select>
                                 </div>
                                 <div class="filter-group">
@@ -323,7 +323,7 @@ async function loadLeaves(container) {
                                            onchange="lvLoadHistory()">
                                 </div>
                                 <div class="filter-group">
-                                    <label><i class="fas fa-check-circle"></i> Statut</label>
+                                    <label><i class="fas fa-check-circle"></i> ${t('leaves.status')}</label>
                                     <select id="history-status" class="form-control" onchange="lvLoadHistory()">
                                         <option value="">Tous</option>
                                         <option value="approved" selected>Validés</option>
@@ -362,8 +362,8 @@ function lvRenderHotelLeaves(leaves) {
         return `
             <div class="empty-state" style="padding: 30px;">
                 <i class="fas fa-calendar-check"></i>
-                <h3>Aucun congé prévu</h3>
-                <p class="text-muted">Aucun collaborateur n'a de congés validés sur cette période</p>
+                <h3>${t('leaves.no_leaves')}</h3>
+                <p class="text-muted">${t('leaves.no_leaves_desc')}</p>
             </div>
         `;
     }
@@ -427,8 +427,8 @@ function lvRenderMyHistory(leaves) {
         return `
             <div class="empty-state" style="padding: 30px;">
                 <i class="fas fa-calendar-check"></i>
-                <h3>Aucune demande</h3>
-                <p class="text-muted">Vous n'avez pas encore fait de demande de congés</p>
+                <h3>${t('leaves.no_leaves')}</h3>
+                <p class="text-muted">${t('leaves.no_leaves_desc')}</p>
             </div>
         `;
     }
@@ -497,7 +497,7 @@ function lvRenderMyHistory(leaves) {
                                 ${l.justificatif_url ? `
                                     <div class="history-card-attachment">
                                         <a href="${l.justificatif_url}" target="_blank" class="btn btn-xs btn-outline">
-                                            <i class="fas fa-file-pdf"></i> Voir justificatif
+                                            <i class="fas fa-file-pdf"></i> ${t('leaves.view_attachment')}
                                         </a>
                                     </div>
                                 ` : ''}
@@ -677,8 +677,8 @@ async function lvLoadHistory() {
             container.innerHTML = `
                 <div class="empty-state" style="padding: 40px;">
                     <i class="fas fa-search"></i>
-                    <h3>Aucun résultat</h3>
-                    <p class="text-muted">Aucune absence trouvée pour les critères sélectionnés</p>
+                    <h3>${t('leaves.no_leaves')}</h3>
+                    <p class="text-muted">${t('leaves.no_leaves_desc')}</p>
                 </div>
             `;
             return;
@@ -688,15 +688,15 @@ async function lvLoadHistory() {
             <table class="table history-table">
                 <thead>
                     <tr>
-                        <th>Collaborateur</th>
+                        <th>${t('leaves.requested_by')}</th>
                         <th>Hôtel</th>
-                        <th>Type</th>
-                        <th>Du</th>
-                        <th>Au</th>
-                        <th>Jours</th>
-                        <th>Statut</th>
-                        <th>Justificatif</th>
-                        <th>Validé par</th>
+                        <th>${t('leaves.type')}</th>
+                        <th>${t('leaves.start_date')}</th>
+                        <th>${t('leaves.end_date')}</th>
+                        <th>${t('leaves.days')}</th>
+                        <th>${t('leaves.status')}</th>
+                        <th>${t('leaves.attachment')}</th>
+                        <th>${t('leaves.approved_by')}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -725,7 +725,7 @@ async function lvLoadHistory() {
                                 <td>${lvStatusBadge(l.status)}</td>
                                 <td>
                                     ${l.justificatif_url ? `
-                                        <a href="${l.justificatif_url}" target="_blank" class="btn btn-xs btn-outline" title="Voir le justificatif">
+                                        <a href="${l.justificatif_url}" target="_blank" class="btn btn-xs btn-outline" title="${t('leaves.view_attachment')}">
                                             <i class="fas fa-file-pdf"></i>
                                         </a>
                                     ` : '<span class="text-muted">-</span>'}
@@ -773,9 +773,9 @@ async function lvExportHistory() {
         a.click();
         window.URL.revokeObjectURL(url);
         
-        toast('Export téléchargé', 'success');
+        toast(t('leaves.export_downloaded'), 'success');
     } catch (e) {
-        toast('Erreur lors de l\'export', 'error');
+        toast(t('common.error'), 'error');
     }
 }
 
@@ -790,7 +790,7 @@ function lvNewLeaveModal() {
     const today = new Date().toISOString().split('T')[0];
     const minDate = lvGetMinDate();
 
-    openModal('Nouvelle demande', `
+    openModal(t('leaves.new_request'), `
         <form onsubmit="lvCreateLeave(event)" id="leave-form" enctype="multipart/form-data">
             <div class="leave-type-selector">
                 <label class="leave-type-label">Type de demande *</label>
@@ -810,11 +810,11 @@ function lvNewLeaveModal() {
             
             <div class="form-row">
                 <div class="form-group">
-                    <label><i class="fas fa-calendar-alt"></i> Date de début *</label>
+                    <label><i class="fas fa-calendar-alt"></i> ${t('leaves.start_date')} *</label>
                     <input type="date" name="start_date" required min="${today}" onchange="lvUpdateEndDateMin(this)">
                 </div>
                 <div class="form-group">
-                    <label><i class="fas fa-calendar-check"></i> Date de fin *</label>
+                    <label><i class="fas fa-calendar-check"></i> ${t('leaves.end_date')} *</label>
                     <input type="date" name="end_date" required min="${today}">
                 </div>
             </div>
@@ -833,7 +833,7 @@ function lvNewLeaveModal() {
                             <span class="upload-main">Glissez votre arrêt de travail ici</span>
                             <span class="upload-sub">ou cliquez pour sélectionner</span>
                         </div>
-                        <div class="upload-formats">PDF uniquement (max 5Mo)</div>
+                        <div class="upload-formats">${t('leaves.pdf_only')}</div>
                     </div>
                     <div class="upload-preview" id="upload-preview" style="display: none;">
                         <i class="fas fa-file-pdf"></i>
@@ -849,7 +849,7 @@ function lvNewLeaveModal() {
             </div>
             
             <div class="form-group">
-                <label><i class="fas fa-comment"></i> Commentaire</label>
+                <label><i class="fas fa-comment"></i> ${t('leaves.comment')}</label>
                 <textarea name="comment" rows="2" placeholder="Précisions éventuelles..."></textarea>
             </div>
             
@@ -859,8 +859,8 @@ function lvNewLeaveModal() {
             </div>
             
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Soumettre la demande</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> ${t('leaves.new_request')}</button>
             </div>
         </form>
     `);
@@ -935,7 +935,7 @@ function lvHandleDrop(event) {
             input.files = dataTransfer.files;
             lvHandleFileSelect(input);
         } else {
-            toast('Seuls les fichiers PDF sont acceptés', 'error');
+            toast(t('leaves.pdf_only'), 'error');
         }
     }
 }
@@ -943,9 +943,9 @@ function lvHandleDrop(event) {
 function lvHandleFileSelect(input) {
     if (input.files && input.files[0]) {
         const file = input.files[0];
-        
+
         if (file.type !== 'application/pdf') {
-            toast('Seuls les fichiers PDF sont acceptés', 'error');
+            toast(t('leaves.pdf_only'), 'error');
             input.value = '';
             return;
         }
@@ -1025,7 +1025,7 @@ async function lvCreateLeave(e) {
             await API.createLeave(data);
         }
         
-        toast('Demande soumise avec succès ! Les responsables ont été notifiés.', 'success');
+        toast(t('leaves.request_created'), 'success');
         closeModal();
         loadLeaves(document.getElementById('page-content'));
     } catch (e) { 
@@ -1040,7 +1040,7 @@ async function lvNewLeaveForOtherModal() {
         const users = usersRes.users || [];
         const today = new Date().toISOString().split('T')[0];
 
-        openModal('Saisir des congés pour un collaborateur', `
+        openModal(t('leaves.enter_leaves'), `
             <form onsubmit="lvCreateLeaveForOther(event)" id="leave-other-form" enctype="multipart/form-data">
                 <div class="form-group">
                     <label><i class="fas fa-user"></i> Collaborateur *</label>
@@ -1068,11 +1068,11 @@ async function lvNewLeaveForOtherModal() {
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label><i class="fas fa-calendar-alt"></i> Date de début *</label>
+                        <label><i class="fas fa-calendar-alt"></i> ${t('leaves.start_date')} *</label>
                         <input type="date" name="start_date" required value="${today}">
                     </div>
                     <div class="form-group">
-                        <label><i class="fas fa-calendar-check"></i> Date de fin *</label>
+                        <label><i class="fas fa-calendar-check"></i> ${t('leaves.end_date')} *</label>
                         <input type="date" name="end_date" required value="${today}">
                     </div>
                 </div>
@@ -1086,7 +1086,7 @@ async function lvNewLeaveForOtherModal() {
                             <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
                             <div class="upload-text">
                                 <span class="upload-main">Cliquez pour sélectionner</span>
-                                <span class="upload-sub">PDF uniquement (max 5Mo)</span>
+                                <span class="upload-sub">${t('leaves.pdf_only')}</span>
                             </div>
                         </div>
                         <div class="upload-preview" id="upload-preview-other" style="display: none;">
@@ -1102,15 +1102,15 @@ async function lvNewLeaveForOtherModal() {
                 </div>
                 
                 <div class="form-group">
-                    <label><i class="fas fa-comment"></i> Commentaire</label>
+                    <label><i class="fas fa-comment"></i> ${t('leaves.comment')}</label>
                     <textarea name="comment" rows="2" placeholder="Précisions..."></textarea>
                 </div>
                 
                 <p class="text-muted"><i class="fas fa-info-circle"></i> Pas de restriction de délai pour les responsables.</p>
                 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
+                    <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> ${t('common.save')}</button>
                 </div>
             </form>
         `, 'modal-lg');
@@ -1141,9 +1141,9 @@ function lvSelectLeaveTypeOther(type) {
 function lvHandleFileSelectOther(input) {
     if (input.files && input.files[0]) {
         const file = input.files[0];
-        
+
         if (file.type !== 'application/pdf') {
-            toast('Seuls les fichiers PDF sont acceptés', 'error');
+            toast(t('leaves.pdf_only'), 'error');
             input.value = '';
             return;
         }
@@ -1194,7 +1194,7 @@ async function lvCreateLeaveForOther(e) {
             await API.createLeaveForOther(data);
         }
         
-        toast('Congés enregistrés avec succès', 'success');
+        toast(t('leaves.request_created'), 'success');
         closeModal();
         loadLeaves(document.getElementById('page-content'));
     } catch (e) { toast(e.message, 'error'); }
@@ -1205,37 +1205,37 @@ async function lvApproveSubmit(e, id) {
     const comment = new FormData(e.target).get('comment') || '';
     try {
         await API.approveLeave(id, comment);
-        toast('Demande approuvée', 'success');
+        toast(t('leaves.request_approved'), 'success');
         closeModal();
         loadLeaves(document.getElementById('page-content'));
     } catch (e) { toast(e.message, 'error'); }
 }
 
 function lvApprove(id) {
-    openModal('Approuver la demande', `
+    openModal(t('leaves.approve'), `
         <form onsubmit="lvApproveSubmit(event, ${id})">
             <div class="form-group">
-                <label>Commentaire (optionnel)</label>
+                <label>${t('leaves.comment')}</label>
                 <textarea name="comment" rows="3" placeholder="Ajouter un commentaire si nécessaire..."></textarea>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Approuver</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> ${t('leaves.approve')}</button>
             </div>
         </form>
     `);
 }
 
 function lvRejectModal(id) {
-    openModal('Refuser la demande', `
+    openModal(t('leaves.reject'), `
         <form onsubmit="lvReject(event, ${id})">
             <div class="form-group">
-                <label>Motif du refus *</label>
+                <label>${t('leaves.reason')} *</label>
                 <textarea name="reason" rows="3" required placeholder="Expliquez le motif du refus..."></textarea>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-danger">Refuser</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-danger">${t('leaves.reject')}</button>
             </div>
         </form>
     `);
@@ -1246,7 +1246,7 @@ async function lvReject(e, id) {
     const reason = new FormData(e.target).get('reason');
     try {
         await API.rejectLeave(id, reason);
-        toast('Demande refusée', 'success');
+        toast(t('leaves.request_rejected'), 'success');
         closeModal();
         loadLeaves(document.getElementById('page-content'));
     } catch (e) { toast(e.message, 'error'); }

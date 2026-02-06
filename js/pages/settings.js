@@ -249,7 +249,7 @@ let currentModules = {};
 
 async function loadSettings(container) {
     if (API.user.role !== 'admin') {
-        container.innerHTML = '<div class="card"><p class="text-danger">Accès réservé aux administrateurs</p></div>';
+        container.innerHTML = '<div class="card"><p class="text-danger">' + t('settings.admin_only') + '</p></div>';
         return;
     }
     
@@ -301,7 +301,7 @@ async function loadSettings(container) {
                 
                 <div class="mt-20">
                     <button class="btn btn-primary" onclick="saveModulesConfig()">
-                        <i class="fas fa-save"></i> Enregistrer la configuration des modules
+                        <i class="fas fa-save"></i> ${t('common.save')}
                     </button>
                 </div>
             </div>
@@ -327,7 +327,7 @@ async function loadSettings(container) {
             <!-- Section Permissions -->
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-shield-alt"></i> Matrice des permissions</h3>
+                    <h3 class="card-title"><i class="fas fa-shield-alt"></i> ${t('settings.role_permissions')}</h3>
                 </div>
                 <p class="text-muted mb-20">
                     Configurez les permissions pour chaque rôle. Cochez/décochez pour activer/désactiver une permission.
@@ -340,7 +340,7 @@ async function loadSettings(container) {
                 
                 <div class="mt-20" style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button class="btn btn-primary" onclick="saveAllPermissions()">
-                        <i class="fas fa-save"></i> Enregistrer les permissions
+                        <i class="fas fa-save"></i> ${t('common.save')}
                     </button>
                     <button class="btn btn-outline" onclick="resetToDefaults()">
                         <i class="fas fa-undo"></i> Réinitialiser par défaut
@@ -366,7 +366,7 @@ async function loadSettings(container) {
             </div>
         `;
     } catch (error) {
-        container.innerHTML = `<div class="card"><p class="text-danger">Erreur: ${error.message}</p></div>`;
+        container.innerHTML = `<div class="card"><p class="text-danger">${t('common.error')}: ${error.message}</p></div>`;
     }
 }
 
@@ -433,7 +433,7 @@ async function saveModulesConfig() {
             console.log('Server confirmed saved:', result.saved);
         }
         
-        toast('Configuration des modules enregistrée', 'success');
+        toast(t('settings.saved'), 'success');
         
         // Synchroniser avec la variable globale de app.js
         if (typeof enabledModules !== 'undefined') {
@@ -446,7 +446,7 @@ async function saveModulesConfig() {
         updateSidebarModulesFromSettings();
     } catch (error) {
         console.error('Error saving modules:', error);
-        toast('Erreur: ' + error.message, 'error');
+        toast(t('common.error') + ': ' + error.message, 'error');
     }
 }
 
@@ -516,7 +516,7 @@ function renderPermissionsTable() {
             <table class="permissions-table">
                 <thead>
                     <tr>
-                        <th style="min-width:200px">Permission</th>
+                        <th style="min-width:200px">${t('settings.permissions')}</th>
                         <th class="text-center" style="min-width:80px">
                             <div class="role-header role-admin-header">
                                 <i class="fas fa-crown"></i><br>Admin
@@ -555,9 +555,9 @@ async function saveAllPermissions() {
                 await API.updateRolePermissions(role, currentPermissions[role]);
             }
         }
-        toast('Permissions enregistrées avec succès', 'success');
+        toast(t('settings.permission_updated'), 'success');
     } catch (error) {
-        toast('Erreur: ' + error.message, 'error');
+        toast(t('common.error') + ': ' + error.message, 'error');
     }
 }
 
@@ -568,9 +568,9 @@ async function resetToDefaults() {
         for (const [role, perms] of Object.entries(DEFAULT_PERMISSIONS)) {
             await API.updateRolePermissions(role, perms);
         }
-        toast('Permissions réinitialisées', 'success');
+        toast(t('settings.saved'), 'success');
         loadSettings(document.getElementById('page-content'));
     } catch (error) {
-        toast('Erreur: ' + error.message, 'error');
+        toast(t('common.error') + ': ' + error.message, 'error');
     }
 }

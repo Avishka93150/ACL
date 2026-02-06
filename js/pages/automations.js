@@ -42,15 +42,15 @@ async function initAutomations() {
     container.innerHTML = `
         <div class="page-header">
             <div>
-                <h2><i class="fas fa-robot"></i> Gestion des Automatisations</h2>
-                <p class="text-muted">Configurez les tâches automatiques, planifications et notifications</p>
+                <h2><i class="fas fa-robot"></i> ${t('automations.title')}</h2>
+                <p class="text-muted">${t('automations.subtitle')}</p>
             </div>
             <div class="header-actions">
                 <button class="btn btn-outline" onclick="viewAutomationLogs()">
-                    <i class="fas fa-history"></i> Historique
+                    <i class="fas fa-history"></i> ${t('automations.history')}
                 </button>
                 <button class="btn btn-primary" onclick="runAllAutomationsNow()">
-                    <i class="fas fa-play"></i> Exécuter Maintenant
+                    <i class="fas fa-play"></i> ${t('automations.run_now')}
                 </button>
             </div>
         </div>
@@ -154,7 +154,7 @@ function renderStats() {
             <div class="stat-icon orange"><i class="fas fa-clock"></i></div>
             <div class="stat-info">
                 <span class="stat-value">${stats.lastRun ? formatTimeAgo(stats.lastRun.last_run_at) : '-'}</span>
-                <span class="stat-label">Dernière exécution</span>
+                <span class="stat-label">${t('automations.last_run')}</span>
             </div>
         </div>
         <div class="stat-card ${stats.errors > 0 ? 'stat-error' : ''}">
@@ -195,7 +195,7 @@ function renderAutomations() {
         container.innerHTML = `
             <div class="empty-state">
                 <i class="fas fa-robot"></i>
-                <p>Aucune automatisation trouvée</p>
+                <p>${t('automations.no_rules')}</p>
             </div>
         `;
         return;
@@ -313,7 +313,7 @@ async function toggleAutomation(id, isActive) {
         if (automation) automation.is_active = isActive;
         
         renderStats();
-        toast(isActive ? 'Automatisation activée' : 'Automatisation désactivée', 'success');
+        toast(isActive ? t('automations.enabled') : t('automations.disabled'), 'success');
     } catch (error) {
         toast(error.message, 'error');
         loadAutomationsData(); // Recharger en cas d'erreur
@@ -405,9 +405,9 @@ function renderAutomationModal(automation) {
         </div>
         
         <div class="modal-footer">
-            <button class="btn btn-outline" onclick="closeModal()">Fermer</button>
+            <button class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
             <button class="btn btn-primary" onclick="saveAutomationSettings()">
-                <i class="fas fa-save"></i> Enregistrer
+                <i class="fas fa-save"></i> ${t('common.save')}
             </button>
         </div>
     `, 'modal-lg');
@@ -421,7 +421,7 @@ function renderGeneralTab(automation) {
         <div class="form-section">
             <h4><i class="fas fa-info-circle"></i> Informations</h4>
             <div class="form-group">
-                <label>Nom</label>
+                <label>${t('automations.rule_name')}</label>
                 <input type="text" id="auto-name" class="form-control" value="${esc(automation.name)}">
             </div>
             <div class="form-group">
@@ -441,7 +441,7 @@ function renderGeneralTab(automation) {
         </div>
         
         <div class="form-section">
-            <h4><i class="fas fa-clock"></i> Planification</h4>
+            <h4><i class="fas fa-clock"></i> ${t('automations.schedule')}</h4>
             <div class="form-row">
                 <div class="form-group col-md-6">
                     <label>Type de planification</label>
@@ -467,8 +467,8 @@ function renderGeneralTab(automation) {
             <h4><i class="fas fa-chart-bar"></i> Statistiques</h4>
             <div class="stats-grid">
                 <div class="stat-item">
-                    <span class="stat-label">Dernière exécution</span>
-                    <span class="stat-value">${automation.last_run_at ? formatDateTime(automation.last_run_at) : 'Jamais'}</span>
+                    <span class="stat-label">${t('automations.last_run')}</span>
+                    <span class="stat-value">${automation.last_run_at ? formatDateTime(automation.last_run_at) : '-'}</span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-label">Statut</span>
@@ -755,7 +755,7 @@ async function loadAutomationLogs(automationId) {
         `;
     } catch (error) {
         document.getElementById('automation-logs-content').innerHTML = `
-            <div class="alert alert-danger">Erreur lors du chargement des logs</div>
+            <div class="alert alert-danger">${t('common.error')}</div>
         `;
     }
 }
@@ -819,7 +819,7 @@ async function saveAutomationSettings() {
     
     try {
         await API.put(`/automations/${selectedAutomation.id}`, data);
-        toast('Configuration enregistrée', 'success');
+        toast(t('automations.rule_updated'), 'success');
         closeModal();
         loadAutomationsData();
     } catch (error) {
@@ -832,7 +832,7 @@ async function viewAutomationLogs() {
         const res = await API.get('/automations/logs?limit=100');
         const logs = res.logs || [];
         
-        openModal('<i class="fas fa-history"></i> Historique des exécutions', `
+        openModal('<i class="fas fa-history"></i> ' + t('automations.history'), `
             <div class="logs-filter mb-15">
                 <select id="logs-filter-status" class="form-control" onchange="filterLogs()">
                     <option value="">Tous les statuts</option>

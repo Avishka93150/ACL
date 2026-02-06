@@ -23,8 +23,8 @@ async function loadTasks(container) {
         container.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-tasks"></i> Tableaux de tâches</h3>
-                    ${canCreate ? '<button class="btn btn-primary" onclick="showNewBoardModal()"><i class="fas fa-plus"></i> Nouveau tableau</button>' : ''}
+                    <h3 class="card-title"><i class="fas fa-tasks"></i> ${t('tasks.title')}</h3>
+                    ${canCreate ? '<button class="btn btn-primary" onclick="showNewBoardModal()"><i class="fas fa-plus"></i> ' + t('tasks.new_board') + '</button>' : ''}
                 </div>
                 <div class="boards-grid" id="boards-list">
                     ${boards.length ? boards.map(b => `
@@ -42,7 +42,7 @@ async function loadTasks(container) {
                                 <span><i class="fas fa-user"></i> ${esc(b.created_by_name)}</span>
                             </div>
                         </div>
-                    `).join('') : '<div class="empty-state"><i class="fas fa-clipboard-list"></i><h3>Aucun tableau</h3><p>Créez votre premier tableau de tâches</p></div>'}
+                    `).join('') : '<div class="empty-state"><i class="fas fa-clipboard-list"></i><h3>' + t('tasks.no_boards') + '</h3><p>' + t('tasks.no_boards_desc') + '</p></div>'}
                 </div>
             </div>
         `;
@@ -52,14 +52,14 @@ async function loadTasks(container) {
 }
 
 function showNewBoardModal() {
-    openModal('Nouveau tableau', `
+    openModal(t('tasks.new_board'), `
         <form onsubmit="createBoard(event)" id="new-board-form">
             <div class="form-group">
-                <label><i class="fas fa-heading"></i> Nom du tableau *</label>
+                <label><i class="fas fa-heading"></i> ${t('tasks.board_name')} *</label>
                 <input type="text" name="name" required placeholder="Ex: Tâches hebdomadaires">
             </div>
             <div class="form-group">
-                <label><i class="fas fa-align-left"></i> Description</label>
+                <label><i class="fas fa-align-left"></i> ${t('tasks.board_desc')}</label>
                 <textarea name="description" rows="2" placeholder="Description optionnelle..."></textarea>
             </div>
             <div class="form-group">
@@ -75,7 +75,7 @@ function showNewBoardModal() {
                 <small class="text-muted">Les managers des hôtels sélectionnés auront automatiquement accès</small>
             </div>
             <div class="form-group">
-                <label><i class="fas fa-users"></i> Membres du tableau</label>
+                <label><i class="fas fa-users"></i> ${t('tasks.members')}</label>
                 <div class="members-selector" id="board-members-selector">
                     <p class="text-muted"><i class="fas fa-info-circle"></i> Sélectionnez d'abord un ou plusieurs hôtels</p>
                 </div>
@@ -92,8 +92,8 @@ function showNewBoardModal() {
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Créer</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.save')}</button>
             </div>
         </form>
     `);
@@ -146,7 +146,7 @@ async function createBoard(e) {
     const data = { name: formData.get('name'), description: formData.get('description'), color: formData.get('color'), hotel_ids: hotelIds, member_ids: memberIds };
     try {
         const res = await API.post('/tasks/boards', data);
-        toast('Tableau créé', 'success');
+        toast(t('tasks.board_created'), 'success');
         closeModal();
         openBoard(res.id);
     } catch (error) { toast(error.message, 'error'); }
@@ -175,8 +175,8 @@ async function openBoard(boardId) {
                         ${members.slice(0, 5).map(m => `<span class="member-avatar" title="${esc(m.first_name)} ${esc(m.last_name)}">${m.first_name.charAt(0)}${m.last_name.charAt(0)}</span>`).join('')}
                         ${members.length > 5 ? `<span class="member-avatar more">+${members.length - 5}</span>` : ''}
                     </div>
-                    <button class="btn btn-outline btn-sm" onclick="showArchivedTasks()" title="Tâches archivées"><i class="fas fa-archive"></i></button>
-                    ${canManage ? `<button class="btn btn-outline btn-sm" onclick="showAddColumnModal()"><i class="fas fa-plus"></i> Colonne</button>
+                    <button class="btn btn-outline btn-sm" onclick="showArchivedTasks()" title="${t('tasks.archived')}"><i class="fas fa-archive"></i></button>
+                    ${canManage ? `<button class="btn btn-outline btn-sm" onclick="showAddColumnModal()"><i class="fas fa-plus"></i> ${t('tasks.new_column')}</button>
                     <button class="btn btn-outline btn-sm" onclick="showBoardSettingsModal()"><i class="fas fa-cog"></i></button>` : ''}
                 </div>
             </div>
@@ -265,7 +265,7 @@ async function saveTaskTitleInline(taskId, input, originalTitle) {
     }
     try {
         await API.updateTask(currentBoard, taskId, { title: newTitle });
-        toast('Titre mis à jour', 'success');
+        toast(t('tasks.task_updated'), 'success');
         openBoard(currentBoard); // Recharger pour afficher
     } catch (e) {
         toast(e.message, 'error');
@@ -292,18 +292,18 @@ async function dropTask(e, columnId) {
 
 function showAddTaskModal(columnId) {
     const members = currentBoardData.members || [];
-    openModal('Nouvelle tâche', `
+    openModal(t('tasks.new_task'), `
         <form onsubmit="createTask(event, ${columnId})" enctype="multipart/form-data" id="new-task-form">
-            <div class="form-group"><label><i class="fas fa-heading"></i> Titre *</label><input type="text" name="title" required placeholder="Titre de la tâche"></div>
-            <div class="form-group"><label><i class="fas fa-align-left"></i> Description</label><textarea name="description" rows="3" placeholder="Description détaillée..."></textarea></div>
+            <div class="form-group"><label><i class="fas fa-heading"></i> ${t('tasks.task_title')} *</label><input type="text" name="title" required placeholder="Titre de la tâche"></div>
+            <div class="form-group"><label><i class="fas fa-align-left"></i> ${t('tasks.task_desc')}</label><textarea name="description" rows="3" placeholder="Description détaillée..."></textarea></div>
             <div class="form-row">
                 <div class="form-group"><label><i class="fas fa-flag"></i> Priorité</label>
                     <select name="priority"><option value="low">🟢 Basse</option><option value="medium" selected>🔵 Moyenne</option><option value="high">🟠 Haute</option><option value="urgent">🔴 Urgente</option></select>
                 </div>
-                <div class="form-group"><label><i class="fas fa-calendar"></i> Échéance</label><input type="date" name="due_date"></div>
+                <div class="form-group"><label><i class="fas fa-calendar"></i> ${t('tasks.due_date')}</label><input type="date" name="due_date"></div>
             </div>
             <div class="form-group">
-                <label><i class="fas fa-users"></i> Assigné à</label>
+                <label><i class="fas fa-users"></i> ${t('tasks.assign_to')}</label>
                 <div class="assignees-selector">${members.map(m => `<label class="assignee-checkbox"><input type="checkbox" name="assignee_ids" value="${m.id}"><span class="assignee-chip"><span class="assignee-avatar-sm">${m.first_name.charAt(0)}</span>${esc(m.first_name)} ${esc(m.last_name)}</span></label>`).join('')}</div>
             </div>
             <div class="form-group">
@@ -316,7 +316,7 @@ function showAddTaskModal(columnId) {
                     <div class="attachments-preview" id="attachments-preview"></div>
                 </div>
             </div>
-            <div class="modal-footer"><button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button><button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Créer</button></div>
+            <div class="modal-footer"><button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button><button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> ${t('tasks.new_task')}</button></div>
         </form>
     `);
 }
@@ -342,7 +342,7 @@ async function createTask(e, columnId) {
     formData.append('assignee_ids', JSON.stringify(assigneeIds));
     try {
         await API.createTaskWithAttachments(currentBoard, formData);
-        toast('Tâche créée', 'success');
+        toast(t('tasks.task_created'), 'success');
         closeModal();
         openBoard(currentBoard);
     } catch (error) { toast(error.message, 'error'); }
@@ -387,7 +387,7 @@ async function openTaskDetail(taskId) {
                     </div>
                     
                     <div class="task-detail-section">
-                        <label><i class="fas fa-tasks"></i> Checklist ${checklistTotal > 0 ? `<span style="color: #10B981; margin-left: auto;">${checklistDone}/${checklistTotal}</span>` : ''}</label>
+                        <label><i class="fas fa-tasks"></i> ${t('tasks.checklist')} ${checklistTotal > 0 ? `<span style="color: #10B981; margin-left: auto;">${checklistDone}/${checklistTotal}</span>` : ''}</label>
                         ${checklistTotal > 0 ? `<div class="checklist-progress"><div class="checklist-progress-bar" style="width: ${(checklistDone/checklistTotal)*100}%"></div></div>` : ''}
                         <div class="checklist-items" id="checklist-items">
                             ${checklist.map(item => `
@@ -399,7 +399,7 @@ async function openTaskDetail(taskId) {
                             `).join('')}
                         </div>
                         <form onsubmit="addChecklistItem(event, ${task.id})" class="checklist-add">
-                            <input type="text" name="item" placeholder="Ajouter un élément...">
+                            <input type="text" name="item" placeholder="${t('tasks.add_item')}">
                             <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-plus"></i></button>
                         </form>
                     </div>
@@ -429,7 +429,7 @@ async function openTaskDetail(taskId) {
                 
                 <div class="task-detail-sidebar">
                     <div class="task-detail-field">
-                        <label><i class="fas fa-users"></i> Assignés</label>
+                        <label><i class="fas fa-users"></i> ${t('tasks.assign_to')}</label>
                         <div class="assignees-multi-select">
                             ${members.length > 0 ? members.map(m => { 
                                 const isAssigned = assignees.some(a => a.id == m.id); 
@@ -455,7 +455,7 @@ async function openTaskDetail(taskId) {
                     </div>
                     
                     <div class="task-detail-field">
-                        <label><i class="fas fa-calendar-alt"></i> Échéance</label>
+                        <label><i class="fas fa-calendar-alt"></i> ${t('tasks.due_date')}</label>
                         <input type="date" value="${task.due_date || ''}" onchange="updateTaskField(${task.id}, 'due_date', this.value)">
                     </div>
                     
@@ -477,11 +477,11 @@ async function openTaskDetail(taskId) {
                     </div>
                     
                     <button class="btn btn-outline btn-block btn-sm" onclick="archiveTask(${task.id})">
-                        <i class="fas fa-archive"></i> Archiver
+                        <i class="fas fa-archive"></i> ${t('tasks.archive')}
                     </button>
-                    
+
                     <button class="btn btn-danger btn-block btn-sm" onclick="deleteTaskConfirm(${task.id})">
-                        <i class="fas fa-trash"></i> Supprimer
+                        <i class="fas fa-trash"></i> ${t('common.delete')}
                     </button>
                 </div>
             </div>
@@ -518,7 +518,7 @@ async function deleteTaskAttachment(attachmentId, taskId) {
 }
 
 function showAddColumnModal() {
-    openModal('Nouvelle colonne', `<form onsubmit="createColumn(event)"><div class="form-group"><label>Nom *</label><input type="text" name="name" required placeholder="Ex: En attente"></div><div class="form-group"><label>Couleur</label><input type="color" name="color" value="#6B7280"></div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button><button type="submit" class="btn btn-primary">Créer</button></div></form>`);
+    openModal(t('tasks.new_column'), `<form onsubmit="createColumn(event)"><div class="form-group"><label>${t('tasks.column_name')} *</label><input type="text" name="name" required placeholder="Ex: En attente"></div><div class="form-group"><label>Couleur</label><input type="color" name="color" value="#6B7280"></div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button><button type="submit" class="btn btn-primary">${t('common.save')}</button></div></form>`);
 }
 
 async function createColumn(e) {
@@ -528,7 +528,7 @@ async function createColumn(e) {
 }
 
 function showEditColumnModal(colId, name, color) {
-    openModal('Modifier la colonne', `<form onsubmit="updateColumn(event, ${colId})"><div class="form-group"><label>Nom</label><input type="text" name="name" value="${esc(name)}" required></div><div class="form-group"><label>Couleur</label><input type="color" name="color" value="${color}"></div><div class="modal-footer"><button type="button" class="btn btn-danger" onclick="deleteColumn(${colId})"><i class="fas fa-trash"></i></button><button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button><button type="submit" class="btn btn-primary">Enregistrer</button></div></form>`);
+    openModal(t('tasks.rename'), `<form onsubmit="updateColumn(event, ${colId})"><div class="form-group"><label>${t('tasks.column_name')}</label><input type="text" name="name" value="${esc(name)}" required></div><div class="form-group"><label>Couleur</label><input type="color" name="color" value="${color}"></div><div class="modal-footer"><button type="button" class="btn btn-danger" onclick="deleteColumn(${colId})"><i class="fas fa-trash"></i></button><button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button><button type="submit" class="btn btn-primary">${t('common.save')}</button></div></form>`);
 }
 
 async function updateColumn(e, colId) { e.preventDefault(); const data = Object.fromEntries(new FormData(e.target)); try { await API.updateColumn(currentBoard, colId, data); toast('Colonne mise à jour', 'success'); closeModal(); openBoard(currentBoard); } catch (error) { toast(error.message, 'error'); } }
@@ -544,14 +544,14 @@ function showBoardSettingsModal() {
                 <div class="form-group"><label>Description</label><textarea name="description" rows="2">${esc(board.description || '')}</textarea></div>
                 <div class="form-group"><label>Couleur</label><input type="color" name="color" value="${board.color}"></div>
                 <div class="form-group"><label>Hôtels associés</label><div class="text-muted">${hotels.map(h => h.name).join(', ')}</div></div>
-                <div class="modal-footer"><button type="button" class="btn btn-danger" onclick="archiveBoard()"><i class="fas fa-archive"></i> Archiver</button><button type="submit" class="btn btn-primary">Enregistrer</button></div>
+                <div class="modal-footer"><button type="button" class="btn btn-danger" onclick="archiveBoard()"><i class="fas fa-archive"></i> ${t('tasks.archive')}</button><button type="submit" class="btn btn-primary">${t('common.save')}</button></div>
             </form>
         </div>
         <div id="board-tab-members" class="tab-content" style="display:none">
             <div class="members-management">
                 <h4>Membres actuels (${members.length})</h4>
                 <div class="current-members-list">${members.map(m => `<div class="member-row"><span class="member-avatar">${m.first_name.charAt(0)}${m.last_name.charAt(0)}</span><div class="member-info"><span class="member-name">${esc(m.first_name)} ${esc(m.last_name)}</span><span class="member-role">${LABELS.role[m.role] || m.role}</span></div>${m.is_owner ? '<span class="badge badge-primary">Propriétaire</span>' : `<button class="btn-icon" onclick="removeBoardMember(${m.id})"><i class="fas fa-times"></i></button>`}</div>`).join('')}</div>
-                <hr><button class="btn btn-outline btn-block" onclick="showAddMemberModal()"><i class="fas fa-user-plus"></i> Ajouter des membres</button>
+                <hr><button class="btn btn-outline btn-block" onclick="showAddMemberModal()"><i class="fas fa-user-plus"></i> ${t('tasks.add_member')}</button>
             </div>
         </div>
     `);
@@ -559,8 +559,8 @@ function showBoardSettingsModal() {
 
 function switchBoardTab(tabName, btn) { document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none'); document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); document.getElementById(`board-tab-${tabName}`).style.display = 'block'; btn.classList.add('active'); }
 
-async function updateBoardSettings(e) { e.preventDefault(); const data = Object.fromEntries(new FormData(e.target)); try { await API.updateTaskBoard(currentBoard, data); toast('Tableau mis à jour', 'success'); closeModal(); openBoard(currentBoard); } catch (error) { toast(error.message, 'error'); } }
-async function archiveBoard() { if (!confirm('Archiver ce tableau ?')) return; try { await API.updateTaskBoard(currentBoard, { is_archived: 1 }); toast('Tableau archivé', 'success'); closeModal(); loadTasks(document.getElementById('page-content')); } catch (error) { toast(error.message, 'error'); } }
+async function updateBoardSettings(e) { e.preventDefault(); const data = Object.fromEntries(new FormData(e.target)); try { await API.updateTaskBoard(currentBoard, data); toast(t('tasks.board_updated'), 'success'); closeModal(); openBoard(currentBoard); } catch (error) { toast(error.message, 'error'); } }
+async function archiveBoard() { if (!confirm(t('tasks.delete_board_confirm'))) return; try { await API.updateTaskBoard(currentBoard, { is_archived: 1 }); toast(t('tasks.board_deleted'), 'success'); closeModal(); loadTasks(document.getElementById('page-content')); } catch (error) { toast(error.message, 'error'); } }
 
 async function removeBoardMember(userId) {
     if (!confirm('Retirer ce membre ?')) return;
@@ -572,7 +572,7 @@ async function showAddMemberModal() {
     try {
         const res = await API.get(`/tasks/available-members?hotel_ids=${hotelIds}`);
         const users = res.users || [], currentMembers = currentBoardData.members || [], currentMemberIds = currentMembers.map(m => m.id), available = users.filter(u => !currentMemberIds.includes(u.id));
-        openModal('Ajouter des membres', `<form onsubmit="addBoardMembers(event)"><div class="members-checkbox-list">${available.length > 0 ? available.map(u => `<label class="checkbox-item member-item"><input type="checkbox" name="user_ids" value="${u.id}"><span class="member-info"><span class="member-name">${esc(u.first_name)} ${esc(u.last_name)}</span><span class="member-role">${LABELS.role[u.role] || u.role}</span></span></label>`).join('') : '<p class="text-muted">Tous les collaborateurs sont déjà membres</p>'}</div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="showBoardSettingsModal()">Retour</button>${available.length > 0 ? '<button type="submit" class="btn btn-primary">Ajouter</button>' : ''}</div></form>`);
+        openModal(t('tasks.add_member'), `<form onsubmit="addBoardMembers(event)"><div class="members-checkbox-list">${available.length > 0 ? available.map(u => `<label class="checkbox-item member-item"><input type="checkbox" name="user_ids" value="${u.id}"><span class="member-info"><span class="member-name">${esc(u.first_name)} ${esc(u.last_name)}</span><span class="member-role">${LABELS.role[u.role] || u.role}</span></span></label>`).join('') : '<p class="text-muted">Tous les collaborateurs sont déjà membres</p>'}</div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="showBoardSettingsModal()">Retour</button>${available.length > 0 ? '<button type="submit" class="btn btn-primary">Ajouter</button>' : ''}</div></form>`);
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -583,7 +583,7 @@ async function addBoardMembers(e) {
     try { await API.post(`/tasks/${currentBoard}/members`, { user_ids: userIds }); toast('Membres ajoutés', 'success'); const res = await API.getTaskBoard(currentBoard); currentBoardData = res; showBoardSettingsModal(); } catch (e) { toast(e.message, 'error'); }
 }
 
-async function updateTaskField(taskId, field, value) { try { await API.updateTask(currentBoard, taskId, { [field]: value }); toast('Mis à jour', 'success'); } catch (error) { toast(error.message, 'error'); } }
+async function updateTaskField(taskId, field, value) { try { await API.updateTask(currentBoard, taskId, { [field]: value }); toast(t('tasks.task_updated'), 'success'); } catch (error) { toast(error.message, 'error'); } }
 async function toggleTaskComplete(taskId, completed) {
     try {
         // Si on marque comme terminée, trouver la colonne "Terminé"
@@ -610,7 +610,7 @@ async function toggleTaskComplete(taskId, completed) {
         toast(error.message, 'error');
     }
 }
-async function deleteTaskConfirm(taskId) { if (!confirm('Supprimer cette tâche ?')) return; try { await API.deleteTask(currentBoard, taskId); toast('Supprimée', 'success'); closeModal(); openBoard(currentBoard); } catch (error) { toast(error.message, 'error'); } }
+async function deleteTaskConfirm(taskId) { if (!confirm(t('tasks.delete_task_confirm'))) return; try { await API.deleteTask(currentBoard, taskId); toast(t('tasks.task_deleted'), 'success'); closeModal(); openBoard(currentBoard); } catch (error) { toast(error.message, 'error'); } }
 
 async function addChecklistItem(e, taskId) { e.preventDefault(); const input = e.target.querySelector('input[name="item"]'); const text = input.value.trim(); if (!text) return; try { await API.addChecklistItem(currentBoard, taskId, { item_text: text }); input.value = ''; openTaskDetail(taskId); } catch (error) { toast(error.message, 'error'); } }
 async function toggleChecklistItem(itemId, checked, taskId) { try { await API.updateChecklistItem(currentBoard, itemId, { is_checked: checked ? 1 : 0 }); openTaskDetail(taskId); } catch (error) { toast(error.message, 'error'); } }
@@ -694,7 +694,7 @@ async function saveTaskTitleModal(taskId, input) {
     }
     try {
         await API.updateTask(currentBoard, taskId, { title: newTitle });
-        toast('Titre mis à jour', 'success');
+        toast(t('tasks.task_updated'), 'success');
         openTaskDetail(taskId);
     } catch (e) {
         toast(e.message, 'error');
@@ -714,8 +714,8 @@ function editTaskDescription(taskId, element) {
     element.innerHTML = `
         <textarea class="desc-textarea" id="edit-desc-textarea">${currentDesc}</textarea>
         <div class="desc-edit-actions">
-            <button class="btn btn-sm btn-primary" onclick="saveTaskDescription(${taskId})">Enregistrer</button>
-            <button class="btn btn-sm btn-outline" onclick="openTaskDetail(${taskId})">Annuler</button>
+            <button class="btn btn-sm btn-primary" onclick="saveTaskDescription(${taskId})">${t('common.save')}</button>
+            <button class="btn btn-sm btn-outline" onclick="openTaskDetail(${taskId})">${t('common.cancel')}</button>
         </div>
     `;
     const textarea = element.querySelector('textarea');
@@ -723,7 +723,7 @@ function editTaskDescription(taskId, element) {
     textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
 }
 
-async function saveTaskDescription(taskId) { const desc = document.getElementById('edit-desc-textarea').value; try { await API.updateTask(currentBoard, taskId, { description: desc }); toast('Description mise à jour', 'success'); openTaskDetail(taskId); } catch (error) { toast(error.message, 'error'); } }
+async function saveTaskDescription(taskId) { const desc = document.getElementById('edit-desc-textarea').value; try { await API.updateTask(currentBoard, taskId, { description: desc }); toast(t('tasks.task_updated'), 'success'); openTaskDetail(taskId); } catch (error) { toast(error.message, 'error'); } }
 
 // Archiver une tâche
 async function archiveTask(taskId) {
@@ -765,15 +765,15 @@ async function showArchivedTasks() {
                         </div>
                         <div class="archived-task-actions">
                             <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); restoreTask(${task.id})">
-                                <i class="fas fa-undo"></i> Restaurer
+                                <i class="fas fa-undo"></i> ${t('tasks.restore')}
                             </button>
                         </div>
                     </div>
-                `).join('') : '<p class="text-muted text-center">Aucune tâche archivée</p>'}
+                `).join('') : '<p class="text-muted text-center">' + t('tasks.no_tasks') + '</p>'}
             </div>
         `;
         
-        openModal(`<i class="fas fa-archive"></i> Tâches archivées (${archivedTasks.length})`, html);
+        openModal(`<i class="fas fa-archive"></i> ${t('tasks.archived')} (${archivedTasks.length})`, html);
     } catch (error) {
         toast(error.message, 'error');
     }
@@ -793,7 +793,7 @@ async function openArchivedTaskDetail(taskId) {
                     <div class="archived-banner">
                         <i class="fas fa-archive"></i> Cette tâche est archivée
                         <button class="btn btn-sm btn-primary" onclick="restoreTask(${task.id}); closeModal();">
-                            <i class="fas fa-undo"></i> Restaurer
+                            <i class="fas fa-undo"></i> ${t('tasks.restore')}
                         </button>
                     </div>
                     
@@ -806,7 +806,7 @@ async function openArchivedTaskDetail(taskId) {
                     
                     ${checklistTotal > 0 ? `
                     <div class="task-detail-section">
-                        <label><i class="fas fa-tasks"></i> Checklist <span style="color: #10B981; margin-left: auto;">${checklistDone}/${checklistTotal}</span></label>
+                        <label><i class="fas fa-tasks"></i> ${t('tasks.checklist')} <span style="color: #10B981; margin-left: auto;">${checklistDone}/${checklistTotal}</span></label>
                         <div class="checklist-items">
                             ${checklist.map(item => `
                                 <div class="checklist-item">
@@ -840,7 +840,7 @@ async function openArchivedTaskDetail(taskId) {
                     </div>
                     ${task.due_date ? `
                     <div class="task-detail-field">
-                        <label><i class="fas fa-calendar-alt"></i> Échéance</label>
+                        <label><i class="fas fa-calendar-alt"></i> ${t('tasks.due_date')}</label>
                         <span>${formatDate(task.due_date)}</span>
                     </div>
                     ` : ''}
