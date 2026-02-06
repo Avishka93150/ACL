@@ -29,12 +29,8 @@ function openModal(title, content, size = '') {
     if (size) {
         modalBox.classList.add(size);
     }
-    // Ensure modal is direct child of body for proper fixed positioning
-    if (modal.parentElement !== document.body) {
-        document.body.appendChild(modal);
-    }
-    // Show modal - use display style directly (avoids CSS specificity conflicts)
-    modal.style.display = 'flex';
+    // Show modal
+    modal.style.display = 'block';
 }
 
 function closeModal() {
