@@ -5311,8 +5311,8 @@ try {
                 }
                 
                 $msgId = db()->insert(
-                    "INSERT INTO messages (sender_id, recipient_id, hotel_id, subject, body, priority, is_broadcast, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())",
-                    [$user['id'], $recipientId, $hotelId, $data['subject'], $data['body'], $data['priority'] ?? 'normal', $isBroadcast ? 1 : 0]
+                    "INSERT INTO messages (sender_id, recipient_id, hotel_id, subject, content, priority, is_broadcast, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())",
+                    [$user['id'], $recipientId, $hotelId, $data['subject'], $data['content'] ?? $data['body'] ?? '', $data['priority'] ?? 'normal', $isBroadcast ? 1 : 0]
                 );
                 
                 json_out(['success' => true, 'id' => $msgId], 201);
@@ -5374,7 +5374,7 @@ try {
             }
             
             // Envoyer un message dans une conversation: POST /messaging/conversations/{id}/messages
-            if ($id === 'conversations' && $action && is_numeric($action) && $subaction === 'messages' && $method === 'POST') {
+            if ($id === 'conversations' && $action && is_numeric($action) && $subId === 'messages' && $method === 'POST') {
                 $user = require_auth();
                 $convId = (int)$action;
                 $data = get_input();
