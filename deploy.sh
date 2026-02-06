@@ -79,6 +79,18 @@ elif [ ! -d "$APP_DIR/.git" ]; then
     FIRST_DEPLOY=true
 else
     echo -e "${GREEN}  Mise a jour detectee (repo git existant)${NC}"
+    # Verifier/corriger le remote origin
+    cd "$APP_DIR"
+    CURRENT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
+    if [ -z "$CURRENT_REMOTE" ]; then
+        echo -e "${YELLOW}  Remote 'origin' manquant, ajout...${NC}"
+        git remote add origin "$REPO_URL"
+        echo -e "${GREEN}  Remote origin configure: $REPO_URL${NC}"
+    elif [ "$CURRENT_REMOTE" != "$REPO_URL" ]; then
+        echo -e "${YELLOW}  Remote origin incorrect ($CURRENT_REMOTE), correction...${NC}"
+        git remote set-url origin "$REPO_URL"
+        echo -e "${GREEN}  Remote origin corrige: $REPO_URL${NC}"
+    fi
 fi
 
 # === ETAPE 3 : SAUVEGARDER LES DONNEES EXISTANTES ===
@@ -167,16 +179,8 @@ if [ "$FIRST_DEPLOY" = true ]; then
     echo -e "${GREEN}  Code installe (commit: $DEPLOYED_COMMIT)${NC}"
 
 else
-    # Mise a jour : git pull classique
+    # Mise a jour : git pull
     cd "$APP_DIR"
-
-    # Stash des modifs locales si besoin
-    LOCAL_CHANGES=$(git status --porcelain 2>/dev/null | grep -v '^\?\?' | wc -l)
-    if [ "$LOCAL_CHANGES" -gt 0 ]; then
-        echo -e "${YELLOW}  $LOCAL_CHANGES fichier(s) modifie(s) localement, stash...${NC}"
-        git stash save "auto_backup_deploy_${DATE}"
-        STASHED=true
-    fi
 
     git fetch origin "$BRANCH"
 
@@ -189,8 +193,30 @@ else
         echo "  Nouveaux commits:"
         git log --oneline HEAD..origin/$BRANCH 2>/dev/null | sed 's/^/    /'
         echo ""
-        git pull origin "$BRANCH"
-        echo -e "${GREEN}  Code mis a jour: ${LOCAL_COMMIT:0:8} -> $(git rev-parse --short HEAD)${NC}"
+
+        # Tenter un pull classique
+        if git pull origin "$BRANCH" 2>/dev/null; then
+            echo -e "${GREEN}  Code mis a jour via git pull${NC}"
+        else
+            # Echec (fichiers untracked en conflit) : forcer la synchro
+            # Les uploads et .env sont deja sauvegardes a l'etape 3
+            echo -e "${YELLOW}  Pull classique impossible (fichiers locaux en conflit)${NC}"
+            echo -e "${BLUE}  Synchronisation forcee depuis GitHub...${NC}"
+
+            # Forcer le checkout sur la branche remote
+            git reset --hard "origin/$BRANCH"
+
+            echo -e "${GREEN}  Code synchronise depuis GitHub${NC}"
+
+            # Restaurer les uploads depuis le backup
+            if [ -d "$BACKUP_DIR/uploads_backup_${DATE}" ]; then
+                echo -e "${BLUE}  Restauration des uploads...${NC}"
+                cp -rn "$BACKUP_DIR/uploads_backup_${DATE}/"* "$APP_DIR/uploads/" 2>/dev/null || true
+                echo -e "${GREEN}  Uploads restaures${NC}"
+            fi
+        fi
+
+        echo -e "${GREEN}  OK: ${LOCAL_COMMIT:0:8} -> $(git rev-parse --short HEAD)${NC}"
     fi
 
     DEPLOYED_COMMIT=$(git rev-parse --short HEAD)
