@@ -79,6 +79,18 @@ elif [ ! -d "$APP_DIR/.git" ]; then
     FIRST_DEPLOY=true
 else
     echo -e "${GREEN}  Mise a jour detectee (repo git existant)${NC}"
+    # Verifier/corriger le remote origin
+    cd "$APP_DIR"
+    CURRENT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
+    if [ -z "$CURRENT_REMOTE" ]; then
+        echo -e "${YELLOW}  Remote 'origin' manquant, ajout...${NC}"
+        git remote add origin "$REPO_URL"
+        echo -e "${GREEN}  Remote origin configure: $REPO_URL${NC}"
+    elif [ "$CURRENT_REMOTE" != "$REPO_URL" ]; then
+        echo -e "${YELLOW}  Remote origin incorrect ($CURRENT_REMOTE), correction...${NC}"
+        git remote set-url origin "$REPO_URL"
+        echo -e "${GREEN}  Remote origin corrige: $REPO_URL${NC}"
+    fi
 fi
 
 # === ETAPE 3 : SAUVEGARDER LES DONNEES EXISTANTES ===
