@@ -33,15 +33,13 @@ function openModal(title, content, size = '') {
     if (modal.parentElement !== document.body) {
         document.body.appendChild(modal);
     }
-    // Force centering via inline styles (override any CSS conflicts)
-    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;z-index:10000;padding:24px;box-sizing:border-box;';
-    modal.classList.remove('hidden');
+    // Show modal - use display style directly (avoids CSS specificity conflicts)
+    modal.style.display = 'flex';
 }
 
 function closeModal() {
     const modal = document.getElementById('modal');
-    modal.classList.add('hidden');
-    modal.style.cssText = '';
+    modal.style.display = 'none';
     // Reset modal size
     const modalBox = document.querySelector('#modal .modal-box');
     if (modalBox) {

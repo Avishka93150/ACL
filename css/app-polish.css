@@ -392,7 +392,7 @@ textarea {
     -webkit-backdrop-filter: blur(4px);
 }
 
-/* Modal container - force centering with !important */
+/* Modal container - centering (display managed by JS openModal/closeModal) */
 #modal.modal,
 .modal {
     position: fixed !important;
@@ -402,16 +402,12 @@ textarea {
     bottom: 0 !important;
     width: 100vw !important;
     height: 100vh !important;
-    z-index: 1000 !important;
-    display: flex !important;
+    z-index: 10000 !important;
+    /* display: managed by JS - flex when open, none when closed */
     align-items: center !important;
     justify-content: center !important;
     padding: 24px !important;
     box-sizing: border-box !important;
-}
-
-.modal.hidden {
-    display: none !important;
 }
 
 /* Modal box - base */
