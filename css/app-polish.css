@@ -1,0 +1,954 @@
+/**
+ * ACL GESTION - Authenticated UI Polish
+ * Modernisation de l'interface connectee
+ * Ce fichier surcharge les styles de style.css pour un rendu plus moderne
+ */
+
+/* =========================================
+   GLOBAL POLISH
+   ========================================= */
+
+/* Smooth scrolling global */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Better body background for authenticated */
+#app {
+    background: var(--gray-50, #F9FAFB);
+}
+
+/* Focus visible for accessibility */
+*:focus-visible {
+    outline: 2px solid var(--brand-secondary, #2563EB);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid var(--brand-secondary, #2563EB);
+    outline-offset: 2px;
+}
+
+/* Screen reader only utility */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* =========================================
+   SIDEBAR POLISH
+   ========================================= */
+
+/* Smoother sidebar gradient */
+.sidebar {
+    background: linear-gradient(180deg, #1A2F4B 0%, #0D1B2A 100%);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+}
+
+/* Sidebar custom scrollbar */
+.sidebar-nav::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Sidebar logo polish */
+.sidebar-header {
+    padding: 20px 20px 16px;
+}
+
+.sidebar-logo {
+    font-size: 18px;
+    letter-spacing: -0.02em;
+}
+
+.sidebar-logo .logo {
+    width: 38px;
+    height: 38px;
+    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 800;
+    font-style: normal;
+    color: white;
+    letter-spacing: 0;
+}
+
+/* Nav section titles */
+.nav-section-title {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.35);
+    padding: 8px 16px 4px;
+}
+
+/* Nav items polish */
+.nav-item {
+    border-radius: 10px;
+    font-size: 14px;
+    padding: 10px 16px;
+    margin: 0 8px 2px;
+    transition: all 0.2s ease;
+}
+
+.nav-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.nav-item.active {
+    background: rgba(37, 99, 235, 0.2);
+    color: white;
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 #2563EB;
+}
+
+.nav-item i {
+    width: 20px;
+    font-size: 15px;
+    opacity: 0.7;
+}
+
+.nav-item.active i {
+    opacity: 1;
+    color: #60A5FA;
+}
+
+/* Nav badge polish */
+.nav-item .badge {
+    background: #EF4444;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    min-width: 20px;
+    text-align: center;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+}
+
+/* Sidebar footer polish */
+.sidebar-footer {
+    background: rgba(0, 0, 0, 0.15);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.user-card {
+    border-radius: 10px;
+    padding: 10px 12px;
+}
+
+.user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.3) 0%, rgba(37, 99, 235, 0.1) 100%);
+    font-size: 14px;
+}
+
+.btn-logout {
+    border-radius: 10px;
+    font-size: 13px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-logout:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: #FCA5A5;
+}
+
+/* =========================================
+   HEADER POLISH
+   ========================================= */
+
+.main-header {
+    background: white;
+    border-bottom: 1px solid var(--gray-200, #E5E7EB);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    padding: 0 24px;
+    gap: 16px;
+}
+
+.page-title,
+#page-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--gray-800, #1F2937);
+}
+
+/* Header action buttons */
+.header-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    color: var(--gray-400, #9CA3AF);
+    transition: all 0.15s ease;
+}
+
+.header-btn:hover {
+    background: var(--gray-100, #F3F4F6);
+    color: var(--gray-600, #4B5563);
+}
+
+.header-btn .notification-count {
+    min-width: 18px;
+    height: 18px;
+    font-size: 10px;
+    font-weight: 700;
+    top: 2px;
+    right: 2px;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+}
+
+/* Quick settings in header */
+.header-quick-settings {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 8px;
+    padding-left: 8px;
+    border-left: 1px solid var(--gray-200, #E5E7EB);
+}
+
+/* =========================================
+   PAGE CONTENT POLISH
+   ========================================= */
+
+.page-content {
+    padding: 24px;
+    background: var(--gray-50, #F9FAFB);
+}
+
+/* Page header */
+.page-header {
+    margin-bottom: 28px;
+}
+
+.page-header h2 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.page-header h2 i {
+    color: var(--brand-secondary, #2563EB);
+    font-size: 20px;
+}
+
+.page-header p {
+    color: var(--gray-500, #6B7280);
+    font-size: 14px;
+    margin-top: 4px;
+}
+
+/* =========================================
+   CARD POLISH
+   ========================================= */
+
+.card {
+    background: white;
+    border: 1px solid var(--gray-200, #E5E7EB);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 0.2s ease;
+}
+
+.card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--gray-100, #F3F4F6);
+    background: white;
+}
+
+.card-header h3,
+.card-header .card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--gray-800, #1F2937);
+    letter-spacing: -0.01em;
+}
+
+.card-body {
+    padding: 20px;
+}
+
+/* =========================================
+   TABLE POLISH
+   ========================================= */
+
+.table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.table thead th {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gray-500, #6B7280);
+    background: var(--gray-50, #F9FAFB);
+    padding: 10px 16px;
+    white-space: nowrap;
+}
+
+.table tbody td {
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--gray-700, #374151);
+    border-bottom: 1px solid var(--gray-100, #F3F4F6);
+    vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.table tbody tr:hover td {
+    background: var(--gray-50, #F9FAFB);
+}
+
+/* Compact table variant */
+.table-compact thead th {
+    padding: 8px 12px;
+    font-size: 11px;
+}
+
+.table-compact tbody td {
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+/* =========================================
+   BUTTON POLISH
+   ========================================= */
+
+.btn {
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 10px 18px;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    border: none;
+    min-height: 40px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+
+.btn-primary:hover {
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    transform: translateY(-1px);
+}
+
+.btn-sm {
+    font-size: 13px;
+    padding: 6px 14px;
+    min-height: 32px;
+    border-radius: 8px;
+}
+
+.btn-outline {
+    background: white;
+    border: 1.5px solid var(--gray-200, #E5E7EB);
+    color: var(--gray-700, #374151);
+}
+
+.btn-outline:hover {
+    border-color: var(--gray-300, #D1D5DB);
+    background: var(--gray-50, #F9FAFB);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.25);
+}
+
+/* =========================================
+   FORM POLISH
+   ========================================= */
+
+.form-group label,
+.form-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gray-700, #374151);
+    margin-bottom: 6px;
+    display: block;
+}
+
+.form-control,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+input[type="tel"],
+input[type="url"],
+select,
+textarea {
+    border: 1.5px solid var(--gray-200, #E5E7EB);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: var(--gray-800, #1F2937);
+    background: white;
+    transition: all 0.15s ease;
+    min-height: 40px;
+}
+
+.form-control:focus,
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: #2563EB;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    outline: none;
+}
+
+/* =========================================
+   BADGE POLISH
+   ========================================= */
+
+.badge {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+
+.badge-success {
+    background: #ECFDF5;
+    color: #047857;
+}
+
+.badge-danger {
+    background: #FEF2F2;
+    color: #B91C1C;
+}
+
+.badge-warning {
+    background: #FFFBEB;
+    color: #92400E;
+}
+
+.badge-info {
+    background: #EFF6FF;
+    color: #1D4ED8;
+}
+
+.badge-primary {
+    background: #EEF2FF;
+    color: #4338CA;
+}
+
+/* =========================================
+   KPI CARDS POLISH
+   ========================================= */
+
+.kpi-card {
+    border-radius: 14px;
+    border: 1px solid var(--gray-200, #E5E7EB);
+    padding: 20px;
+    background: white;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.kpi-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    transform: translateY(-2px);
+}
+
+.kpi-card::before {
+    border-radius: 4px;
+}
+
+.kpi-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.kpi-value {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--gray-900, #111827);
+}
+
+.kpi-label {
+    font-size: 13px;
+    color: var(--gray-500, #6B7280);
+    font-weight: 500;
+}
+
+/* =========================================
+   MODAL POLISH
+   ========================================= */
+
+.modal-overlay {
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+.modal {
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--gray-100, #F3F4F6);
+}
+
+.modal-header h3 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.modal-body {
+    padding: 24px;
+}
+
+.modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--gray-100, #F3F4F6);
+    background: var(--gray-50, #F9FAFB);
+    border-radius: 0 0 18px 18px;
+}
+
+/* =========================================
+   TOAST POLISH
+   ========================================= */
+
+.toast {
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    padding: 14px 18px;
+    font-size: 14px;
+    font-weight: 500;
+    border-left-width: 4px;
+    backdrop-filter: blur(12px);
+}
+
+/* =========================================
+   NOTIFICATION DROPDOWN POLISH
+   ========================================= */
+
+.notification-dropdown {
+    border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+    border: 1px solid var(--gray-100, #F3F4F6);
+}
+
+.notification-item {
+    transition: all 0.15s ease;
+}
+
+.notification-item:hover {
+    background: var(--gray-50, #F9FAFB);
+}
+
+.notification-item.unread {
+    background: #F0F7FF;
+    border-left: 3px solid #2563EB;
+}
+
+/* =========================================
+   TAB POLISH
+   ========================================= */
+
+.tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--gray-100, #F3F4F6);
+    padding: 4px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+}
+
+.tab-btn {
+    padding: 10px 18px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--gray-500, #6B7280);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex: 1;
+    text-align: center;
+}
+
+.tab-btn:hover {
+    color: var(--gray-700, #374151);
+}
+
+.tab-btn.active {
+    background: white;
+    color: var(--gray-800, #1F2937);
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* =========================================
+   FILTER CHIPS POLISH
+   ========================================= */
+
+.filter-chip,
+.filter-btn {
+    padding: 8px 16px;
+    border-radius: 10px;
+    border: 1.5px solid var(--gray-200, #E5E7EB);
+    background: white;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--gray-600, #4B5563);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.filter-chip:hover,
+.filter-btn:hover {
+    border-color: var(--gray-300, #D1D5DB);
+    background: var(--gray-50, #F9FAFB);
+}
+
+.filter-chip.active,
+.filter-btn.active {
+    background: #EFF6FF;
+    border-color: #BFDBFE;
+    color: #1D4ED8;
+    font-weight: 600;
+}
+
+/* =========================================
+   EMPTY STATE POLISH
+   ========================================= */
+
+.empty-state {
+    padding: 60px 24px;
+    text-align: center;
+    color: var(--gray-400, #9CA3AF);
+}
+
+.empty-state i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: block;
+    opacity: 0.5;
+}
+
+.empty-state p {
+    font-size: 15px;
+    max-width: 360px;
+    margin: 0 auto;
+    line-height: 1.5;
+}
+
+/* =========================================
+   LOADING STATE POLISH
+   ========================================= */
+
+.loading-spinner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 24px;
+    gap: 16px;
+    color: var(--gray-400, #9CA3AF);
+}
+
+.loading-spinner .spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--gray-200, #E5E7EB);
+    border-top-color: #2563EB;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* =========================================
+   ALERTS POLISH
+   ========================================= */
+
+.alert {
+    padding: 14px 18px;
+    border-radius: 12px;
+    font-size: 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.alert-danger {
+    background: #FEF2F2;
+    color: #991B1B;
+    border: 1px solid #FECACA;
+}
+
+.alert-warning {
+    background: #FFFBEB;
+    color: #92400E;
+    border: 1px solid #FDE68A;
+}
+
+.alert-success {
+    background: #ECFDF5;
+    color: #065F46;
+    border: 1px solid #A7F3D0;
+}
+
+.alert-info {
+    background: #EFF6FF;
+    color: #1E40AF;
+    border: 1px solid #BFDBFE;
+}
+
+/* =========================================
+   SWITCH TOGGLE POLISH
+   ========================================= */
+
+.switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    background: var(--gray-300, #D1D5DB);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.switch.active,
+.switch:has(input:checked) {
+    background: #2563EB;
+}
+
+.switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.switch.active::after,
+.switch:has(input:checked)::after {
+    transform: translateX(20px);
+}
+
+/* =========================================
+   PAGINATION POLISH
+   ========================================= */
+
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 24px;
+}
+
+.pagination .page-btn {
+    min-width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--gray-200, #E5E7EB);
+    border-radius: 8px;
+    background: white;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--gray-600, #4B5563);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.pagination .page-btn:hover {
+    background: var(--gray-50, #F9FAFB);
+    border-color: var(--gray-300, #D1D5DB);
+}
+
+.pagination .page-btn.active {
+    background: #2563EB;
+    color: white;
+    border-color: #2563EB;
+}
+
+/* =========================================
+   DARK MODE OVERRIDES
+   ========================================= */
+
+[data-theme="dark"] .card {
+    background: var(--gray-100);
+    border-color: var(--gray-200);
+}
+
+[data-theme="dark"] .card-header {
+    background: var(--gray-100);
+    border-color: var(--gray-200);
+}
+
+[data-theme="dark"] .main-header {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .sidebar {
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .kpi-card {
+    background: var(--gray-100);
+    border-color: var(--gray-200);
+}
+
+[data-theme="dark"] .notification-item.unread {
+    background: rgba(37, 99, 235, 0.1);
+    border-left-color: #60A5FA;
+}
+
+[data-theme="dark"] .tabs {
+    background: var(--gray-200);
+}
+
+[data-theme="dark"] .tab-btn.active {
+    background: var(--gray-100);
+    color: var(--gray-800);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="dark"] .filter-chip.active,
+[data-theme="dark"] .filter-btn.active {
+    background: rgba(37, 99, 235, 0.15);
+    border-color: rgba(37, 99, 235, 0.3);
+    color: #60A5FA;
+}
+
+[data-theme="dark"] .badge-success { background: rgba(16, 185, 129, 0.15); color: #34D399; }
+[data-theme="dark"] .badge-danger { background: rgba(239, 68, 68, 0.15); color: #F87171; }
+[data-theme="dark"] .badge-warning { background: rgba(245, 158, 11, 0.15); color: #FBBF24; }
+[data-theme="dark"] .badge-info { background: rgba(59, 130, 246, 0.15); color: #60A5FA; }
+[data-theme="dark"] .badge-primary { background: rgba(99, 102, 241, 0.15); color: #818CF8; }
+
+[data-theme="dark"] .pagination .page-btn {
+    background: var(--gray-100);
+    border-color: var(--gray-200);
+    color: var(--gray-500);
+}
+
+[data-theme="dark"] .pagination .page-btn.active {
+    background: #2563EB;
+    border-color: #2563EB;
+    color: white;
+}
+
+[data-theme="dark"] .modal {
+    background: var(--gray-100);
+}
+
+[data-theme="dark"] .modal-footer {
+    background: var(--gray-200);
+}
+
+/* =========================================
+   RESPONSIVE POLISH
+   ========================================= */
+
+@media (max-width: 768px) {
+    .page-content {
+        padding: 16px;
+    }
+
+    .kpi-card {
+        padding: 16px;
+    }
+
+    .kpi-value {
+        font-size: 22px;
+    }
+
+    .card-body {
+        padding: 16px;
+    }
+
+    .modal {
+        border-radius: 14px;
+    }
+
+    .header-quick-settings {
+        border-left: none;
+        margin-left: 4px;
+        padding-left: 4px;
+    }
+}

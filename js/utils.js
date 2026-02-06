@@ -155,7 +155,7 @@ async function loadNotifications() {
                             <div class="notification-message">${esc(n.message || '')}</div>
                             <div class="notification-time">${timeAgo(n.created_at)}</div>
                         </div>
-                        <button class="notification-delete" onclick="event.stopPropagation(); deleteNotification(${n.id})">
+                        <button class="notification-delete" onclick="event.stopPropagation(); deleteNotification(${parseInt(n.id)})">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
@@ -257,6 +257,7 @@ async function deleteNotification(notifId) {
         loadNotifications();
     } catch (error) {
         console.error('Erreur:', error);
+        toast('Erreur lors de la suppression', 'error');
     }
 }
 
@@ -469,6 +470,10 @@ function renderPagination(pagination, onPageChange) {
         pages.push(i);
     }
 
+    // Cleanup previous pagination callbacks to prevent memory leaks
+    Object.keys(window).forEach(key => {
+        if (key.startsWith('_pgcb_')) delete window[key];
+    });
     // Stocker le callback dans un ID unique
     const callbackId = '_pgcb_' + Date.now();
     window[callbackId] = onPageChange;
