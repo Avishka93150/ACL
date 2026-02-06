@@ -957,12 +957,21 @@ select.form-control {
 }
 
 [data-theme="dark"] .modal-box {
-    background: var(--gray-50);
+    background: #1E293B;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
 }
-
 [data-theme="dark"] .modal-backdrop {
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.5);
 }
+[data-theme="dark"] .modal-header {
+    border-color: #334155;
+    background: #1E293B;
+}
+[data-theme="dark"] .modal-header h3 { color: #E2E8F0; }
+[data-theme="dark"] .modal-header button { background: #334155; color: #94A3B8; }
+[data-theme="dark"] .modal-header button:hover { background: #475569; color: #E2E8F0; }
+[data-theme="dark"] .modal-body { color: #CBD5E1; }
+[data-theme="dark"] .modal-footer { background: #172033; border-color: #334155; }
 
 [data-theme="dark"] .nav-item:hover,
 [data-theme="dark"] .nav-item.active {
