@@ -327,7 +327,7 @@ async function hkClearAll() {
         for (const d of (res.dispatches || []).filter(d => d.status === 'pending')) {
             await API.deleteDispatch(d.id);
         }
-        toast('Dispatch effacé', 'success');
+        toast(t('housekeeping.dispatch_validated'), 'success');
         await hkLoadTab();
     } catch (e) { toast(e.message, 'error'); }
 }
@@ -631,7 +631,7 @@ async function hkLoadControl(container) {
             </div>
         ` : ''}
 
-        ${!toControl.length && !controlled.length ? '<div class="empty-state"><i class="fas fa-clipboard-check"></i><h3>Rien à contrôler</h3></div>' : ''}
+        ${!toControl.length && !controlled.length ? '<div class="empty-state"><i class="fas fa-clipboard-check"></i><h3>' + t('housekeeping.no_rooms') + '</h3></div>' : ''}
     `;
 }
 
@@ -912,7 +912,7 @@ async function hkBatchControlModal() {
     const toControl = (res.dispatches || []).filter(d => d.status === 'completed');
     
     if (toControl.length === 0) {
-        toast('Aucune chambre à contrôler', 'info');
+        toast(t('housekeeping.select_rooms'), 'info');
         return;
     }
     
@@ -996,11 +996,11 @@ async function hkBatchControlSubmit(e) {
     const ids = [...document.querySelectorAll('input[name="dispatches"]:checked')].map(c => parseInt(c.value));
     
     if (ids.length === 0) {
-        toast('Sélectionnez au moins une chambre', 'warning');
+        toast(t('housekeeping.select_rooms'), 'warning');
         return;
     }
-    
-    if (!confirm(`Valider ${ids.length} chambre(s) comme conformes (tous critères OK) ?`)) {
+
+    if (!confirm(`${t('housekeeping.mark_controlled')} (${ids.length}) ?`)) {
         return;
     }
     
