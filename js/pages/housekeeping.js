@@ -491,9 +491,9 @@ async function hkLoadBatchCompleteRooms() {
                 <div class="batch-floor">
                     <div class="batch-floor-header">
                         <label>
-                            <input type="checkbox" onchange="hkToggleFloorComplete(this, '${floor}')"> 
-                            <strong>Étage ${floor}</strong>
-                            <span class="floor-count">(${byFloor[floor].length} chambres)</span>
+                            <input type="checkbox" onchange="hkToggleFloorComplete(this, '${floor}')">
+                            <strong>${t('housekeeping.floor')} ${floor}</strong>
+                            <span class="floor-count">(${byFloor[floor].length})</span>
                         </label>
                     </div>
                     <div class="batch-floor-rooms" data-floor="${floor}">
@@ -548,11 +548,11 @@ async function hkBatchCompleteSubmit() {
     const ids = [...document.querySelectorAll('input[name="complete_dispatches"]:checked')].map(c => +c.value);
     
     if (!ids.length) {
-        toast('Sélectionnez au moins une chambre', 'warning');
+        toast(t('housekeeping.select_rooms'), 'warning');
         return;
     }
-    
-    if (!confirm(`Marquer ${ids.length} chambre(s) comme nettoyée(s) ?`)) return;
+
+    if (!confirm(`${t('housekeeping.mark_clean')} (${ids.length}) ?`)) return;
     
     try {
         let success = 0;
@@ -592,9 +592,9 @@ async function hkLoadControl(container) {
 
     container.innerHTML = `
         <div class="control-stats">
-            <div class="stat-item stat-warning"><span class="stat-number">${toControl.length}</span><span class="stat-label">À contrôler</span></div>
-            <div class="stat-item stat-success"><span class="stat-number">${controlled.length}</span><span class="stat-label">Contrôlées</span></div>
-            <div class="stat-item"><span class="stat-number">${pending.length}</span><span class="stat-label">En attente</span></div>
+            <div class="stat-item stat-warning"><span class="stat-number">${toControl.length}</span><span class="stat-label">${t('housekeeping.to_clean')}</span></div>
+            <div class="stat-item stat-success"><span class="stat-number">${controlled.length}</span><span class="stat-label">${t('housekeeping.controlled')}</span></div>
+            <div class="stat-item"><span class="stat-number">${pending.length}</span><span class="stat-label">${t('housekeeping.not_assigned')}</span></div>
         </div>
 
         ${toControl.length ? `
@@ -725,10 +725,10 @@ async function hkControlModal(id) {
                 
                 <div class="modal-footer">
                     ${isControlled ? `
-                        <button type="button" class="btn btn-outline" onclick="closeModal()">Fermer</button>
+                        <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
                     ` : `
-                        <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                        <button type="submit" class="btn btn-primary">Valider</button>
+                        <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                        <button type="submit" class="btn btn-primary">${t('common.save')}</button>
                     `}
                 </div>
             </form>
@@ -899,7 +899,7 @@ async function hkControlSubmit(e, id) {
 
     try {
         await API.controlDispatchWithPhoto(id, data);
-        toast('Contrôle enregistré', 'success');
+        toast(t('housekeeping.mark_controlled'), 'success');
         closeModal();
         await hkLoadTab();
     } catch (e) { toast(e.message, 'error'); }
@@ -924,7 +924,7 @@ async function hkBatchControlModal() {
         byFloor[floor].push(d);
     });
     
-    openModal('Contrôle multiple', `
+    openModal(t('housekeeping.control'), `
         <form onsubmit="hkBatchControlSubmit(event)">
             <div class="batch-control-info">
                 <p><i class="fas fa-info-circle"></i> Sélectionnez les chambres à valider comme <strong>conformes</strong> (tous les critères OK).</p>
@@ -936,9 +936,9 @@ async function hkBatchControlModal() {
                     <div class="batch-floor">
                         <div class="batch-floor-header">
                             <label>
-                                <input type="checkbox" onchange="hkToggleControlFloor(this, '${floor}')"> 
-                                <strong>Étage ${floor}</strong>
-                                <span class="floor-count">(${byFloor[floor].length} chambre${byFloor[floor].length > 1 ? 's' : ''})</span>
+                                <input type="checkbox" onchange="hkToggleControlFloor(this, '${floor}')">
+                                <strong>${t('housekeeping.floor')} ${floor}</strong>
+                                <span class="floor-count">(${byFloor[floor].length})</span>
                             </label>
                         </div>
                         <div class="batch-floor-rooms" data-floor="${floor}">
@@ -956,18 +956,18 @@ async function hkBatchControlModal() {
             
             <div class="batch-control-actions">
                 <button type="button" class="btn btn-outline btn-sm" onclick="hkSelectAllControl(true)">
-                    <i class="fas fa-check-double"></i> Tout sélectionner
+                    <i class="fas fa-check-double"></i> ${t('housekeeping.select_all')}
                 </button>
                 <button type="button" class="btn btn-outline btn-sm" onclick="hkSelectAllControl(false)">
-                    <i class="fas fa-times"></i> Tout désélectionner
+                    <i class="fas fa-times"></i> ${t('housekeeping.deselect_all')}
                 </button>
             </div>
             
             <div class="modal-footer">
                 <span id="batch-control-count" class="selected-count">0 sélectionnée(s)</span>
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
                 <button type="submit" class="btn btn-success">
-                    <i class="fas fa-check"></i> Valider OK
+                    <i class="fas fa-check"></i> ${t('housekeeping.validate_dispatch')}
                 </button>
             </div>
         </form>
