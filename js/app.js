@@ -5,8 +5,69 @@
 let currentPage = 'dashboard';
 let captchaAnswer = 0;
 
+// === DARK MODE ===
+function initTheme() {
+    const saved = localStorage.getItem('acl_theme');
+    if (saved) {
+        document.documentElement.setAttribute('data-theme', saved);
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    }
+}
+
+function toggleDarkMode() {
+    const current = document.documentElement.getAttribute('data-theme');
+    const newTheme = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('acl_theme', newTheme);
+
+    // Mettre a jour l'icone du toggle
+    const icon = document.getElementById('theme-toggle-icon');
+    if (icon) {
+        icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    }
+}
+
+// === SERVICE WORKER ===
+function registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').then(function(reg) {
+            // SW enregistre
+        }).catch(function() {
+            // SW non supporte ou erreur
+        });
+    }
+}
+
+function requestPushPermission() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'granted') return;
+    if (Notification.permission === 'denied') return;
+
+    Notification.requestPermission().then(function(permission) {
+        if (permission === 'granted') {
+            toast(t('notif.push_enabled'), 'success');
+        }
+    });
+}
+
+function sendBrowserNotification(title, body, tag) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    new Notification(title, {
+        body: body,
+        icon: '/favicon.ico',
+        tag: tag || 'acl-' + Date.now(),
+        requireInteraction: false
+    });
+}
+
+// Appliquer le theme des le chargement (avant DOMContentLoaded)
+initTheme();
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    registerServiceWorker();
     if (API.token && API.user) {
         showApp();
     } else {
@@ -279,8 +340,19 @@ async function showApp() {
     // Load modules config and hide disabled modules
     await loadModulesConfig();
 
+    // Inject theme toggle + language selector in header
+    injectHeaderControls();
+
+    // Apply saved language
+    if (typeof updateNavLabels === 'function') {
+        updateNavLabels();
+    }
+
     // Load notifications
     loadNotifications();
+
+    // Request push permission on first interaction
+    document.body.addEventListener('click', requestPushPermission, { once: true });
 
     // Start real-time polling
     startPolling();
@@ -584,10 +656,15 @@ async function longPoll() {
                 loadNotifications();
             }
 
-            // Notification toast pour les nouvelles notifications
+            // Notification toast + push pour les nouvelles notifications
             if (data.notifications && data.notifications.length > 0) {
                 const latest = data.notifications[0];
-                toast(latest.title || 'Nouvelle notification', 'info');
+                toast(latest.title || t('notif.new'), 'info');
+                sendBrowserNotification(
+                    'ACL GESTION',
+                    latest.title || t('notif.new'),
+                    'acl-notif-' + latest.id
+                );
             }
         }
 
@@ -611,6 +688,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // Request notification permission after user interaction
     document.body.addEventListener('click', requestNotificationPermission, { once: true });
 });
+
+// === HEADER CONTROLS (theme + lang) ===
+function injectHeaderControls() {
+    const headerActions = document.querySelector('.header-actions');
+    if (!headerActions || document.getElementById('header-quick-settings')) return;
+
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    const container = document.createElement('div');
+    container.id = 'header-quick-settings';
+    container.className = 'header-quick-settings';
+    container.innerHTML = `
+        <button class="theme-toggle" onclick="toggleDarkMode()" title="${t('settings.dark_mode')}">
+            <i id="theme-toggle-icon" class="fas ${isDark ? 'fa-sun' : 'fa-moon'}"></i>
+        </button>
+        ${typeof renderLanguageSelector === 'function' ? renderLanguageSelector() : ''}
+    `;
+    headerActions.appendChild(container);
+}
 
 // Profile Modal
 function showProfileModal() {

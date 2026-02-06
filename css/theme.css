@@ -862,3 +862,274 @@ select.form-control {
         align-items: center;
     }
 }
+
+/* =========================================
+   DARK MODE
+   ========================================= */
+[data-theme="dark"] {
+    --gray-25: #0D1117;
+    --gray-50: #161B22;
+    --gray-100: #1C2128;
+    --gray-200: #2D333B;
+    --gray-300: #444C56;
+    --gray-400: #768390;
+    --gray-500: #8B949E;
+    --gray-600: #ADBAC7;
+    --gray-700: #CDD9E5;
+    --gray-800: #E6EDF3;
+    --gray-900: #F0F6FC;
+
+    --primary-50: #1C2128;
+    --primary-100: #1E2A3A;
+    --primary-200: #253650;
+    --primary-500: #6B8AFF;
+    --primary-600: #7B9AFF;
+    --primary-700: #8BAAFF;
+
+    --brand-primary: #3A7BD5;
+    --brand-secondary: #5B9AFF;
+
+    --success-50: #0D1F17;
+    --success-100: #122B1E;
+    --success-500: #3FB950;
+    --success-600: #56D364;
+
+    --warning-50: #1F1A0D;
+    --warning-100: #2B2212;
+    --warning-500: #D29922;
+    --warning-600: #E3B341;
+
+    --danger-50: #1F0D0D;
+    --danger-100: #2B1212;
+    --danger-500: #F85149;
+    --danger-600: #FF7B72;
+
+    --info-50: #0D1525;
+    --info-100: #121F35;
+    --info-500: #58A6FF;
+    --info-600: #79C0FF;
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+
+    color-scheme: dark;
+}
+
+[data-theme="dark"] body {
+    background-color: var(--gray-25);
+    color: var(--gray-800);
+}
+
+[data-theme="dark"] .sidebar {
+    background: #0D1117;
+    border-right-color: var(--gray-200);
+}
+
+[data-theme="dark"] .main-header {
+    background: var(--gray-50);
+    border-bottom-color: var(--gray-200);
+}
+
+[data-theme="dark"] .card {
+    background: var(--gray-50);
+    border-color: var(--gray-200);
+}
+
+[data-theme="dark"] .table th,
+[data-theme="dark"] .table-compact th {
+    background: var(--gray-100);
+    color: var(--gray-700);
+}
+
+[data-theme="dark"] .table td,
+[data-theme="dark"] .table-compact td {
+    border-color: var(--gray-200);
+}
+
+[data-theme="dark"] .form-control,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+    background: var(--gray-100);
+    border-color: var(--gray-300);
+    color: var(--gray-800);
+}
+
+[data-theme="dark"] .modal-box {
+    background: var(--gray-50);
+}
+
+[data-theme="dark"] .modal-backdrop {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="dark"] .nav-item:hover,
+[data-theme="dark"] .nav-item.active {
+    background: var(--gray-200);
+}
+
+[data-theme="dark"] .btn-outline {
+    border-color: var(--gray-300);
+    color: var(--gray-700);
+}
+
+[data-theme="dark"] .notification-dropdown {
+    background: var(--gray-50);
+    border-color: var(--gray-200);
+}
+
+[data-theme="dark"] .toast {
+    background: var(--gray-100);
+    color: var(--gray-800);
+    border-color: var(--gray-300);
+}
+
+[data-theme="dark"] .kpi-card {
+    background: var(--gray-50);
+    border-color: var(--gray-200);
+}
+
+/* =========================================
+   DARK MODE TOGGLE BUTTON
+   ========================================= */
+.theme-toggle {
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 1.1rem;
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    transition: var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.theme-toggle:hover {
+    background: var(--gray-100);
+}
+
+[data-theme="dark"] .theme-toggle:hover {
+    background: var(--gray-200);
+}
+
+/* =========================================
+   LANGUAGE SELECTOR
+   ========================================= */
+.language-selector {
+    display: flex;
+    gap: var(--space-1);
+    align-items: center;
+}
+
+.lang-btn {
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--gray-500);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-semibold);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.lang-btn:hover {
+    border-color: var(--primary-500);
+    color: var(--primary-500);
+}
+
+.lang-btn.active {
+    background: var(--primary-500);
+    border-color: var(--primary-500);
+    color: white;
+}
+
+/* =========================================
+   DASHBOARD CUSTOMIZATION (Drag & Drop)
+   ========================================= */
+.dashboard-customize-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+}
+
+.widget-card {
+    transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+}
+
+.widget-card.dragging {
+    opacity: 0.5;
+    transform: scale(0.98);
+    box-shadow: var(--shadow-xl);
+}
+
+.widget-card.drag-over {
+    border: 2px dashed var(--primary-500);
+    border-radius: var(--radius-lg);
+}
+
+.widget-card[draggable="true"] .card-header {
+    cursor: grab;
+}
+
+.widget-card[draggable="true"] .card-header:active {
+    cursor: grabbing;
+}
+
+.widget-card .drag-handle {
+    color: var(--gray-400);
+    margin-right: var(--space-2);
+    cursor: grab;
+}
+
+.widget-config-modal .widget-list {
+    list-style: none;
+    padding: 0;
+}
+
+.widget-config-modal .widget-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-2);
+    background: var(--gray-50);
+    cursor: grab;
+    transition: var(--transition-fast);
+}
+
+.widget-config-modal .widget-item:hover {
+    background: var(--gray-100);
+}
+
+.widget-config-modal .widget-item:active {
+    cursor: grabbing;
+    box-shadow: var(--shadow-md);
+}
+
+.widget-config-modal .widget-item .drag-icon {
+    color: var(--gray-400);
+}
+
+.widget-config-modal .widget-item label {
+    flex: 1;
+    cursor: pointer;
+    font-weight: var(--font-medium);
+}
+
+/* Header actions group for theme toggle + lang */
+.header-quick-settings {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: var(--space-2);
+    padding-left: var(--space-2);
+    border-left: 1px solid var(--gray-200);
+}
