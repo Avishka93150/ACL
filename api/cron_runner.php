@@ -6,11 +6,10 @@
  * Ce script doit être exécuté toutes les 30 minutes via crontab.
  * Il vérifie quelles automatisations doivent s'exécuter et les lance.
  * 
- * Configuration crontab recommandée :
- * */30 * * * * /opt/plesk/php/8.1/bin/php /var/www/vhosts/acl-gestion.com/api/cron_runner.php
- * 
- * Ou pour tester manuellement :
- * php cron_runner.php
+ * Configuration crontab recommandee :
+ *   Toutes les 30 min : /opt/plesk/php/8.3/bin/php /var/www/vhosts/acl-gestion.com/httpdocs/api/cron_runner.php
+ *
+ * Tester manuellement : php cron_runner.php
  */
 
 // Configuration
