@@ -140,6 +140,59 @@ function showNewHotelModal() {
                     <input type="time" name="checkout_time" value="11:00">
                 </div>
             </div>
+
+            <div class="form-section mt-20">
+                <h5><i class="fas fa-server"></i> PMS (Property Management System)</h5>
+                <p class="text-muted mb-10">Connectez votre logiciel de gestion hôtelière</p>
+                <div class="form-group">
+                    <label>Type de PMS</label>
+                    <select name="pms_type" onchange="togglePmsFields(this.value, 'new')">
+                        <option value="">Aucun PMS</option>
+                        <option value="geho">Geho</option>
+                    </select>
+                </div>
+                <div id="pms-fields-new" style="display:none">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Adresse IP du serveur *</label>
+                            <input type="text" name="pms_ip" placeholder="Ex: 192.168.1.100">
+                        </div>
+                        <div class="form-group">
+                            <label>Port de communication *</label>
+                            <input type="number" name="pms_port" placeholder="Ex: 8080" min="1" max="65535">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Utilisateur PMS</label>
+                            <input type="text" name="pms_username" placeholder="Optionnel">
+                        </div>
+                        <div class="form-group">
+                            <label>Mot de passe PMS</label>
+                            <input type="password" name="pms_password" placeholder="Optionnel">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section mt-20">
+                <h5><i class="fab fa-stripe"></i> Stripe (Paiement en ligne)</h5>
+                <p class="text-muted mb-10">Clés API Stripe pour le paiement des réservations en ligne</p>
+                <div class="form-group">
+                    <label>Clé publique (pk_live_... ou pk_test_...)</label>
+                    <input type="text" name="stripe_public_key" placeholder="pk_live_xxxxx">
+                </div>
+                <div class="form-group">
+                    <label>Clé secrète (sk_live_... ou sk_test_...)</label>
+                    <input type="password" name="stripe_secret_key" placeholder="sk_live_xxxxx">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="booking_enabled" value="1"> Activer la réservation en ligne
+                    </label>
+                </div>
+            </div>
+
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
                 <button type="submit" class="btn btn-primary">${t('common.create')}</button>
@@ -228,6 +281,72 @@ async function showEditHotelModal(id) {
                 </div>
                 
                 <div class="form-section mt-20">
+                    <h5><i class="fas fa-server"></i> PMS (Property Management System)</h5>
+                    <p class="text-muted mb-10">Connectez votre logiciel de gestion hôtelière</p>
+                    <div class="form-group">
+                        <label>Type de PMS</label>
+                        <select name="pms_type" onchange="togglePmsFields(this.value, 'edit')">
+                            <option value="">Aucun PMS</option>
+                            <option value="geho" ${h.pms_type === 'geho' ? 'selected' : ''}>Geho</option>
+                        </select>
+                    </div>
+                    <div id="pms-fields-edit" style="${h.pms_type ? '' : 'display:none'}">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Adresse IP du serveur *</label>
+                                <input type="text" name="pms_ip" value="${esc(h.pms_ip || '')}" placeholder="Ex: 192.168.1.100">
+                            </div>
+                            <div class="form-group">
+                                <label>Port de communication *</label>
+                                <input type="number" name="pms_port" value="${h.pms_port || ''}" placeholder="Ex: 8080" min="1" max="65535">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Utilisateur PMS</label>
+                                <input type="text" name="pms_username" value="${esc(h.pms_username || '')}" placeholder="Optionnel">
+                            </div>
+                            <div class="form-group">
+                                <label>Mot de passe PMS</label>
+                                <input type="password" name="pms_password" value="${esc(h.pms_password || '')}" placeholder="Optionnel">
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline mb-10" onclick="testPmsConnection(${h.id})">
+                            <i class="fas fa-plug"></i> Tester la connexion
+                        </button>
+                        <div id="pms-test-result"></div>
+                    </div>
+                </div>
+
+                <div class="form-section mt-20">
+                    <h5><i class="fab fa-stripe"></i> Stripe (Paiement en ligne)</h5>
+                    <p class="text-muted mb-10">Clés API Stripe pour le paiement des réservations en ligne</p>
+                    <div class="form-group">
+                        <label>Clé publique (pk_live_... ou pk_test_...)</label>
+                        <input type="text" name="stripe_public_key" value="${esc(h.stripe_public_key || '')}" placeholder="pk_live_xxxxx">
+                    </div>
+                    <div class="form-group">
+                        <label>Clé secrète (sk_live_... ou sk_test_...)</label>
+                        <input type="password" name="stripe_secret_key" value="${esc(h.stripe_secret_key || '')}" placeholder="sk_live_xxxxx">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="booking_enabled" value="1" ${h.booking_enabled == 1 ? 'checked' : ''}> Activer la réservation en ligne
+                        </label>
+                    </div>
+                    ${h.booking_slug ? `
+                        <div class="form-group">
+                            <label>URL de réservation</label>
+                            <div class="input-group">
+                                <input type="text" readonly value="${window.location.origin}/booking.html?hotel=${esc(h.booking_slug)}" class="form-control" id="booking-url-field">
+                                <button type="button" class="btn btn-outline" onclick="copyBookingUrl()"><i class="fas fa-copy"></i></button>
+                            </div>
+                            <small class="form-help">Partagez ce lien avec vos clients pour la réservation en ligne</small>
+                        </div>
+                    ` : ''}
+                </div>
+
+                <div class="form-section mt-20">
                     <h5><i class="fas fa-chart-line"></i> Revenue Management (Xotelo)</h5>
                     <p class="text-muted mb-10">Configurez la clé Xotelo pour la veille tarifaire</p>
                     <div class="form-group">
@@ -236,7 +355,7 @@ async function showEditHotelModal(id) {
                         <small class="form-help">Trouvez cette clé sur <a href="https://xotelo.com" target="_blank">xotelo.com</a></small>
                     </div>
                 </div>
-                
+
                 <div class="form-section mt-20">
                     <h5><i class="fas fa-cash-register"></i> Configuration des clôtures</h5>
                     <p class="text-muted mb-10">Paramétrez les documents requis pour les clôtures journalières</p>
@@ -871,18 +990,51 @@ function closureConfigUpdateField(docIdx, fieldIdx, field, value) {
 async function saveClosureConfig(hotelId) {
     // Valider les documents
     const validDocs = closureConfigDocs.filter(d => d.document_name && d.document_name.trim());
-    
+
     if (closureConfigDocs.length > 0 && validDocs.length === 0) {
         toast('Veuillez renseigner le nom des documents', 'warning');
         return;
     }
-    
+
     try {
         await API.post(`/closures/config/${hotelId}`, { config: validDocs });
         toast('Configuration enregistrée', 'success');
         closeModal();
     } catch (e) {
         toast(e.message, 'error');
+    }
+}
+
+// ==================== PMS HELPERS ====================
+
+function togglePmsFields(value, context) {
+    const el = document.getElementById('pms-fields-' + context);
+    if (el) el.style.display = value ? '' : 'none';
+}
+
+async function testPmsConnection(hotelId) {
+    const resultDiv = document.getElementById('pms-test-result');
+    if (resultDiv) resultDiv.innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin"></i> Test en cours...</span>';
+
+    try {
+        const res = await API.post('/pms/test-connection', { hotel_id: hotelId });
+        if (resultDiv) {
+            if (res.connected) {
+                resultDiv.innerHTML = '<span class="text-success"><i class="fas fa-check-circle"></i> Connexion réussie</span>';
+            } else {
+                resultDiv.innerHTML = `<span class="text-danger"><i class="fas fa-times-circle"></i> ${esc(res.message || 'Connexion échouée')}</span>`;
+            }
+        }
+    } catch (err) {
+        if (resultDiv) resultDiv.innerHTML = `<span class="text-danger"><i class="fas fa-times-circle"></i> ${esc(err.message)}</span>`;
+    }
+}
+
+function copyBookingUrl() {
+    const field = document.getElementById('booking-url-field');
+    if (field) {
+        navigator.clipboard.writeText(field.value);
+        toast('URL copiée', 'success');
     }
 }
 
