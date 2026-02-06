@@ -323,34 +323,37 @@ function generateResponse(userMessage) {
     };
 }
 
-// Ajouter un message au chat
+// Ajouter un message au chat (XSS-safe)
 function addChatMessage(text, sender, action = null) {
     const container = document.getElementById('chatbot-messages');
-    
+
+    // Messages utilisateur echappes, messages bot (internes) formates
+    const formattedText = sender === 'user' ? esc(text) : formatBotMessage(text);
+    const actionHTML = action ? `<button class="chat-action-btn" onclick="executeChatAction('${escAttr(action.type)}', '${escAttr(action.page)}')">
+                    <i class="fas fa-arrow-right"></i> Aller a ${esc(action.page)}
+                </button>` : '';
+
     const messageHTML = `
         <div class="chat-message ${sender}">
             <div class="message-avatar">
                 <i class="fas fa-${sender === 'bot' ? 'robot' : 'user'}"></i>
             </div>
             <div class="message-content">
-                ${formatMessage(text)}
-                ${action ? `<button class="chat-action-btn" onclick="executeChatAction('${action.type}', '${action.page}')">
-                    <i class="fas fa-arrow-right"></i> Aller à ${action.page}
-                </button>` : ''}
+                ${formattedText}
+                ${actionHTML}
             </div>
         </div>
     `;
-    
+
     container.insertAdjacentHTML('beforeend', messageHTML);
     container.scrollTop = container.scrollHeight;
-    
-    // Sauvegarder dans l'historique
+
     chatHistory.push({ text, sender, timestamp: new Date() });
 }
 
-// Formater le message (markdown simple)
-function formatMessage(text) {
-    return text
+// Formater les messages du bot (markdown simple - reponses internes sures, echappees d'abord)
+function formatBotMessage(text) {
+    return esc(text)
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\n/g, '<br>');
 }

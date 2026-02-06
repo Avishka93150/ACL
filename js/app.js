@@ -210,14 +210,10 @@ async function handleLogin(e) {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connexion...';
 
     try {
-        console.log('Tentative de connexion...', email);
         const result = await API.login(email, password);
-        console.log('Résultat API:', result);
-        
+
         if (result.success && result.token && result.user) {
             API.setAuth(result.token, result.user);
-            console.log('Auth sauvegardée, token:', API.token ? 'OK' : 'ERREUR');
-            console.log('User:', API.user);
             toast('Connexion réussie', 'success');
             
             // Hide login modal if open
@@ -232,12 +228,10 @@ async function handleLogin(e) {
                 showApp();
             }
         } else {
-            console.error('Réponse invalide:', result);
             toast(result.message || 'Erreur de connexion', 'error');
         }
     } catch (error) {
-        console.error('Erreur login:', error);
-        toast(error.message, 'error');
+        toast('Erreur de connexion', 'error');
     } finally {
         btn.disabled = false;
         btn.innerHTML = 'Se connecter <i class="fas fa-arrow-right"></i>';
@@ -526,30 +520,89 @@ function requestNotificationPermission() {
     }
 }
 
-// Initialize polling for real-time updates
-let pollingInterval = null;
+// === REAL-TIME POLLING ===
+let pollingActive = false;
+let pollingAbort = null;
+let lastPollTimestamp = null;
 
 function startPolling() {
-    if (pollingInterval) clearInterval(pollingInterval);
-    
-    // Initial update
+    // Mise a jour initiale des badges
     updateMaintenanceBadge();
     updateMessagesBadge();
-    
-    // Poll every 10 seconds for badges
-    pollingInterval = setInterval(() => {
-        if (API.token) {
-            updateMaintenanceBadge();
-            updateMessagesBadge();
-            loadNotifications(); // Refresh notifications
-        }
-    }, 10000);
+
+    // Demarrer le long polling
+    pollingActive = true;
+    lastPollTimestamp = new Date().toISOString().replace('T', ' ').substr(0, 19);
+    longPoll();
 }
 
 function stopPolling() {
-    if (pollingInterval) {
-        clearInterval(pollingInterval);
-        pollingInterval = null;
+    pollingActive = false;
+    if (pollingAbort) {
+        pollingAbort.abort();
+        pollingAbort = null;
+    }
+}
+
+async function longPoll() {
+    if (!pollingActive || !API.token) return;
+
+    try {
+        pollingAbort = new AbortController();
+        const response = await fetch(
+            `${CONFIG.API_URL}/notifications/poll?since=${encodeURIComponent(lastPollTimestamp)}`,
+            {
+                headers: { 'Authorization': 'Bearer ' + API.token },
+                signal: pollingAbort.signal
+            }
+        );
+
+        if (!response.ok) {
+            // Si erreur 401, arreter le polling (session expiree)
+            if (response.status === 401) { stopPolling(); return; }
+            throw new Error('Poll error');
+        }
+
+        const data = await response.json();
+
+        if (data.has_updates) {
+            // Mettre a jour le badge de notifications
+            const badge = document.querySelector('.notification-count');
+            if (badge && data.unread_notifications !== undefined) {
+                badge.textContent = data.unread_notifications > 0 ? data.unread_notifications : '';
+                badge.style.display = data.unread_notifications > 0 ? 'flex' : 'none';
+            }
+
+            // Mettre a jour le badge de messages
+            if (data.unread_messages > 0) {
+                updateMessagesBadge();
+            }
+
+            // Recharger la liste des notifications si le dropdown est ouvert
+            const dropdown = document.querySelector('.notification-dropdown.active');
+            if (dropdown) {
+                loadNotifications();
+            }
+
+            // Notification toast pour les nouvelles notifications
+            if (data.notifications && data.notifications.length > 0) {
+                const latest = data.notifications[0];
+                toast(latest.title || 'Nouvelle notification', 'info');
+            }
+        }
+
+        if (data.timestamp) {
+            lastPollTimestamp = data.timestamp;
+        }
+    } catch (e) {
+        if (e.name === 'AbortError') return;
+        // En cas d'erreur, attendre avant de reessayer
+        await new Promise(r => setTimeout(r, 5000));
+    }
+
+    // Relancer immediatement le prochain poll
+    if (pollingActive) {
+        setTimeout(longPoll, 500);
     }
 }
 

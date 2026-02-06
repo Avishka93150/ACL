@@ -818,3 +818,47 @@ select.form-control {
         padding: var(--space-4);
     }
 }
+
+/* =========================================
+   PAGINATION
+   ========================================= */
+.pagination-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-4) 0;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+}
+
+.pagination-info {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.pagination-controls .btn-sm {
+    min-width: 36px;
+    height: 36px;
+    padding: 0 var(--space-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pagination-ellipsis {
+    padding: 0 var(--space-2);
+    color: var(--gray-400);
+}
+
+@media (max-width: 768px) {
+    .pagination-container {
+        flex-direction: column;
+        align-items: center;
+    }
+}

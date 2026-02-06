@@ -1044,7 +1044,7 @@ function updateExpenseCard(input) {
                 </div>
                 <div class="preview-info">
                     <span class="preview-status">Nouveau justificatif sélectionné</span>
-                    <span class="preview-filename">${fileName} (${fileSize})</span>
+                    <span class="preview-filename">${esc(fileName)} (${esc(fileSize)})</span>
                 </div>
             `;
             card.classList.add('file-replacing');
@@ -1136,7 +1136,7 @@ function updateDocumentCard(docId, input) {
                 </div>
                 <div class="preview-info">
                     <span class="preview-status">Nouveau fichier sélectionné</span>
-                    <span class="preview-filename">${fileName} (${fileSize})</span>
+                    <span class="preview-filename">${esc(fileName)} (${esc(fileSize)})</span>
                 </div>
             `;
             card.classList.add('file-replacing');

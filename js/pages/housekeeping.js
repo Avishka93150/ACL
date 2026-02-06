@@ -1442,13 +1442,13 @@ function hkCreateAnomaliesPDF(data, hotelName, startDate, endDate) {
                     ${d.control_notes ? `
                         <p>
                             <span class="label">Notes du contrôle:</span><br>
-                            <span class="value">${d.control_notes}</span>
+                            <span class="value">${esc(d.control_notes)}</span>
                         </p>
                     ` : ''}
                     ${d.controlled_by_name ? `
                         <p>
                             <span class="label">Contrôlé par:</span>
-                            <span class="value">${d.controlled_by_name}</span>
+                            <span class="value">${esc(d.controlled_by_name)}</span>
                         </p>
                     ` : ''}
                 </div>

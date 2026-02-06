@@ -3,6 +3,7 @@
  */
 
 let mtHotels = [];
+let mtCurrentPage = 1;
 let mtCurrentHotel = null; // null = tous les hôtels
 let mtBlockedRoomsData = null; // Cache pour les données chambres bloquées
 
@@ -227,10 +228,11 @@ function mtChangeHotel(id) {
     mtReloadTickets();
 }
 
-async function mtReloadTickets() {
-    const params = {};
+async function mtReloadTickets(page) {
+    if (page !== undefined) mtCurrentPage = page;
+    const params = { page: mtCurrentPage, per_page: 25 };
     if (mtCurrentHotel) params.hotel_id = mtCurrentHotel;
-    
+
     const status = document.getElementById('mt-filter-status')?.value;
     const priority = document.getElementById('mt-filter-priority')?.value;
     if (status) params.status = status;
@@ -238,8 +240,12 @@ async function mtReloadTickets() {
 
     try {
         const res = await API.getTickets(params);
-        document.getElementById('mt-tickets-list').innerHTML = mtRenderTickets(res.tickets || []);
-    } catch (e) { toast(e.message, 'error'); }
+        let html = mtRenderTickets(res.tickets || []);
+        if (res.pagination) {
+            html += renderPagination(res.pagination, (p) => mtReloadTickets(p));
+        }
+        document.getElementById('mt-tickets-list').innerHTML = html;
+    } catch (e) { toast('Erreur chargement tickets', 'error'); }
 }
 
 function mtNewTicketModal() {

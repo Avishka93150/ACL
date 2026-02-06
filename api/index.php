@@ -99,6 +99,187 @@ function getRolePermissions($role) {
     }
 }
 
+// === PAGINATION HELPER ===
+function paginate($query, $params = [], $countQuery = null, $countParams = null) {
+    $page = max(1, (int)($_GET['page'] ?? 1));
+    $perPage = min(100, max(1, (int)($_GET['per_page'] ?? 25)));
+    $offset = ($page - 1) * $perPage;
+
+    // Compter le total
+    if (!$countQuery) {
+        $countQuery = preg_replace('/SELECT .+? FROM/is', 'SELECT COUNT(*) FROM', $query);
+        $countQuery = preg_replace('/ORDER BY .+$/is', '', $countQuery);
+        $countQuery = preg_replace('/LIMIT .+$/is', '', $countQuery);
+        $countParams = $params;
+    }
+
+    $total = (int)db()->count($countQuery, $countParams);
+    $totalPages = $perPage > 0 ? ceil($total / $perPage) : 1;
+
+    // Ajouter LIMIT/OFFSET
+    $query = preg_replace('/LIMIT \d+/i', '', $query);
+    $query .= " LIMIT $perPage OFFSET $offset";
+
+    $data = db()->query($query, $params);
+
+    return [
+        'data' => $data,
+        'pagination' => [
+            'page' => $page,
+            'per_page' => $perPage,
+            'total' => $total,
+            'total_pages' => (int)$totalPages,
+            'has_next' => $page < $totalPages,
+            'has_prev' => $page > 1
+        ]
+    ];
+}
+
+// === RATE LIMITING (login) ===
+function checkRateLimit($email) {
+    try {
+        // Creer la table si elle n'existe pas
+        db()->execute("CREATE TABLE IF NOT EXISTS login_attempts (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            email VARCHAR(255) NOT NULL,
+            ip_address VARCHAR(45),
+            attempted_at DATETIME NOT NULL,
+            INDEX idx_email_time (email, attempted_at),
+            INDEX idx_ip_time (ip_address, attempted_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        $since = date('Y-m-d H:i:s', time() - LOGIN_LOCKOUT_MINUTES * 60);
+
+        // Verifier par email
+        $attempts = db()->count(
+            "SELECT COUNT(*) FROM login_attempts WHERE email = ? AND attempted_at > ?",
+            [$email, $since]
+        );
+        if ($attempts >= LOGIN_MAX_ATTEMPTS) {
+            return false;
+        }
+
+        // Verifier par IP
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        $ipAttempts = db()->count(
+            "SELECT COUNT(*) FROM login_attempts WHERE ip_address = ? AND attempted_at > ?",
+            [$ip, $since]
+        );
+        if ($ipAttempts >= LOGIN_MAX_ATTEMPTS * 3) {
+            return false;
+        }
+
+        return true;
+    } catch (Exception $e) {
+        return true; // En cas d'erreur, laisser passer
+    }
+}
+
+function recordLoginAttempt($email) {
+    try {
+        db()->insert(
+            "INSERT INTO login_attempts (email, ip_address, attempted_at) VALUES (?, ?, NOW())",
+            [$email, $_SERVER['REMOTE_ADDR'] ?? '']
+        );
+        // Nettoyage des anciennes tentatives (> 24h)
+        db()->execute("DELETE FROM login_attempts WHERE attempted_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)");
+    } catch (Exception $e) {}
+}
+
+function clearLoginAttempts($email) {
+    try {
+        db()->execute("DELETE FROM login_attempts WHERE email = ?", [$email]);
+    } catch (Exception $e) {}
+}
+
+// === VALIDATION MOT DE PASSE ===
+function validatePassword($password) {
+    if (strlen($password) < 8) return 'Le mot de passe doit contenir au moins 8 caracteres';
+    if (!preg_match('/[A-Z]/', $password)) return 'Le mot de passe doit contenir au moins une majuscule';
+    if (!preg_match('/[a-z]/', $password)) return 'Le mot de passe doit contenir au moins une minuscule';
+    if (!preg_match('/[0-9]/', $password)) return 'Le mot de passe doit contenir au moins un chiffre';
+    return null;
+}
+
+// === VALIDATION UPLOAD ===
+function validateUpload($file, $type = 'image') {
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        return 'Erreur lors de l\'upload du fichier';
+    }
+
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+
+    if ($type === 'image') {
+        if (!in_array($ext, UPLOAD_ALLOWED_IMAGES)) {
+            return 'Format d\'image non autorise. Formats acceptes: ' . implode(', ', UPLOAD_ALLOWED_IMAGES);
+        }
+        if ($file['size'] > UPLOAD_MAX_SIZE_IMAGE) {
+            return 'Image trop volumineuse (max ' . (UPLOAD_MAX_SIZE_IMAGE / 1024 / 1024) . ' Mo)';
+        }
+        // Verifier le type MIME reel
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+        if (!in_array($mime, ['image/jpeg', 'image/png'])) {
+            return 'Le contenu du fichier ne correspond pas a une image valide';
+        }
+    } elseif ($type === 'document') {
+        if (!in_array($ext, UPLOAD_ALLOWED_DOCS)) {
+            return 'Format de document non autorise. Formats acceptes: ' . implode(', ', UPLOAD_ALLOWED_DOCS);
+        }
+        if ($file['size'] > UPLOAD_MAX_SIZE_DOC) {
+            return 'Document trop volumineux (max ' . (UPLOAD_MAX_SIZE_DOC / 1024 / 1024) . ' Mo)';
+        }
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+        if ($mime !== 'application/pdf') {
+            return 'Le contenu du fichier ne correspond pas a un PDF valide';
+        }
+    } elseif ($type === 'any') {
+        $allowedExts = array_merge(UPLOAD_ALLOWED_IMAGES, UPLOAD_ALLOWED_DOCS);
+        if (!in_array($ext, $allowedExts)) {
+            return 'Format non autorise. Formats acceptes: ' . implode(', ', $allowedExts);
+        }
+        $maxSize = in_array($ext, UPLOAD_ALLOWED_IMAGES) ? UPLOAD_MAX_SIZE_IMAGE : UPLOAD_MAX_SIZE_DOC;
+        if ($file['size'] > $maxSize) {
+            return 'Fichier trop volumineux';
+        }
+    }
+
+    return null;
+}
+
+// === PROTECTION CSRF ===
+function checkCsrf() {
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' || $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+        return; // Pas de verification pour GET/OPTIONS
+    }
+
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? null;
+    $referer = $_SERVER['HTTP_REFERER'] ?? null;
+
+    // Si ni Origin ni Referer, accepter (requete meme-origine typique)
+    if (!$origin && !$referer) return;
+
+    $allowedHost = parse_url(CORS_ORIGIN, PHP_URL_HOST);
+
+    if ($origin) {
+        $originHost = parse_url($origin, PHP_URL_HOST);
+        if ($originHost && $originHost !== $allowedHost) {
+            json_error('Requete cross-origin non autorisee', 403);
+        }
+        return;
+    }
+
+    if ($referer) {
+        $refererHost = parse_url($referer, PHP_URL_HOST);
+        if ($refererHost && $refererHost !== $allowedHost) {
+            json_error('Requete cross-origin non autorisee', 403);
+        }
+    }
+}
+
 // Créer une notification
 // Types disponibles: info, warning, danger, success
 function createNotification($userId, $type, $title, $message = null) {
@@ -693,6 +874,9 @@ $subId = $segments[3] ?? null;  // Pour les routes comme /tasks/1/columns/2
 $subaction = $segments[4] ?? null;  // Pour les routes comme /tasks/1/tasks/2/checklist
 $method = $_SERVER['REQUEST_METHOD'];
 
+// === PROTECTION CSRF ===
+checkCsrf();
+
 // === ENDPOINTS ===
 try {
     switch ($endpoint) {
@@ -888,24 +1072,33 @@ try {
                 if (empty($data['email']) || empty($data['password'])) {
                     json_error('Email et mot de passe requis');
                 }
-                
+
+                // Rate limiting
+                if (!checkRateLimit($data['email'])) {
+                    json_error('Trop de tentatives de connexion. Reessayez dans ' . LOGIN_LOCKOUT_MINUTES . ' minutes.', 429);
+                }
+
                 $user = Auth::login($data['email'], $data['password']);
                 if (!$user) {
-                    // Logger la tentative échouée
-                    rgpdLog(null, 'login_failed', 'auth', null, "Tentative échouée pour: " . $data['email']);
+                    // Enregistrer la tentative echouee
+                    recordLoginAttempt($data['email']);
+                    rgpdLog(null, 'login_failed', 'auth', null, "Tentative echouee pour: " . $data['email']);
                     json_error('Email ou mot de passe incorrect');
                 }
-                
+
+                // Connexion reussie : effacer les tentatives
+                clearLoginAttempts($data['email']);
+
                 // Logger la connexion réussie
                 rgpdLog($user['id'], 'login', 'auth', $user['id'], null);
-                
+
                 // Vérifier si le consentement RGPD a été donné
                 $hasConsent = db()->queryOne(
                     "SELECT gdpr_consent FROM users WHERE id = ?",
                     [$user['id']]
                 );
                 $user['needs_gdpr_consent'] = !($hasConsent && $hasConsent['gdpr_consent']);
-                
+
                 $token = Auth::generateToken($user);
                 json_out(['success' => true, 'user' => $user, 'token' => $token]);
             }
@@ -935,16 +1128,18 @@ try {
                     $params[] = $data['phone'];
                 }
                 if (!empty($data['password'])) {
+                    $pwError = validatePassword($data['password']);
+                    if ($pwError) json_error($pwError);
                     $sets[] = "password = ?";
                     $params[] = password_hash($data['password'], PASSWORD_DEFAULT);
                 }
-                
+
                 if (!empty($sets)) {
                     $sets[] = "updated_at = NOW()";
                     $params[] = $user['id'];
                     db()->execute("UPDATE users SET " . implode(', ', $sets) . " WHERE id = ?", $params);
                 }
-                
+
                 // Retourner l'utilisateur mis à jour
                 $updatedUser = db()->queryOne("SELECT id, email, first_name, last_name, phone, role, status FROM users WHERE id = ?", [$user['id']]);
                 json_out(['success' => true, 'user' => $updatedUser]);
@@ -982,16 +1177,16 @@ try {
             if ($method === 'GET' && !$id) {
                 $user = require_auth();
                 try {
-                    $notifications = db()->query(
-                        "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50",
-                        [$user['id']]
-                    );
+                    $query = "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC";
+                    $params = [$user['id']];
+                    $countQuery = "SELECT COUNT(*) FROM notifications WHERE user_id = ?";
+                    $result = paginate($query, $params, $countQuery, $params);
                     $unreadCount = db()->count("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0", [$user['id']]);
                 } catch (Exception $e) {
-                    $notifications = [];
+                    $result = ['data' => [], 'pagination' => ['page' => 1, 'per_page' => 25, 'total' => 0, 'total_pages' => 0, 'has_next' => false, 'has_prev' => false]];
                     $unreadCount = 0;
                 }
-                json_out(['success' => true, 'notifications' => $notifications, 'unread_count' => $unreadCount]);
+                json_out(['success' => true, 'notifications' => $result['data'], 'pagination' => $result['pagination'], 'unread_count' => $unreadCount]);
             }
             
             // Marquer une notification comme lue - PUT /notifications/{id}/read
@@ -1021,9 +1216,55 @@ try {
                 db()->execute("DELETE FROM notifications WHERE user_id = ?", [$user['id']]);
                 json_out(['success' => true]);
             }
-            
+
+            // --- POLLING: GET /notifications/poll?since=<timestamp> ---
+            if ($method === 'GET' && $id === 'poll') {
+                $user = require_auth();
+                $since = $_GET['since'] ?? date('Y-m-d H:i:s', time() - 30);
+                $maxWait = 25;
+                $start = time();
+                $unreadNotifs = 0;
+
+                while (time() - $start < $maxWait) {
+                    $newNotifs = db()->query(
+                        "SELECT * FROM notifications WHERE user_id = ? AND created_at > ? ORDER BY created_at DESC LIMIT 20",
+                        [$user['id'], $since]
+                    );
+                    $newMessages = db()->count(
+                        "SELECT COUNT(*) FROM conversation_messages cm
+                         JOIN conversations c ON cm.conversation_id = c.id
+                         WHERE (c.user1_id = ? OR c.user2_id = ?) AND cm.sender_id != ? AND cm.is_read = 0 AND cm.created_at > ?",
+                        [$user['id'], $user['id'], $user['id'], $since]
+                    );
+                    $unreadNotifs = db()->count(
+                        "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0",
+                        [$user['id']]
+                    );
+
+                    if (count($newNotifs) > 0 || $newMessages > 0) {
+                        json_out([
+                            'success' => true,
+                            'has_updates' => true,
+                            'notifications' => $newNotifs,
+                            'unread_notifications' => (int)$unreadNotifs,
+                            'unread_messages' => (int)$newMessages,
+                            'timestamp' => date('Y-m-d H:i:s')
+                        ]);
+                    }
+                    sleep(2);
+                }
+
+                json_out([
+                    'success' => true,
+                    'has_updates' => false,
+                    'unread_notifications' => (int)$unreadNotifs,
+                    'unread_messages' => 0,
+                    'timestamp' => date('Y-m-d H:i:s')
+                ]);
+            }
+
             break;
-        
+
         // --- MODULES CONFIG ---
         case 'modules':
             // Récupérer la config des modules - GET /modules
@@ -2012,27 +2253,24 @@ try {
                 if (!empty($_GET['status'])) { $where .= " AND m.status = ?"; $params[] = $_GET['status']; }
                 if (!empty($_GET['priority'])) { $where .= " AND m.priority = ?"; $params[] = $_GET['priority']; }
                 
-                $limit = min(100, intval($_GET['limit'] ?? 50));
-                
-                $tickets = db()->query(
-                    "SELECT m.*, h.name as hotel_name,
+                $query = "SELECT m.*, h.name as hotel_name,
                             CONCAT(ua.first_name, ' ', ua.last_name) as assigned_to_name,
                             DATEDIFF(NOW(), m.assigned_at) as days_in_progress
-                     FROM maintenance_tickets m 
-                     LEFT JOIN hotels h ON m.hotel_id = h.id 
+                     FROM maintenance_tickets m
+                     LEFT JOIN hotels h ON m.hotel_id = h.id
                      LEFT JOIN users ua ON m.assigned_to = ua.id
-                     WHERE $where 
-                     ORDER BY FIELD(m.priority,'critical','high','medium','low'), m.created_at DESC 
-                     LIMIT $limit",
-                    $params
-                );
-                
+                     WHERE $where
+                     ORDER BY FIELD(m.priority,'critical','high','medium','low'), m.created_at DESC";
+                $countQuery = "SELECT COUNT(*) FROM maintenance_tickets m WHERE $where";
+
+                $result = paginate($query, $params, $countQuery, $params);
+
                 // Calculer is_overdue pour chaque ticket
-                foreach ($tickets as &$ticket) {
+                foreach ($result['data'] as &$ticket) {
                     $ticket['is_overdue'] = ($ticket['status'] === 'in_progress' && $ticket['days_in_progress'] >= 7);
                 }
-                
-                json_out(['success' => true, 'tickets' => $tickets]);
+
+                json_out(['success' => true, 'tickets' => $result['data'], 'pagination' => $result['pagination']]);
             }
             
             // Récupérer un ticket spécifique
@@ -2142,21 +2380,18 @@ try {
                     json_error('Données manquantes: hotel_id, category et description sont requis');
                 }
                 
-                // Gérer l'upload de photo si présente
+                // Gerer l'upload de photo si presente
                 $photoFilename = null;
                 if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+                    $uploadError = validateUpload($_FILES['photo'], 'image');
+                    if ($uploadError) json_error($uploadError);
+
                     $uploadDir = __DIR__ . '/../uploads/maintenance/';
-                    if (!is_dir($uploadDir)) {
-                        mkdir($uploadDir, 0755, true);
-                    }
-                    
+                    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+
                     $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
-                    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
-                        json_error('Format d\'image non supporté');
-                    }
-                    
                     $photoFilename = 'ticket_' . time() . '_' . uniqid() . '.' . $ext;
-                    
+
                     if (!move_uploaded_file($_FILES['photo']['tmp_name'], $uploadDir . $photoFilename)) {
                         json_error('Erreur lors de l\'upload de la photo');
                     }
@@ -2793,6 +3028,10 @@ try {
                         $error = is_array($files['error']) ? $files['error'][$i] : $files['error'];
                         
                         if ($error === UPLOAD_ERR_OK && $size > 0) {
+                            $singleFile = ['name' => $name, 'tmp_name' => $tmpName, 'size' => $size, 'type' => $type, 'error' => $error];
+                            $uploadError = validateUpload($singleFile, 'any');
+                            if ($uploadError) continue;
+
                             $ext = pathinfo($name, PATHINFO_EXTENSION);
                             $filename = 'task_' . $taskId . '_' . time() . '_' . uniqid() . '.' . $ext;
                             
@@ -3425,6 +3664,10 @@ try {
                     if (isset($_FILES['files']) && isset($_FILES['files']['name'][$questionId]) && $_FILES['files']['error'][$questionId] === UPLOAD_ERR_OK) {
                         $tmpName = $_FILES['files']['tmp_name'][$questionId];
                         $originalName = $_FILES['files']['name'][$questionId];
+                        $evalFile = ['name' => $originalName, 'tmp_name' => $tmpName, 'size' => $_FILES['files']['size'][$questionId], 'type' => $_FILES['files']['type'][$questionId], 'error' => $_FILES['files']['error'][$questionId]];
+                        $uploadError = validateUpload($evalFile, 'image');
+                        if ($uploadError) json_error($uploadError);
+
                         $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
                         
                         if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'])) {
@@ -3750,6 +3993,10 @@ try {
                     
                     for ($i = 0; $i < $fileCount; $i++) {
                         if ($_FILES['control_photos']['error'][$i] === UPLOAD_ERR_OK) {
+                            $controlFile = ['name' => $_FILES['control_photos']['name'][$i], 'tmp_name' => $_FILES['control_photos']['tmp_name'][$i], 'size' => $_FILES['control_photos']['size'][$i], 'type' => $_FILES['control_photos']['type'][$i], 'error' => $_FILES['control_photos']['error'][$i]];
+                            $uploadError = validateUpload($controlFile, 'image');
+                            if ($uploadError) continue;
+
                             $ext = strtolower(pathinfo($_FILES['control_photos']['name'][$i], PATHINFO_EXTENSION));
                             if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
                                 continue; // Skip invalid format
@@ -3964,21 +4211,23 @@ try {
                     }
                     
                     $file = $_FILES['justificatif'];
-                    
+                    $uploadError = validateUpload($file, 'document');
+                    if ($uploadError) json_error($uploadError);
+
                     // Vérifier le type de fichier
                     $finfo = finfo_open(FILEINFO_MIME_TYPE);
                     $mimeType = finfo_file($finfo, $file['tmp_name']);
                     finfo_close($finfo);
-                    
+
                     if ($mimeType !== 'application/pdf') {
                         json_error('Seuls les fichiers PDF sont acceptés pour le justificatif');
                     }
-                    
+
                     // Vérifier la taille (5Mo max)
                     if ($file['size'] > 5 * 1024 * 1024) {
                         json_error('Le fichier ne doit pas dépasser 5Mo');
                     }
-                    
+
                     // Sauvegarder le fichier
                     $uploadDir = __DIR__ . '/../uploads/leaves/';
                     if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
@@ -4045,16 +4294,18 @@ try {
                     }
                     
                     $file = $_FILES['justificatif'];
-                    
+                    $uploadError = validateUpload($file, 'document');
+                    if ($uploadError) json_error($uploadError);
+
                     // Vérifier le type
                     $finfo = finfo_open(FILEINFO_MIME_TYPE);
                     $mimeType = finfo_file($finfo, $file['tmp_name']);
                     finfo_close($finfo);
-                    
+
                     if ($mimeType !== 'application/pdf') {
                         json_error('Seuls les fichiers PDF sont acceptés');
                     }
-                    
+
                     // Sauvegarder
                     $uploadDir = __DIR__ . '/../uploads/leaves/';
                     if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
@@ -4534,11 +4785,24 @@ try {
                 json_out(['success' => true, 'transaction' => $transaction]);
             }
             
-            // Transactions - Liste
+            // Transactions - Liste (filtrer par hotels de l'utilisateur)
             if ($id === 'transactions' && !$action && $method === 'GET') {
-                require_auth();
+                $user = require_auth();
+                // Filtrer par les hotels accessibles a l'utilisateur
+                $userHotels = array_column(
+                    db()->query("SELECT hotel_id FROM user_hotels WHERE user_id = ?", [$user['id']]),
+                    'hotel_id'
+                );
+                if ($user['role'] !== 'admin' && empty($userHotels)) {
+                    json_out(['success' => true, 'transactions' => [], 'summary' => []]);
+                }
                 $where = "1=1";
                 $params = [];
+                if ($user['role'] !== 'admin') {
+                    $placeholders = implode(',', array_fill(0, count($userHotels), '?'));
+                    $where .= " AND t.hotel_id IN ($placeholders)";
+                    $params = array_merge($params, $userHotels);
+                }
                 
                 if (!empty($_GET['hotel_id'])) { 
                     $where .= " AND t.hotel_id = ?"; 
@@ -4553,17 +4817,15 @@ try {
                     $params[] = $_GET['end_date']; 
                 }
                 
-                $transactions = db()->query(
-                    "SELECT t.*, h.name as hotel_name, CONCAT(u.first_name, ' ', u.last_name) as user_name
-                     FROM linen_transactions t 
-                     JOIN hotels h ON t.hotel_id = h.id 
+                $query = "SELECT t.*, h.name as hotel_name, CONCAT(u.first_name, ' ', u.last_name) as user_name
+                     FROM linen_transactions t
+                     JOIN hotels h ON t.hotel_id = h.id
                      LEFT JOIN users u ON t.created_by = u.id
-                     WHERE $where 
-                     ORDER BY t.transaction_date DESC, t.id DESC
-                     LIMIT 100",
-                    $params
-                );
-                
+                     WHERE $where
+                     ORDER BY t.transaction_date DESC, t.id DESC";
+                $countQuery = "SELECT COUNT(*) FROM linen_transactions t JOIN hotels h ON t.hotel_id = h.id WHERE $where";
+                $result = paginate($query, $params, $countQuery, $params);
+
                 // Calculer le résumé
                 $summary = [];
                 $hotelId = $_GET['hotel_id'] ?? null;
@@ -4594,7 +4856,7 @@ try {
                     }
                 }
                 
-                json_out(['success' => true, 'transactions' => $transactions, 'summary' => $summary]);
+                json_out(['success' => true, 'transactions' => $result['data'], 'pagination' => $result['pagination'], 'summary' => $summary]);
             }
             
             if ($id === 'transactions' && $method === 'POST') {
@@ -4603,10 +4865,13 @@ try {
                 // Gestion upload fichier
                 $documentUrl = null;
                 if (!empty($_FILES['document']) && $_FILES['document']['error'] === UPLOAD_ERR_OK) {
+                    $uploadError = validateUpload($_FILES['document'], 'any');
+                    if ($uploadError) json_error($uploadError);
+
                     $uploadDir = __DIR__ . '/../uploads/linen/';
                     if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                    
-                    $ext = pathinfo($_FILES['document']['name'], PATHINFO_EXTENSION);
+
+                    $ext = strtolower(pathinfo($_FILES['document']['name'], PATHINFO_EXTENSION));
                     $filename = 'linen_' . time() . '_' . uniqid() . '.' . $ext;
                     move_uploaded_file($_FILES['document']['tmp_name'], $uploadDir . $filename);
                     $documentUrl = 'uploads/linen/' . $filename;
@@ -4802,12 +5067,16 @@ try {
                 json_out(['success' => true, 'user' => $targetUser]);
             }
             
-            // Hôtels assignés à un utilisateur
+            // Hotels assignes a un utilisateur (verifier droits d'acces)
             if ($method === 'GET' && $id && $action === 'hotels') {
-                require_auth();
+                $user = require_auth();
+                // Seuls les managers/admins ou l'utilisateur lui-meme peuvent voir ses hotels
+                if ($user['id'] != $id && !in_array($user['role'], ['admin', 'groupe_manager', 'hotel_manager'])) {
+                    json_error('Acces refuse', 403);
+                }
                 $hotels = db()->query(
-                    "SELECT h.* FROM hotels h 
-                     INNER JOIN user_hotels uh ON h.id = uh.hotel_id 
+                    "SELECT h.* FROM hotels h
+                     INNER JOIN user_hotels uh ON h.id = uh.hotel_id
                      WHERE uh.user_id = ?",
                     [$id]
                 );
@@ -4829,9 +5098,13 @@ try {
                     json_error('Vous ne pouvez pas créer un utilisateur avec ce rôle', 403);
                 }
                 
+                // Validation mot de passe
+                $pwError = validatePassword($data['password']);
+                if ($pwError) json_error($pwError);
+
                 $exists = db()->queryOne("SELECT id FROM users WHERE email = ?", [$data['email']]);
                 if ($exists) json_error('Email déjà utilisé');
-                
+
                 $hash = password_hash($data['password'], PASSWORD_DEFAULT);
                 $newUserId = db()->insert(
                     "INSERT INTO users (email, password, first_name, last_name, phone, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())",
@@ -4964,50 +5237,48 @@ try {
             // Liste des messages reçus
             if ($method === 'GET' && !$id) {
                 $user = require_auth();
-                $messages = db()->query(
-                    "SELECT m.*, 
+                $query = "SELECT m.*,
                      CONCAT(s.first_name, ' ', s.last_name) as sender_name,
                      s.role as sender_role
                      FROM messages m
                      LEFT JOIN users s ON m.sender_id = s.id
                      WHERE m.recipient_id = ? OR (m.is_broadcast = 1 AND (m.hotel_id IS NULL OR m.hotel_id IN (SELECT DISTINCT r.hotel_id FROM rooms r JOIN room_dispatch rd ON r.id = rd.room_id WHERE rd.assigned_to = ?)))
-                     ORDER BY m.created_at DESC
-                     LIMIT 100",
-                    [$user['id'], $user['id']]
-                );
-                json_out(['success' => true, 'messages' => $messages]);
+                     ORDER BY m.created_at DESC";
+                $params = [$user['id'], $user['id']];
+                $countQuery = "SELECT COUNT(*) FROM messages m WHERE m.recipient_id = ? OR (m.is_broadcast = 1 AND (m.hotel_id IS NULL OR m.hotel_id IN (SELECT DISTINCT r.hotel_id FROM rooms r JOIN room_dispatch rd ON r.id = rd.room_id WHERE rd.assigned_to = ?)))";
+                $result = paginate($query, $params, $countQuery, $params);
+                json_out(['success' => true, 'messages' => $result['data'], 'pagination' => $result['pagination']]);
             }
             
             // Messages envoyés
             if ($id === 'sent' && $method === 'GET') {
                 $user = require_auth();
-                $messages = db()->query(
-                    "SELECT m.*, 
+                $query = "SELECT m.*,
                      CONCAT(r.first_name, ' ', r.last_name) as recipient_name,
                      h.name as hotel_name
                      FROM messages m
                      LEFT JOIN users r ON m.recipient_id = r.id
                      LEFT JOIN hotels h ON m.hotel_id = h.id
                      WHERE m.sender_id = ?
-                     ORDER BY m.created_at DESC
-                     LIMIT 100",
-                    [$user['id']]
-                );
-                json_out(['success' => true, 'messages' => $messages]);
+                     ORDER BY m.created_at DESC";
+                $params = [$user['id']];
+                $countQuery = "SELECT COUNT(*) FROM messages m WHERE m.sender_id = ?";
+                $result = paginate($query, $params, $countQuery, $params);
+                json_out(['success' => true, 'messages' => $result['data'], 'pagination' => $result['pagination']]);
             }
             
-            // Lire un message
+            // Lire un message (verifier que l'utilisateur est l'expediteur ou le destinataire)
             if ($method === 'GET' && $id && is_numeric($id)) {
                 $user = require_auth();
                 $message = db()->queryOne(
-                    "SELECT m.*, 
+                    "SELECT m.*,
                      CONCAT(s.first_name, ' ', s.last_name) as sender_name,
                      CONCAT(r.first_name, ' ', r.last_name) as recipient_name
                      FROM messages m
                      LEFT JOIN users s ON m.sender_id = s.id
                      LEFT JOIN users r ON m.recipient_id = r.id
-                     WHERE m.id = ?",
-                    [$id]
+                     WHERE m.id = ? AND (m.sender_id = ? OR m.recipient_id = ? OR m.is_broadcast = 1)",
+                    [$id, $user['id'], $user['id']]
                 );
                 if (!$message) json_error('Message non trouvé', 404);
                 
@@ -5366,7 +5637,7 @@ try {
                     json_out(['success' => true, 'services' => $services]);
                 }
                 if ($method === 'POST' && !$resourceId) {
-                    require_auth();
+                    require_role('admin', 'groupe_manager', 'hotel_manager');
                     $data = get_input();
                     if (empty($data['hotel_id']) || empty($data['name'])) json_error('Hôtel et nom requis');
                     $newId = db()->insert(
@@ -5376,7 +5647,7 @@ try {
                     json_out(['success' => true, 'id' => $newId], 201);
                 }
                 if ($method === 'PUT' && $resourceId) {
-                    require_auth();
+                    require_role('admin', 'groupe_manager', 'hotel_manager');
                     $data = get_input();
                     $sets = []; $params = [];
                     foreach (['name', 'code', 'color', 'sort_order', 'is_active'] as $field) {
@@ -5386,7 +5657,7 @@ try {
                     json_out(['success' => true]);
                 }
                 if ($method === 'DELETE' && $resourceId) {
-                    require_auth();
+                    require_role('admin', 'groupe_manager', 'hotel_manager');
                     db()->execute("DELETE FROM time_services WHERE id = ?", [$resourceId]);
                     json_out(['success' => true]);
                 }
@@ -5407,7 +5678,7 @@ try {
                     json_out(['success' => true, 'positions' => $positions]);
                 }
                 if ($method === 'POST' && !$resourceId) {
-                    require_auth();
+                    require_role('admin', 'groupe_manager', 'hotel_manager');
                     $data = get_input();
                     if (empty($data['hotel_id']) || empty($data['name'])) json_error('Hôtel et nom requis');
                     $newId = db()->insert(
@@ -5417,7 +5688,7 @@ try {
                     json_out(['success' => true, 'id' => $newId], 201);
                 }
                 if ($method === 'DELETE' && $resourceId) {
-                    require_auth();
+                    require_role('admin', 'groupe_manager', 'hotel_manager');
                     db()->execute("DELETE FROM time_positions WHERE id = ?", [$resourceId]);
                     json_out(['success' => true]);
                 }
@@ -5440,7 +5711,7 @@ try {
                     json_out(['success' => true, 'contracts' => $contracts]);
                 }
                 if ($method === 'POST' && !$resourceId) {
-                    require_auth();
+                    require_role('admin', 'groupe_manager', 'hotel_manager', 'rh');
                     $data = get_input();
                     if (empty($data['user_id']) || empty($data['hotel_id'])) json_error('Utilisateur et hôtel requis');
                     $newId = db()->insert(
@@ -6059,31 +6330,28 @@ try {
             if ($method === 'GET' && $id === 'audits' && !$action) {
                 $user = require_auth();
                 $hotelId = $_GET['hotel_id'] ?? null;
-                $limit = $_GET['limit'] ?? 50;
-                
+
                 $where = "1=1";
                 $params = [];
-                
+
                 if ($hotelId) {
                     $where .= " AND a.hotel_id = ?";
                     $params[] = $hotelId;
                 }
-                
+
                 try {
-                    $audits = db()->query(
-                        "SELECT a.*, ag.name as grid_name, h.name as hotel_name,
+                    $query = "SELECT a.*, ag.name as grid_name, h.name as hotel_name,
                          CONCAT(u.first_name, ' ', u.last_name) as performer_name
                          FROM audits a
                          JOIN audit_grids ag ON a.grid_id = ag.id
                          JOIN hotels h ON a.hotel_id = h.id
                          JOIN users u ON a.performed_by = u.id
                          WHERE $where
-                         ORDER BY a.created_at DESC
-                         LIMIT " . (int)$limit,
-                        $params
-                    );
-                } catch (Exception $e) { $audits = []; }
-                json_out(['success' => true, 'audits' => $audits]);
+                         ORDER BY a.created_at DESC";
+                    $countQuery = "SELECT COUNT(*) FROM audits a JOIN audit_grids ag ON a.grid_id = ag.id JOIN hotels h ON a.hotel_id = h.id JOIN users u ON a.performed_by = u.id WHERE $where";
+                    $result = paginate($query, $params, $countQuery, $params);
+                } catch (Exception $e) { $result = ['data' => [], 'pagination' => ['page' => 1, 'per_page' => 25, 'total' => 0, 'total_pages' => 0, 'has_next' => false, 'has_prev' => false]]; }
+                json_out(['success' => true, 'audits' => $result['data'], 'pagination' => $result['pagination']]);
             }
             
             // Détail d'un audit - GET /audit/audits/{id}
@@ -6188,10 +6456,13 @@ try {
                     $photoUrl = null;
                     $photoKey = "photo_$questionId";
                     if (!empty($_FILES[$photoKey]) && $_FILES[$photoKey]['error'] === UPLOAD_ERR_OK) {
-                        $ext = pathinfo($_FILES[$photoKey]['name'], PATHINFO_EXTENSION);
-                        $filename = 'audit_' . $auditId . '_' . $questionId . '_' . time() . '.' . $ext;
-                        move_uploaded_file($_FILES[$photoKey]['tmp_name'], $uploadDir . $filename);
-                        $photoUrl = 'uploads/audit/' . $filename;
+                        $uploadError = validateUpload($_FILES[$photoKey], 'image');
+                        if (!$uploadError) {
+                            $ext = strtolower(pathinfo($_FILES[$photoKey]['name'], PATHINFO_EXTENSION));
+                            $filename = 'audit_' . $auditId . '_' . $questionId . '_' . time() . '.' . $ext;
+                            move_uploaded_file($_FILES[$photoKey]['tmp_name'], $uploadDir . $filename);
+                            $photoUrl = 'uploads/audit/' . $filename;
+                        }
                     }
                     
                     // Calculer score
@@ -6469,11 +6740,12 @@ try {
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
                 
                 if (isset($_FILES['expense_receipt']) && $_FILES['expense_receipt']['error'] === UPLOAD_ERR_OK) {
-                    $ext = strtolower(pathinfo($_FILES['expense_receipt']['name'], PATHINFO_EXTENSION));
-                    if (in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'])) {
+                    $uploadError = validateUpload($_FILES['expense_receipt'], 'any');
+                    if (!$uploadError) {
+                        $ext = strtolower(pathinfo($_FILES['expense_receipt']['name'], PATHINFO_EXTENSION));
                         $fileName = 'expense_' . $hotelId . '_' . $closureDate . '_' . time() . '.' . $ext;
                         $filePath = $uploadDir . $fileName;
-                        
+
                         if (move_uploaded_file($_FILES['expense_receipt']['tmp_name'], $filePath)) {
                             $expenseReceipt = 'uploads/closures/' . $fileName;
                         }
@@ -6516,21 +6788,24 @@ try {
                 foreach ($_FILES as $key => $file) {
                     if (strpos($key, 'doc_') === 0 && $file['error'] === UPLOAD_ERR_OK) {
                         $configId = intval(str_replace('doc_', '', $key));
-                        
+
+                        $uploadError = validateUpload($file, 'any');
+                        if ($uploadError) continue;
+
                         $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
                         if (!in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'])) continue;
-                        
+
                         $fileName = 'closure_' . $closureId . '_doc' . $configId . '_' . time() . '.' . $ext;
                         $filePath = $uploadDir . $fileName;
-                        
+
                         if (move_uploaded_file($file['tmp_name'], $filePath)) {
                             $fileUrl = 'uploads/closures/' . $fileName;
-                            
+
                             db()->execute(
                                 "DELETE FROM closure_documents WHERE closure_id = ? AND config_id = ?",
                                 [$closureId, $configId]
                             );
-                            
+
                             db()->insert(
                                 "INSERT INTO closure_documents (closure_id, config_id, file_url, uploaded_at) VALUES (?, ?, ?, NOW())",
                                 [$closureId, $configId, $fileUrl]
@@ -6538,7 +6813,7 @@ try {
                         }
                     }
                 }
-                
+
                 json_out(['success' => true, 'id' => $closureId]);
             }
             
@@ -6574,12 +6849,15 @@ try {
                 foreach ($_FILES as $key => $file) {
                     if (strpos($key, 'doc_') === 0 && $file['error'] === UPLOAD_ERR_OK) {
                         $configId = intval(str_replace('doc_', '', $key));
+                        $uploadError = validateUpload($file, 'any');
+                        if ($uploadError) continue;
+
                         $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
                         if (!in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'])) continue;
-                        
+
                         $fileName = 'closure_' . $closureId . '_doc' . $configId . '_' . time() . '.' . $ext;
                         $filePath = $uploadDir . $fileName;
-                        
+
                         if (move_uploaded_file($file['tmp_name'], $filePath)) {
                             db()->execute("DELETE FROM closure_documents WHERE closure_id = ? AND config_id = ?", [$closureId, $configId]);
                             db()->insert(
@@ -7000,7 +7278,10 @@ try {
                     if (isset($_FILES['justificatif']) && $_FILES['justificatif']['error'] === UPLOAD_ERR_OK) {
                         $uploadDir = __DIR__ . '/../uploads/closures/remises/';
                         if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                        
+
+                        $uploadError = validateUpload($_FILES['justificatif'], 'any');
+                        if ($uploadError) json_error($uploadError);
+
                         $ext = strtolower(pathinfo($_FILES['justificatif']['name'], PATHINFO_EXTENSION));
                         if (!in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'])) {
                             json_error('Format de fichier non accepté');
@@ -7535,8 +7816,8 @@ try {
                             CURLOPT_URL => $xoteloUrl,
                             CURLOPT_RETURNTRANSFER => true,
                             CURLOPT_TIMEOUT => 30,
-                            CURLOPT_SSL_VERIFYPEER => false,
-                            CURLOPT_SSL_VERIFYHOST => false,
+                            CURLOPT_SSL_VERIFYPEER => true,
+                            CURLOPT_SSL_VERIFYHOST => 2,
                             CURLOPT_HTTPHEADER => ['Accept: application/json'],
                             CURLOPT_USERAGENT => 'ACL-Gestion/1.0'
                         ]);
