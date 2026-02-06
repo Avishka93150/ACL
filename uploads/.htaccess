@@ -1,0 +1,28 @@
+# Desactiver l'execution de scripts dans le dossier uploads
+# Securite : empecher l'upload de fichiers PHP deguises
+
+# Desactiver PHP
+<FilesMatch "\.ph(p[3457]?|t|tml|ar)$">
+    Require all denied
+</FilesMatch>
+
+# Interdire l'execution de scripts
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+
+# N'autoriser que les types de fichiers attendus
+<FilesMatch "\.(?!(jpg|jpeg|png|pdf|gif|webp)$)[^.]+$">
+    Require all denied
+</FilesMatch>
+
+# Empecher le directory listing
+Options -Indexes
+
+# Forcer le type Content-Type pour eviter le sniffing
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>

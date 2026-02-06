@@ -123,8 +123,8 @@ function renderUsersTable(users) {
                         <td>
                             <div class="table-actions">
                                 <button onclick="showEditUserModal(${u.id})" title="Modifier"><i class="fas fa-edit"></i></button>
-                                <button onclick="showAssignHotelsModal(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')" title="Affecter aux hôtels"><i class="fas fa-building"></i></button>
-                                ${u.id !== API.user.id ? `<button onclick="toggleUserStatus(${u.id}, '${u.status}')" title="${u.status === 'active' ? 'Désactiver' : 'Activer'}"><i class="fas fa-${u.status === 'active' ? 'ban' : 'check'}"></i></button>` : ''}
+                                <button onclick="showAssignHotelsModal(${parseInt(u.id)}, '${escAttr(u.first_name)} ${escAttr(u.last_name)}')" title="Affecter aux hôtels"><i class="fas fa-building"></i></button>
+                                ${u.id !== API.user.id ? `<button onclick="toggleUserStatus(${parseInt(u.id)}, '${escAttr(u.status)}')" title="${u.status === 'active' ? 'Désactiver' : 'Activer'}"><i class="fas fa-${u.status === 'active' ? 'ban' : 'check'}"></i></button>` : ''}
                             </div>
                         </td>
                     </tr>

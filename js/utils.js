@@ -2,20 +2,25 @@
  * ACL GESTION - Utilities
  */
 
-// Toast notifications
+// Toast notifications (XSS-safe)
 function toast(message, type = 'info') {
     const icons = { success: 'fa-check-circle', error: 'fa-times-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
     const container = document.getElementById('toast-container');
     const el = document.createElement('div');
     el.className = `toast ${type}`;
-    el.innerHTML = `<i class="fas ${icons[type]}"></i><span>${message}</span>`;
+    const icon = document.createElement('i');
+    icon.className = `fas ${icons[type] || 'fa-info-circle'}`;
+    const span = document.createElement('span');
+    span.textContent = message;
+    el.appendChild(icon);
+    el.appendChild(span);
     container.appendChild(el);
     setTimeout(() => el.remove(), 4000);
 }
 
 // Modal
 function openModal(title, content, size = '') {
-    document.getElementById('modal-title').innerHTML = title;
+    document.getElementById('modal-title').textContent = title;
     document.getElementById('modal-body').innerHTML = content;
     const modalBox = document.querySelector('#modal .modal-box');
     // Reset size classes
@@ -58,10 +63,16 @@ function getCurrentWeek() {
 
 // Escape HTML
 function esc(str) {
-    if (!str) return '';
+    if (str === null || str === undefined) return '';
     const div = document.createElement('div');
-    div.textContent = str;
+    div.textContent = String(str);
     return div.innerHTML;
+}
+
+// Escape pour les attributs JS (quotes simples dans onclick etc.)
+function escAttr(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // Labels
@@ -96,12 +107,12 @@ const LABELS = {
 // Badges
 function statusBadge(status) {
     const colors = { open: 'danger', in_progress: 'warning', resolved: 'success', pending: 'gray', completed: 'success', controlled: 'success', approved: 'success', rejected: 'danger', active: 'success', inactive: 'gray' };
-    return `<span class="badge badge-${colors[status] || 'gray'}">${LABELS.status[status] || status}</span>`;
+    return `<span class="badge badge-${colors[status] || 'gray'}">${esc(LABELS.status[status] || status)}</span>`;
 }
 
 function priorityBadge(priority) {
     const colors = { critical: 'danger', high: 'warning', medium: 'primary', low: 'success' };
-    return `<span class="badge badge-${colors[priority] || 'gray'}">${LABELS.priority[priority] || priority}</span>`;
+    return `<span class="badge badge-${colors[priority] || 'gray'}">${esc(LABELS.priority[priority] || priority)}</span>`;
 }
 
 // Loading state
@@ -135,7 +146,7 @@ async function loadNotifications() {
                 listEl.innerHTML = '<div class="notification-empty"><i class="fas fa-bell-slash"></i><p>Aucune notification</p></div>';
             } else {
                 listEl.innerHTML = notifications.map(n => `
-                    <div class="notification-item ${n.is_read == 0 ? 'unread' : ''}" data-id="${n.id}" onclick="handleNotificationClick(${n.id}, '${n.link || ''}')">
+                    <div class="notification-item ${n.is_read == 0 ? 'unread' : ''}" data-id="${n.id}" onclick="handleNotificationClick(${parseInt(n.id)}, '${escAttr(n.link || '')}')">
                         <div class="notification-icon ${getNotificationIconClass(n.type)}">
                             <i class="fas ${getNotificationIcon(n.type)}"></i>
                         </div>
@@ -294,9 +305,7 @@ async function loadUserPermissions() {
             }
         }
         permissionsLoaded = true;
-        console.log('Permissions chargées pour', API.user.role, ':', userPermissions);
     } catch (error) {
-        console.log('Erreur chargement permissions, utilisation des défauts:', error.message);
         permissionsLoaded = true;
     }
 }
@@ -437,4 +446,53 @@ function getDefaultPermissions(role) {
     };
     
     return defaults[role] || defaults['employee'];
+}
+
+// === PAGINATION COMPONENT ===
+function renderPagination(pagination, onPageChange) {
+    if (!pagination || pagination.total_pages <= 1) return '';
+
+    const { page, total_pages, total, per_page, has_prev, has_next } = pagination;
+    const start = (page - 1) * per_page + 1;
+    const end = Math.min(page * per_page, total);
+
+    // Generer les numeros de page visibles
+    let pages = [];
+    const maxVisible = 5;
+    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    let endPage = Math.min(total_pages, startPage + maxVisible - 1);
+    if (endPage - startPage < maxVisible - 1) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        pages.push(i);
+    }
+
+    // Stocker le callback dans un ID unique
+    const callbackId = '_pgcb_' + Date.now();
+    window[callbackId] = onPageChange;
+
+    return `
+        <div class="pagination-container">
+            <div class="pagination-info">
+                Affichage ${start}-${end} sur ${total} resultats
+            </div>
+            <div class="pagination-controls">
+                <button class="btn btn-sm btn-outline" ${!has_prev ? 'disabled' : ''} onclick="${callbackId}(${page - 1})">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                ${startPage > 1 ? `<button class="btn btn-sm btn-outline" onclick="${callbackId}(1)">1</button>` : ''}
+                ${startPage > 2 ? '<span class="pagination-ellipsis">...</span>' : ''}
+                ${pages.map(p => `
+                    <button class="btn btn-sm ${p === page ? 'btn-primary' : 'btn-outline'}" onclick="${callbackId}(${p})">${p}</button>
+                `).join('')}
+                ${endPage < total_pages - 1 ? '<span class="pagination-ellipsis">...</span>' : ''}
+                ${endPage < total_pages ? `<button class="btn btn-sm btn-outline" onclick="${callbackId}(${total_pages})">${total_pages}</button>` : ''}
+                <button class="btn btn-sm btn-outline" ${!has_next ? 'disabled' : ''} onclick="${callbackId}(${page + 1})">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    `;
 }
