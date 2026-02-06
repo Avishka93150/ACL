@@ -81,6 +81,7 @@ async function loadRevenue(container) {
                         <div class="last-update-info" id="revenue-last-update">
                             <i class="fas fa-clock"></i> <span>Chargement...</span>
                         </div>
+                        <button class="btn btn-outline" onclick="showPriceAlerts()"><i class="fas fa-bell"></i> Alertes</button>
                         ${canSettings ? `<button class="btn btn-outline" onclick="showRevenueSettings()"><i class="fas fa-cog"></i> Paramètres</button>` : ''}
                     </div>
                 </div>
@@ -885,4 +886,244 @@ function formatDateISO(date) {
 
 function formatDateLong(dateStr) {
     return new Date(dateStr + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+// ============ ALERTES TARIFAIRES ============
+
+async function showPriceAlerts() {
+    try {
+        const [alertsRes, compRes] = await Promise.all([
+            API.get(`/price_alerts?hotel_id=${revenueSelectedHotel}`),
+            API.get(`/hotels/${revenueSelectedHotel}/competitors`)
+        ]);
+        const alerts = alertsRes || [];
+        const competitors = compRes.competitors || [];
+
+        const directionLabels = { any: 'Hausse ou baisse', up: 'Hausse uniquement', down: 'Baisse uniquement' };
+        const typeLabels = { delta_amount: '€', delta_percent: '%' };
+
+        let alertsHtml = '';
+        if (alerts.length === 0) {
+            alertsHtml = '<div class="empty-state" style="padding:30px"><i class="fas fa-bell-slash"></i><h3>Aucune alerte configurée</h3><p>Ajoutez une alerte pour être notifié des changements de tarifs concurrents</p></div>';
+        } else {
+            alertsHtml = '<div class="price-alerts-list">';
+            for (const a of alerts) {
+                const compLabel = a.competitor_name || 'Tous les concurrents';
+                const otaLabel = a.ota_name || 'Toutes les OTAs';
+                const typeUnit = typeLabels[a.alert_type];
+                const dirLabel = directionLabels[a.direction];
+                alertsHtml += `
+                    <div class="price-alert-item ${a.is_active ? '' : 'inactive'}">
+                        <div class="price-alert-info">
+                            <div class="price-alert-target">
+                                <strong>${esc(compLabel)}</strong>
+                                <span class="badge badge-sm">${esc(otaLabel)}</span>
+                            </div>
+                            <div class="price-alert-rule">
+                                ${dirLabel} &ge; <strong>${parseFloat(a.threshold_value)}${typeUnit}</strong>
+                                <span class="price-alert-channels">
+                                    ${a.notify_app == 1 ? '<i class="fas fa-bell" title="Notification"></i>' : ''}
+                                    ${a.notify_email == 1 ? '<i class="fas fa-envelope" title="Email"></i>' : ''}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="price-alert-actions">
+                            <button class="btn btn-sm ${a.is_active ? 'btn-outline' : 'btn-ghost'}" onclick="togglePriceAlert(${a.id})" title="${a.is_active ? 'Désactiver' : 'Activer'}">
+                                <i class="fas fa-${a.is_active ? 'pause' : 'play'}"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline" onclick="editPriceAlert(${a.id})" title="Modifier">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-ghost" onclick="deletePriceAlert(${a.id})" title="Supprimer" style="color:var(--danger)">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>`;
+            }
+            alertsHtml += '</div>';
+        }
+
+        openModal('Alertes tarifaires', `
+            <div class="price-alerts-container">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                    <p style="margin:0;color:#6B7280;font-size:13px">Recevez une notification quand un concurrent change ses tarifs</p>
+                    <button class="btn btn-primary btn-sm" onclick="showPriceAlertForm()"><i class="fas fa-plus"></i> Nouvelle alerte</button>
+                </div>
+                <div id="price-alerts-list">${alertsHtml}</div>
+                <div style="margin-top:16px;border-top:1px solid #F3F4F6;padding-top:16px">
+                    <button class="btn btn-outline btn-sm" onclick="showPriceAlertLogs()"><i class="fas fa-history"></i> Historique des alertes</button>
+                </div>
+            </div>
+        `, 'modal-lg');
+    } catch (err) {
+        toast(err.message || 'Erreur chargement alertes', 'error');
+    }
+}
+
+async function showPriceAlertForm(alertId) {
+    try {
+        const compRes = await API.get(`/hotels/${revenueSelectedHotel}/competitors`);
+        const competitors = compRes.competitors || [];
+        let alert = null;
+
+        if (alertId) {
+            alert = await API.get(`/price_alerts/${alertId}`);
+        }
+
+        const competitorOptions = `<option value="">Tous les concurrents</option>` +
+            competitors.map(c => `<option value="${c.id}" ${alert && alert.competitor_id == c.id ? 'selected' : ''}>${esc(c.competitor_name)}</option>`).join('');
+
+        const otaOptions = `<option value="">Toutes les OTAs</option>` +
+            XOTELO_OTAS.filter(o => o.value).map(o => `<option value="${o.value}" ${alert && alert.ota_name === o.value ? 'selected' : ''}>${o.label}</option>`).join('');
+
+        openModal(alertId ? 'Modifier l\'alerte' : 'Nouvelle alerte tarifaire', `
+            <form onsubmit="savePriceAlert(event, ${alertId || 'null'})">
+                <input type="hidden" name="hotel_id" value="${revenueSelectedHotel}">
+                <div class="form-group">
+                    <label>Concurrent</label>
+                    <select name="competitor_id" class="form-control">${competitorOptions}</select>
+                    <small class="form-help">Laissez vide pour surveiller tous les concurrents</small>
+                </div>
+                <div class="form-group">
+                    <label>OTA</label>
+                    <select name="ota_name" class="form-control">${otaOptions}</select>
+                    <small class="form-help">Laissez vide pour surveiller toutes les plateformes</small>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Type de seuil</label>
+                        <select name="alert_type" class="form-control">
+                            <option value="delta_percent" ${!alert || alert.alert_type === 'delta_percent' ? 'selected' : ''}>Variation en %</option>
+                            <option value="delta_amount" ${alert && alert.alert_type === 'delta_amount' ? 'selected' : ''}>Variation en €</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Seuil</label>
+                        <input type="number" name="threshold_value" class="form-control" step="0.01" min="0.01" required value="${alert ? parseFloat(alert.threshold_value) : '5'}" placeholder="Ex: 5">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Direction</label>
+                    <select name="direction" class="form-control">
+                        <option value="any" ${!alert || alert.direction === 'any' ? 'selected' : ''}>Hausse ou baisse</option>
+                        <option value="up" ${alert && alert.direction === 'up' ? 'selected' : ''}>Hausse uniquement</option>
+                        <option value="down" ${alert && alert.direction === 'down' ? 'selected' : ''}>Baisse uniquement</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Canaux de notification</label>
+                    <div style="display:flex;gap:20px;margin-top:6px">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400">
+                            <input type="checkbox" name="notify_app" value="1" ${!alert || alert.notify_app == 1 ? 'checked' : ''}>
+                            <i class="fas fa-bell"></i> Notification in-app
+                        </label>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400">
+                            <input type="checkbox" name="notify_email" value="1" ${alert && alert.notify_email == 1 ? 'checked' : ''}>
+                            <i class="fas fa-envelope"></i> Email
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="showPriceAlerts()">Retour</button>
+                    <button type="submit" class="btn btn-primary">${alertId ? 'Enregistrer' : 'Créer l\'alerte'}</button>
+                </div>
+            </form>
+        `);
+    } catch (err) {
+        toast(err.message || 'Erreur', 'error');
+    }
+}
+
+async function savePriceAlert(e, alertId) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const data = {
+        hotel_id: parseInt(fd.get('hotel_id')),
+        competitor_id: fd.get('competitor_id') || null,
+        ota_name: fd.get('ota_name') || null,
+        alert_type: fd.get('alert_type'),
+        threshold_value: parseFloat(fd.get('threshold_value')),
+        direction: fd.get('direction'),
+        notify_app: fd.get('notify_app') ? 1 : 0,
+        notify_email: fd.get('notify_email') ? 1 : 0
+    };
+
+    try {
+        if (alertId) {
+            await API.put(`/price_alerts/${alertId}`, data);
+            toast('Alerte mise à jour', 'success');
+        } else {
+            await API.post('/price_alerts', data);
+            toast('Alerte créée', 'success');
+        }
+        showPriceAlerts();
+    } catch (err) {
+        toast(err.message || 'Erreur', 'error');
+    }
+}
+
+async function togglePriceAlert(id) {
+    try {
+        const res = await API.put(`/price_alerts/${id}/toggle`);
+        toast(res.message, 'success');
+        showPriceAlerts();
+    } catch (err) {
+        toast(err.message || 'Erreur', 'error');
+    }
+}
+
+async function editPriceAlert(id) {
+    showPriceAlertForm(id);
+}
+
+async function deletePriceAlert(id) {
+    if (!confirm('Supprimer cette alerte ?')) return;
+    try {
+        await API.delete(`/price_alerts/${id}`);
+        toast('Alerte supprimée', 'success');
+        showPriceAlerts();
+    } catch (err) {
+        toast(err.message || 'Erreur', 'error');
+    }
+}
+
+async function showPriceAlertLogs() {
+    try {
+        const logs = await API.get(`/price_alerts/logs?hotel_id=${revenueSelectedHotel}&limit=50`);
+        let html = '';
+        if (!logs || logs.length === 0) {
+            html = '<div class="empty-state" style="padding:30px"><i class="fas fa-history"></i><h3>Aucun historique</h3><p>Les alertes déclenchées apparaîtront ici</p></div>';
+        } else {
+            html = `<div class="table-responsive"><table class="table table-compact">
+                <thead><tr><th>Date</th><th>Concurrent</th><th>OTA</th><th>Ancien</th><th>Nouveau</th><th>Delta</th><th>Canaux</th></tr></thead><tbody>`;
+            for (const l of logs) {
+                const delta = parseFloat(l.delta_amount);
+                const pct = parseFloat(l.delta_percent);
+                const cls = delta > 0 ? 'text-danger' : 'text-success';
+                const sign = delta > 0 ? '+' : '';
+                const date = new Date(l.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+                html += `<tr>
+                    <td>${date}</td>
+                    <td>${esc(l.competitor_name || '-')}</td>
+                    <td>${esc(l.ota_name || '-')}</td>
+                    <td>${parseFloat(l.old_rate).toFixed(0)}€</td>
+                    <td>${parseFloat(l.new_rate).toFixed(0)}€</td>
+                    <td class="${cls}"><strong>${sign}${delta.toFixed(0)}€</strong> (${sign}${pct.toFixed(1)}%)</td>
+                    <td>${l.notified_app == 1 ? '<i class="fas fa-bell"></i> ' : ''}${l.notified_email == 1 ? '<i class="fas fa-envelope"></i>' : ''}</td>
+                </tr>`;
+            }
+            html += '</tbody></table></div>';
+        }
+
+        openModal('Historique des alertes tarifaires', `
+            <div>
+                <div style="margin-bottom:12px">
+                    <button class="btn btn-outline btn-sm" onclick="showPriceAlerts()"><i class="fas fa-arrow-left"></i> Retour aux alertes</button>
+                </div>
+                ${html}
+            </div>
+        `, 'modal-xl');
+    } catch (err) {
+        toast(err.message || 'Erreur', 'error');
+    }
 }

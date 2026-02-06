@@ -1335,3 +1335,51 @@ CREATE TABLE IF NOT EXISTS xotelo_api_logs (
 ALTER TABLE users MODIFY COLUMN role ENUM('admin','groupe_manager','hotel_manager','comptabilite','rh','receptionniste','employee') DEFAULT 'employee';
 
 ALTER TABLE evaluation_grids MODIFY COLUMN target_role ENUM('admin','groupe_manager','hotel_manager','comptabilite','rh','receptionniste','employee') NOT NULL DEFAULT 'employee';
+
+-- =============================================
+-- Alertes tarifaires Revenue Management
+-- =============================================
+
+-- Configuration des alertes par utilisateur
+CREATE TABLE IF NOT EXISTS price_alerts (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    hotel_id INT UNSIGNED NOT NULL,
+    competitor_id INT UNSIGNED DEFAULT NULL COMMENT 'NULL = tous les concurrents',
+    ota_name VARCHAR(100) DEFAULT NULL COMMENT 'NULL = toutes les OTAs',
+    alert_type ENUM('delta_amount', 'delta_percent') NOT NULL DEFAULT 'delta_percent',
+    threshold_value DECIMAL(10,2) NOT NULL COMMENT 'Seuil en euros ou en %',
+    direction ENUM('any', 'up', 'down') NOT NULL DEFAULT 'any',
+    notify_app TINYINT(1) DEFAULT 1,
+    notify_email TINYINT(1) DEFAULT 0,
+    is_active TINYINT(1) DEFAULT 1,
+    created_at DATETIME,
+    updated_at DATETIME,
+    INDEX idx_user (user_id),
+    INDEX idx_hotel (hotel_id),
+    INDEX idx_active (is_active),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Historique des alertes envoyées (pour éviter les doublons)
+CREATE TABLE IF NOT EXISTS price_alert_logs (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    alert_id INT UNSIGNED NOT NULL,
+    user_id INT UNSIGNED NOT NULL,
+    hotel_id INT UNSIGNED NOT NULL,
+    competitor_name VARCHAR(255),
+    ota_name VARCHAR(100),
+    old_rate DECIMAL(10,2),
+    new_rate DECIMAL(10,2),
+    delta_amount DECIMAL(10,2),
+    delta_percent DECIMAL(5,2),
+    check_date DATE,
+    notified_app TINYINT(1) DEFAULT 0,
+    notified_email TINYINT(1) DEFAULT 0,
+    created_at DATETIME,
+    INDEX idx_alert (alert_id),
+    INDEX idx_user (user_id),
+    INDEX idx_created (created_at),
+    FOREIGN KEY (alert_id) REFERENCES price_alerts(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

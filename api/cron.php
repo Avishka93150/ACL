@@ -46,11 +46,14 @@ switch ($action) {
     case 'revenue':
         updateAllRevenueRates();
         break;
+    case 'price_alerts':
+        checkPriceAlerts();
+        break;
     case 'cleanup':
         cleanupOldData();
         break;
     default:
-        echo "Usage: php cron.php [dispatch|control|maintenance|leaves_reminder|tasks_due|audit|closure|revenue|cleanup]\n\n";
+        echo "Usage: php cron.php [dispatch|control|maintenance|leaves_reminder|tasks_due|audit|closure|revenue|price_alerts|cleanup]\n\n";
         echo "Tâches disponibles:\n";
         echo "  dispatch        - Vérifie si des chambres ont été dispatchées aujourd'hui (12h00)\n";
         echo "  control         - Vérifie si les chambres nettoyées ont été contrôlées (19h00)\n";
@@ -60,6 +63,7 @@ switch ($action) {
         echo "  audit           - Rappel audits à réaliser et alertes retard (09h00)\n";
         echo "  closure         - Vérifie les clôtures journalières non effectuées (13h-23h)\n";
         echo "  revenue         - Actualise les tarifs Xotelo pour tous les hôtels (06h00)\n";
+        echo "  price_alerts    - Vérifie les alertes tarifaires après mise à jour (06h15)\n";
         echo "  cleanup         - Nettoyage tokens expirés et anciennes données (03h00)\n";
         exit(1);
 }
@@ -1382,8 +1386,194 @@ function updateAllRevenueRates() {
                 [count($hotels) . ' hotels', $dateFrom, $dateTo, $totalRates, $totalErrors > 0 ? "$totalErrors errors" : null]
             );
         } catch (Exception $e) {}
-        
+
     } catch (Exception $e) {
         echo "  ⚠ Erreur: " . $e->getMessage() . "\n";
+    }
+}
+
+/**
+ * Vérifie les alertes tarifaires configurées par les utilisateurs.
+ * Compare les tarifs actuels (cache) avec l'historique précédent
+ * pour détecter les variations dépassant les seuils définis.
+ *
+ * À exécuter après updateAllRevenueRates(), ex: 06h15
+ * php /chemin/api/cron.php price_alerts
+ */
+function checkPriceAlerts() {
+    echo "\n=== VÉRIFICATION ALERTES TARIFAIRES ===\n\n";
+
+    try {
+        $db = db();
+
+        // Récupérer toutes les alertes actives avec les infos utilisateur
+        $alerts = $db->query(
+            "SELECT pa.*, u.email, u.first_name, u.last_name,
+                    h.name as hotel_name,
+                    hc.competitor_name, hc.xotelo_hotel_key as competitor_key
+             FROM price_alerts pa
+             JOIN users u ON u.id = pa.user_id AND u.status = 'active'
+             JOIN hotels h ON h.id = pa.hotel_id AND h.status = 'active'
+             LEFT JOIN hotel_competitors hc ON hc.id = pa.competitor_id
+             WHERE pa.is_active = 1"
+        );
+
+        if (empty($alerts)) {
+            echo "  Aucune alerte active configurée.\n";
+            return;
+        }
+
+        echo "  " . count($alerts) . " alerte(s) active(s) à vérifier\n\n";
+
+        $totalNotifications = 0;
+        $totalEmails = 0;
+
+        foreach ($alerts as $alert) {
+            echo "  🔔 Alerte #{$alert['id']} - {$alert['first_name']} {$alert['last_name']} - {$alert['hotel_name']}\n";
+
+            $hotelId = $alert['hotel_id'];
+            $today = date('Y-m-d');
+
+            // Conditions de filtrage selon la config de l'alerte
+            $whereCompetitor = "";
+            $params = [$hotelId, $today];
+
+            if ($alert['competitor_id'] && $alert['competitor_key']) {
+                $whereCompetitor = " AND rc.source_hotel_key = ?";
+                $params[] = $alert['competitor_key'];
+            } else {
+                $whereCompetitor = " AND rc.source_type = 'competitor'";
+            }
+
+            $whereOta = "";
+            if (!empty($alert['ota_name'])) {
+                $whereOta = " AND rc.ota_name = ?";
+                $params[] = $alert['ota_name'];
+            }
+
+            // Tarifs actuels depuis le cache (les plus récents)
+            $currentRates = $db->query(
+                "SELECT rc.source_hotel_key, rc.source_name, rc.ota_name, rc.check_date,
+                        rc.rate_amount as new_rate
+                 FROM xotelo_rates_cache rc
+                 WHERE rc.hotel_id = ? AND rc.check_date >= ?
+                 $whereCompetitor $whereOta
+                 AND rc.rate_amount > 0",
+                $params
+            );
+
+            if (empty($currentRates)) {
+                echo "     → Aucun tarif actuel trouvé\n";
+                continue;
+            }
+
+            $alertsTriggered = 0;
+
+            foreach ($currentRates as $rate) {
+                // Chercher le tarif précédent (dernier historique AVANT aujourd'hui)
+                $previousRate = $db->queryOne(
+                    "SELECT rate_amount FROM xotelo_rates_history
+                     WHERE hotel_id = ? AND source_hotel_key = ? AND check_date = ? AND ota_name = ?
+                       AND fetched_at < CURDATE() AND rate_amount > 0
+                     ORDER BY fetched_at DESC LIMIT 1",
+                    [$hotelId, $rate['source_hotel_key'], $rate['check_date'], $rate['ota_name']]
+                );
+
+                if (!$previousRate) continue;
+
+                $oldRate = (float)$previousRate['rate_amount'];
+                $newRate = (float)$rate['new_rate'];
+
+                if ($oldRate == 0) continue;
+
+                $deltaAmount = $newRate - $oldRate;
+                $deltaPercent = ($deltaAmount / $oldRate) * 100;
+
+                if ($alert['direction'] === 'up' && $deltaAmount <= 0) continue;
+                if ($alert['direction'] === 'down' && $deltaAmount >= 0) continue;
+                if ($deltaAmount == 0) continue;
+
+                // Vérifier le seuil
+                $thresholdValue = (float)$alert['threshold_value'];
+                $exceeded = false;
+
+                if ($alert['alert_type'] === 'delta_percent') {
+                    $exceeded = abs($deltaPercent) >= $thresholdValue;
+                } else {
+                    $exceeded = abs($deltaAmount) >= $thresholdValue;
+                }
+
+                if (!$exceeded) continue;
+
+                // Vérifier qu'on n'a pas déjà envoyé cette alerte aujourd'hui
+                $alreadySent = $db->queryOne(
+                    "SELECT id FROM price_alert_logs
+                     WHERE alert_id = ? AND check_date = ? AND competitor_name = ? AND ota_name = ?
+                       AND DATE(created_at) = CURDATE()",
+                    [$alert['id'], $rate['check_date'], $rate['source_name'], $rate['ota_name']]
+                );
+
+                if ($alreadySent) continue;
+
+                // ALERTE DÉCLENCHÉE
+                $alertsTriggered++;
+                $sign = $deltaAmount > 0 ? '+' : '';
+                $checkDateFr = date('d/m/Y', strtotime($rate['check_date']));
+
+                echo "     ⚠ {$rate['source_name']} / {$rate['ota_name']} ({$checkDateFr}): {$oldRate}€ → {$newRate}€ ({$sign}" . round($deltaAmount) . "€, {$sign}" . round($deltaPercent, 1) . "%)\n";
+
+                // Logger l'alerte
+                $db->insert(
+                    "INSERT INTO price_alert_logs (alert_id, user_id, hotel_id, competitor_name, ota_name, old_rate, new_rate, delta_amount, delta_percent, check_date, notified_app, notified_email, created_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())",
+                    [
+                        $alert['id'], $alert['user_id'], $hotelId,
+                        $rate['source_name'], $rate['ota_name'],
+                        $oldRate, $newRate, $deltaAmount, round($deltaPercent, 2),
+                        $rate['check_date'],
+                        $alert['notify_app'] ? 1 : 0,
+                        $alert['notify_email'] ? 1 : 0
+                    ]
+                );
+
+                // Notification in-app
+                if ($alert['notify_app']) {
+                    $title = "Tarif {$rate['source_name']} : {$sign}" . round($deltaAmount) . "€";
+                    $message = "{$rate['ota_name']} pour le {$checkDateFr} : {$oldRate}€ → {$newRate}€ ({$sign}" . round($deltaPercent, 1) . "%)";
+                    createNotification($alert['user_id'], 'warning', $title, $message);
+                    $totalNotifications++;
+                }
+
+                // Email
+                if ($alert['notify_email'] && !empty($alert['email'])) {
+                    $subject = "Alerte tarif - {$rate['source_name']} ({$sign}" . round($deltaAmount) . "€)";
+                    $body = "Bonjour {$alert['first_name']},\n\n";
+                    $body .= "Une variation tarifaire a été détectée :\n\n";
+                    $body .= "Hôtel : {$alert['hotel_name']}\n";
+                    $body .= "Concurrent : {$rate['source_name']}\n";
+                    $body .= "Plateforme : {$rate['ota_name']}\n";
+                    $body .= "Date de séjour : {$checkDateFr}\n\n";
+                    $body .= "Ancien tarif : {$oldRate}€\n";
+                    $body .= "Nouveau tarif : {$newRate}€\n";
+                    $body .= "Variation : {$sign}" . round($deltaAmount) . "€ ({$sign}" . round($deltaPercent, 1) . "%)\n\n";
+                    $body .= "---\nACL GESTION - Alertes Revenue Management\n";
+                    sendEmail($alert['email'], $subject, $body);
+                    $totalEmails++;
+                }
+            }
+
+            if ($alertsTriggered === 0) {
+                echo "     → Aucune variation au-dessus du seuil\n";
+            } else {
+                echo "     → $alertsTriggered alerte(s) déclenchée(s)\n";
+            }
+        }
+
+        echo "\n  ════════════════════════════════════\n";
+        echo "  TOTAL: $totalNotifications notification(s), $totalEmails email(s)\n";
+        echo "  ════════════════════════════════════\n";
+
+    } catch (Exception $e) {
+        echo "  ⚠ Erreur checkPriceAlerts: " . $e->getMessage() . "\n";
     }
 }
