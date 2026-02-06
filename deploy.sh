@@ -61,6 +61,9 @@ fi
 mkdir -p "$BACKUP_DIR"
 echo -e "${GREEN}  Backup dir: $BACKUP_DIR${NC}"
 
+# Autoriser git sur ce repertoire (necessaire quand root execute sur un repo d'un autre user)
+git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+
 # === ETAPE 2 : DETECTER PREMIER DEPLOIEMENT OU MISE A JOUR ===
 echo ""
 echo -e "${YELLOW}[2/8] Detection du type de deploiement...${NC}"
