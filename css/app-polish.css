@@ -392,31 +392,43 @@ textarea {
     -webkit-backdrop-filter: blur(4px);
 }
 
-/* Modal container - ensure centering */
-#modal.modal {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
+/* Modal container - force centering with !important */
+#modal.modal,
+.modal {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 1000 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 24px !important;
+    box-sizing: border-box !important;
 }
 
-/* Modal box - base (use #modal for higher specificity over style.css) */
-#modal .modal-box {
-    position: relative;
+.modal.hidden {
+    display: none !important;
+}
+
+/* Modal box - base */
+#modal .modal-box,
+.modal .modal-box {
+    position: relative !important;
     background: #fff;
-    border-radius: 16px;
-    width: 94%;
-    max-width: 580px;
-    max-height: 88vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    border-radius: 16px !important;
+    width: 94% !important;
+    max-width: 580px !important;
+    max-height: 88vh !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
     animation: modalSlideIn 0.2s ease-out;
-    margin: 0 auto;
+    z-index: 1001;
 }
 
 @keyframes modalSlideIn {
@@ -424,12 +436,12 @@ textarea {
     to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Modal sizes (use #modal for higher specificity) */
-#modal .modal-box.modal-md   { max-width: 640px; }
-#modal .modal-box.modal-lg   { max-width: 760px; }
-#modal .modal-box.modal-wide { max-width: 860px; }
-#modal .modal-box.modal-xl   { max-width: 1080px; }
-#modal .modal-box.modal-full { max-width: 94vw; width: 94vw; }
+/* Modal sizes - force with !important */
+#modal .modal-box.modal-md   { max-width: 640px !important; }
+#modal .modal-box.modal-lg   { max-width: 760px !important; }
+#modal .modal-box.modal-wide { max-width: 860px !important; }
+#modal .modal-box.modal-xl   { max-width: 1080px !important; }
+#modal .modal-box.modal-full { max-width: 94vw !important; width: 94vw !important; }
 
 /* Modal header */
 #modal .modal-header {
@@ -893,10 +905,10 @@ textarea {
     .kpi-value { font-size: 22px; }
     .card-body { padding: 16px; }
 
-    #modal .modal-box { width: 96%; border-radius: 14px; max-height: 92vh; }
+    #modal .modal-box { width: 96% !important; border-radius: 14px !important; max-height: 92vh !important; }
     #modal .modal-box.modal-wide,
     #modal .modal-box.modal-lg,
-    #modal .modal-box.modal-xl { max-width: 96%; }
+    #modal .modal-box.modal-xl { max-width: 96% !important; }
     #modal .modal-header { padding: 14px 16px; }
     #modal .modal-body { padding: 16px; }
     .modal-footer { padding: 12px 16px; }

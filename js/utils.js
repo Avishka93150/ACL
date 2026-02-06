@@ -20,6 +20,7 @@ function toast(message, type = 'info') {
 
 // Modal
 function openModal(title, content, size = '') {
+    const modal = document.getElementById('modal');
     document.getElementById('modal-title').textContent = title;
     document.getElementById('modal-body').innerHTML = content;
     const modalBox = document.querySelector('#modal .modal-box');
@@ -28,11 +29,19 @@ function openModal(title, content, size = '') {
     if (size) {
         modalBox.classList.add(size);
     }
-    document.getElementById('modal').classList.remove('hidden');
+    // Ensure modal is direct child of body for proper fixed positioning
+    if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+    // Force centering via inline styles (override any CSS conflicts)
+    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;z-index:10000;padding:24px;box-sizing:border-box;';
+    modal.classList.remove('hidden');
 }
 
 function closeModal() {
-    document.getElementById('modal').classList.add('hidden');
+    const modal = document.getElementById('modal');
+    modal.classList.add('hidden');
+    modal.style.cssText = '';
     // Reset modal size
     const modalBox = document.querySelector('#modal .modal-box');
     if (modalBox) {
