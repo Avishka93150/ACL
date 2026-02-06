@@ -235,7 +235,13 @@
    ========================================= */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: repeat(12, 1fr);
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-5);
+}
+
+.dashboard-col {
+    display: flex;
+    flex-direction: column;
     gap: var(--space-5);
 }
 
