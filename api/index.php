@@ -8062,7 +8062,135 @@ try {
             }
             
             break;
-        
+
+        // ==================== ALERTES TARIFAIRES ====================
+        case 'price_alerts':
+            $user = require_auth();
+            $userHotelIds = getManageableHotels($user);
+
+            if ($method === 'GET') {
+                if ($action === 'logs') {
+                    // GET /price_alerts/logs?hotel_id=X&limit=50
+                    $hotelId = intval($_GET['hotel_id'] ?? 0);
+                    if ($hotelId && !in_array($hotelId, $userHotelIds)) {
+                        json_error('Accès refusé', 403);
+                    }
+                    $limit = min(intval($_GET['limit'] ?? 50), 200);
+                    $where = "pal.user_id = ?";
+                    $params = [$user['id']];
+                    if ($hotelId) {
+                        $where .= " AND pal.hotel_id = ?";
+                        $params[] = $hotelId;
+                    }
+                    $logs = db()->query(
+                        "SELECT pal.*, h.name as hotel_name
+                         FROM price_alert_logs pal
+                         LEFT JOIN hotels h ON h.id = pal.hotel_id
+                         WHERE $where
+                         ORDER BY pal.created_at DESC
+                         LIMIT $limit",
+                        $params
+                    );
+                    json_out($logs);
+                } elseif ($id) {
+                    // GET /price_alerts/{id}
+                    $alert = db()->queryOne(
+                        "SELECT pa.*, hc.competitor_name
+                         FROM price_alerts pa
+                         LEFT JOIN hotel_competitors hc ON hc.id = pa.competitor_id
+                         WHERE pa.id = ? AND pa.user_id = ?",
+                        [$id, $user['id']]
+                    );
+                    if (!$alert) json_error('Alerte non trouvée', 404);
+                    json_out($alert);
+                } else {
+                    // GET /price_alerts?hotel_id=X
+                    $hotelId = intval($_GET['hotel_id'] ?? 0);
+                    $where = "pa.user_id = ?";
+                    $params = [$user['id']];
+                    if ($hotelId) {
+                        if (!in_array($hotelId, $userHotelIds)) {
+                            json_error('Accès refusé', 403);
+                        }
+                        $where .= " AND pa.hotel_id = ?";
+                        $params[] = $hotelId;
+                    }
+                    $alerts = db()->query(
+                        "SELECT pa.*, hc.competitor_name, h.name as hotel_name
+                         FROM price_alerts pa
+                         LEFT JOIN hotel_competitors hc ON hc.id = pa.competitor_id
+                         LEFT JOIN hotels h ON h.id = pa.hotel_id
+                         WHERE $where
+                         ORDER BY pa.created_at DESC",
+                        $params
+                    );
+                    json_out($alerts);
+                }
+            } elseif ($method === 'POST') {
+                // POST /price_alerts - Créer une alerte
+                $data = get_input();
+                $hotelId = intval($data['hotel_id'] ?? 0);
+                if (!$hotelId || !in_array($hotelId, $userHotelIds)) {
+                    json_error('Hôtel invalide ou accès refusé', 403);
+                }
+                $alertType = in_array($data['alert_type'] ?? '', ['delta_amount', 'delta_percent']) ? $data['alert_type'] : 'delta_percent';
+                $direction = in_array($data['direction'] ?? '', ['any', 'up', 'down']) ? $data['direction'] : 'any';
+                $threshold = floatval($data['threshold_value'] ?? 0);
+                if ($threshold <= 0) {
+                    json_error('Le seuil doit être supérieur à 0', 400);
+                }
+                $competitorId = !empty($data['competitor_id']) ? intval($data['competitor_id']) : null;
+                $otaName = !empty($data['ota_name']) ? trim($data['ota_name']) : null;
+                $notifyApp = intval($data['notify_app'] ?? 1);
+                $notifyEmail = intval($data['notify_email'] ?? 0);
+
+                $insertId = db()->insert(
+                    "INSERT INTO price_alerts (user_id, hotel_id, competitor_id, ota_name, alert_type, threshold_value, direction, notify_app, notify_email, is_active, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())",
+                    [$user['id'], $hotelId, $competitorId, $otaName, $alertType, $threshold, $direction, $notifyApp, $notifyEmail]
+                );
+                json_out(['id' => $insertId, 'message' => 'Alerte créée'], 201);
+
+            } elseif ($method === 'PUT') {
+                if (!$id) json_error('ID requis', 400);
+                $data = get_input();
+
+                // Vérifier propriété
+                $alert = db()->queryOne("SELECT * FROM price_alerts WHERE id = ? AND user_id = ?", [$id, $user['id']]);
+                if (!$alert) json_error('Alerte non trouvée', 404);
+
+                if ($action === 'toggle') {
+                    // PUT /price_alerts/{id}/toggle
+                    $newStatus = $alert['is_active'] ? 0 : 1;
+                    db()->execute("UPDATE price_alerts SET is_active = ?, updated_at = NOW() WHERE id = ?", [$newStatus, $id]);
+                    json_out(['is_active' => $newStatus, 'message' => $newStatus ? 'Alerte activée' : 'Alerte désactivée']);
+                } else {
+                    // PUT /price_alerts/{id} - Modifier
+                    $alertType = in_array($data['alert_type'] ?? '', ['delta_amount', 'delta_percent']) ? $data['alert_type'] : $alert['alert_type'];
+                    $direction = in_array($data['direction'] ?? '', ['any', 'up', 'down']) ? $data['direction'] : $alert['direction'];
+                    $threshold = floatval($data['threshold_value'] ?? $alert['threshold_value']);
+                    if ($threshold <= 0) json_error('Le seuil doit être supérieur à 0', 400);
+                    $competitorId = array_key_exists('competitor_id', $data) ? (!empty($data['competitor_id']) ? intval($data['competitor_id']) : null) : $alert['competitor_id'];
+                    $otaName = array_key_exists('ota_name', $data) ? (!empty($data['ota_name']) ? trim($data['ota_name']) : null) : $alert['ota_name'];
+                    $notifyApp = intval($data['notify_app'] ?? $alert['notify_app']);
+                    $notifyEmail = intval($data['notify_email'] ?? $alert['notify_email']);
+
+                    db()->execute(
+                        "UPDATE price_alerts SET competitor_id = ?, ota_name = ?, alert_type = ?, threshold_value = ?, direction = ?, notify_app = ?, notify_email = ?, updated_at = NOW() WHERE id = ?",
+                        [$competitorId, $otaName, $alertType, $threshold, $direction, $notifyApp, $notifyEmail, $id]
+                    );
+                    json_out(['message' => 'Alerte mise à jour']);
+                }
+
+            } elseif ($method === 'DELETE') {
+                if (!$id) json_error('ID requis', 400);
+                $alert = db()->queryOne("SELECT * FROM price_alerts WHERE id = ? AND user_id = ?", [$id, $user['id']]);
+                if (!$alert) json_error('Alerte non trouvée', 404);
+                db()->execute("DELETE FROM price_alerts WHERE id = ?", [$id]);
+                json_out(['message' => 'Alerte supprimée']);
+            }
+            break;
+
         default:
             json_error('Endpoint non trouvé', 404);
     }
