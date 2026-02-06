@@ -1700,16 +1700,20 @@ tr:hover { background: var(--gray-50); }
 .filter-count { font-size: 13px; color: var(--gray-500); padding: 8px 12px; background: white; border-radius: var(--radius); border: 1px solid var(--gray-200); white-space: nowrap; }
 
 /* === MODAL === */
-.modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
-.modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.5); }
-.modal-box { position: relative; background: white; border-radius: var(--radius); width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
-.modal-box.modal-wide { max-width: 900px; }
-.modal-box.modal-xl { max-width: 1100px; }
-.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px; border-bottom: 1px solid var(--gray-200); }
-.modal-header h3 { font-size: 18px; }
-.modal-header button { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--gray-400); }
-.modal-body { padding: 20px; }
-.modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 15px 20px; border-top: 1px solid var(--gray-200); }
+/* Display gere par JS: openModal() → display:block, closeModal() → display:none */
+.modal-backdrop { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.4); z-index: 10000; }
+.modal-box { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10001; background: white; border-radius: 16px; width: 94%; max-width: 580px; max-height: 88vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05); }
+.modal-box.modal-md { max-width: 640px; }
+.modal-box.modal-lg { max-width: 760px; }
+.modal-box.modal-wide { max-width: 860px; }
+.modal-box.modal-xl { max-width: 1080px; }
+.modal-box.modal-full { max-width: 94vw; width: 94vw; }
+.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid #F3F4F6; background: white; flex-shrink: 0; border-radius: 16px 16px 0 0; }
+.modal-header h3 { font-size: 17px; font-weight: 700; color: #1E3A5F; margin: 0; }
+.modal-header button { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: #F3F4F6; border: none; color: #6B7280; cursor: pointer; font-size: 14px; }
+.modal-header button:hover { background: #E5E7EB; color: #1F2937; }
+.modal-body { padding: 24px; overflow-y: auto; flex: 1; min-height: 0; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 24px; border-top: 1px solid #F3F4F6; background: #F9FAFB; flex-shrink: 0; border-radius: 0 0 16px 16px; }
 
 /* === TOAST === */
 #toast-container { position: fixed; top: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; }
@@ -2617,11 +2621,11 @@ tr:hover { background: var(--gray-50); }
     .tab-btn i { margin-right: 4px; }
     
     /* Modal */
-    .modal-content { width: 95%; max-width: none; margin: 10px; max-height: 90vh; }
-    .modal-header { padding: 15px; }
+    .modal-box { width: 96%; max-width: 96%; max-height: 92vh; }
+    .modal-header { padding: 14px 16px; }
     .modal-header h3 { font-size: 16px; }
-    .modal-body { padding: 15px; }
-    .modal-footer { padding: 15px; flex-direction: column; gap: 10px; }
+    .modal-body { padding: 16px; }
+    .modal-footer { padding: 14px 16px; }
     .modal-footer .btn { width: 100%; }
     
     /* Batch actions */
@@ -2751,8 +2755,11 @@ tr:hover { background: var(--gray-50); }
     th, td { padding: 8px 10px; font-size: 12px; }
     
     .nav-item { padding: 14px 16px; font-size: 15px; }
-    
-    .modal-content { margin: 5px; }
+
+    /* Modal - bottom sheet on very small screens */
+    .modal-box { width: 100%; max-width: 100%; max-height: 96vh; border-radius: 12px 12px 0 0; top: auto; bottom: 0; transform: translate(-50%, 0); }
+    .modal-footer { flex-direction: column; }
+    .modal-footer .btn { width: 100%; justify-content: center; }
 }
 
 /* ===== KANBAN / TASKS ===== */
@@ -2946,7 +2953,7 @@ tr:hover { background: var(--gray-50); }
 
 /* ===== LANDSCAPE MOBILE ===== */
 @media (max-width: 768px) and (orientation: landscape) {
-    .modal-content { max-height: 85vh; }
+    .modal-box { max-height: 85vh; }
     .modal-body { max-height: 50vh; overflow-y: auto; }
     .chat-messages { max-height: 200px; }
 }
@@ -8716,10 +8723,7 @@ input:checked + .slider:before {
     border: 2px solid #dc2626;
 }
 
-/* Modal XL for comparison */
-.modal-xl .modal-content {
-    max-width: 900px;
-}
+/* Modal XL for comparison - handled by .modal-box.modal-xl */
 
 /* Price Evolution Chart */
 .price-evolution {
@@ -9614,8 +9618,7 @@ input:checked + .slider:before {
 .log-row-skipped { background: var(--gray-50); opacity: 0.7; }
 .log-message { max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* Modal large */
-.modal-lg .modal-content { max-width: 800px; width: 95%; }
+/* Modal large - handled by .modal-box.modal-lg */
 
 /* Mobile login button in nav menu */
 .mobile-login-btn {
