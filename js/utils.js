@@ -23,8 +23,8 @@ function openModal(title, content, size = '') {
     document.getElementById('modal-title').textContent = title;
     document.getElementById('modal-body').innerHTML = content;
     const modalBox = document.querySelector('#modal .modal-box');
-    // Reset size classes
-    modalBox.classList.remove('modal-wide', 'modal-xl');
+    // Reset all size classes
+    modalBox.classList.remove('modal-md', 'modal-wide', 'modal-lg', 'modal-xl', 'modal-full');
     if (size) {
         modalBox.classList.add(size);
     }
@@ -36,7 +36,7 @@ function closeModal() {
     // Reset modal size
     const modalBox = document.querySelector('#modal .modal-box');
     if (modalBox) {
-        modalBox.classList.remove('modal-wide', 'modal-xl');
+        modalBox.classList.remove('modal-md', 'modal-wide', 'modal-lg', 'modal-xl', 'modal-full');
     }
 }
 

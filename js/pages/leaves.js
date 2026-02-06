@@ -1113,7 +1113,7 @@ async function lvNewLeaveForOtherModal() {
                     <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
                 </div>
             </form>
-        `);
+        `, 'modal-lg');
     } catch (e) { toast(e.message, 'error'); }
 }
 

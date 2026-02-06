@@ -838,7 +838,7 @@ async function showRevenueSettings() {
                 </div>
                 <div class="modal-footer"><button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button><button type="submit" class="btn btn-primary">Enregistrer</button></div>
             </form>
-        `, 'modal-lg');
+        `, 'modal-wide');
         
     } catch (error) {
         toast(error.message, 'error');
