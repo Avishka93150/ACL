@@ -198,7 +198,7 @@ function showNewHotelModal() {
                 <button type="submit" class="btn btn-primary">${t('common.create')}</button>
             </div>
         </form>
-    `);
+    `, 'modal-lg');
 }
 
 async function createHotel(e) {
@@ -369,7 +369,7 @@ async function showEditHotelModal(id) {
                     <button type="submit" class="btn btn-primary">${t('common.save')}</button>
                 </div>
             </form>
-        `);
+        `, 'modal-lg');
     } catch (error) {
         toast(error.message, 'error');
     }
