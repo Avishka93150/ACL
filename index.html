@@ -13,6 +13,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/landing.css">
     <!-- Chart.js for revenue evolution graphs -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -25,28 +26,28 @@
 <div id="login-page">
     <div class="landing-wrapper">
         <!-- Navigation -->
-        <nav class="nav-bar">
-            <div class="nav-container">
-                <a href="#" class="nav-logo">
-                    <div class="logo-icon"><i class="fas fa-hotel"></i></div>
+        <nav class="landing-nav" id="landing-nav">
+            <div class="landing-nav-container">
+                <a href="#" class="landing-logo">
+                    <div class="landing-logo-icon"><i class="fas fa-hotel"></i></div>
                     <span>ACL GESTION</span>
                 </a>
-                <div class="nav-menu" id="nav-menu">
-                    <a href="#features" class="nav-link" onclick="closeLandingMenu()">Fonctionnalités</a>
-                    <a href="#benefits" class="nav-link" onclick="closeLandingMenu()">Avantages</a>
-                    <a href="#contact" class="nav-link" onclick="closeLandingMenu()">Contact</a>
-                    <button class="btn-login mobile-login-btn" onclick="showLoginForm(); closeLandingMenu();">
-                        <i class="fas fa-user"></i>
-                        <span>Espace client</span>
+                <div class="landing-nav-menu" id="nav-menu">
+                    <a href="#features" class="landing-nav-link" onclick="closeLandingMenu()">Fonctionnalites</a>
+                    <a href="#modules" class="landing-nav-link" onclick="closeLandingMenu()">Modules</a>
+                    <a href="#benefits" class="landing-nav-link" onclick="closeLandingMenu()">Avantages</a>
+                    <a href="#contact" class="landing-nav-link" onclick="closeLandingMenu()">Contact</a>
+                    <button class="landing-btn landing-btn-primary mobile-login-btn" onclick="showLoginForm(); closeLandingMenu();">
+                        <i class="fas fa-sign-in-alt"></i> Connexion
                     </button>
                 </div>
-                <div class="nav-actions">
-                    <button class="btn-login" onclick="showLoginForm()">
-                        <i class="fas fa-user"></i>
-                        <span>Espace client</span>
+                <div class="landing-nav-actions">
+                    <button class="landing-btn landing-btn-outline" onclick="scrollToContact()">Demo</button>
+                    <button class="landing-btn landing-btn-primary" onclick="showLoginForm()">
+                        <i class="fas fa-sign-in-alt"></i> Connexion
                     </button>
                 </div>
-                <button class="nav-toggle" onclick="toggleLandingMenu()">
+                <button class="landing-nav-toggle" onclick="toggleLandingMenu()">
                     <i class="fas fa-bars"></i>
                 </button>
             </div>
@@ -54,131 +55,259 @@
 
         <!-- Hero Section -->
         <section class="hero-section">
-            <div class="hero-bg"></div>
+            <div class="hero-background"></div>
             <div class="hero-container">
                 <div class="hero-content">
                     <div class="hero-badge">
-                        <i class="fas fa-star"></i>
-                        Solution tout-en-un pour l'hôtellerie
+                        <i class="fas fa-shield-alt"></i>
+                        Plateforme securisee & conforme RGPD
                     </div>
-                    <h1>Pilotez vos établissements avec <span class="text-gradient">précision</span></h1>
-                    <p>Une plateforme intuitive et complète pour centraliser la gestion de vos hôtels. Maintenance, gouvernante, planning, audits — tout au même endroit.</p>
+                    <h1 class="hero-title">La gestion hoteliere <span class="highlight">simplifiee</span></h1>
+                    <p class="hero-description">Centralisez la gestion de vos etablissements sur une seule plateforme. Maintenance, gouvernante, blanchisserie, conges, audits et revenus — pilotez tout en temps reel.</p>
                     <div class="hero-cta">
-                        <button class="btn-primary-lg" onclick="scrollToContact()">
-                            Demander une démo
+                        <button class="landing-btn landing-btn-hero" onclick="scrollToContact()">
+                            Demander une demo gratuite
                             <i class="fas fa-arrow-right"></i>
                         </button>
-                        <button class="btn-secondary-lg" onclick="document.getElementById('features').scrollIntoView({behavior: 'smooth'})">
-                            Découvrir
+                        <button class="landing-btn landing-btn-ghost" onclick="document.getElementById('features').scrollIntoView({behavior: 'smooth'})">
+                            <i class="fas fa-play-circle"></i>
+                            Decouvrir
                         </button>
                     </div>
                     <div class="hero-stats">
-                        <div class="stat-item">
-                            <span class="stat-number">500+</span>
-                            <span class="stat-label">Chambres gérées</span>
+                        <div class="hero-stat">
+                            <span class="hero-stat-value" id="stat-hotels">12</span>
+                            <span class="hero-stat-label">Hotels geres</span>
                         </div>
-                        <div class="stat-divider"></div>
-                        <div class="stat-item">
-                            <span class="stat-number">98%</span>
-                            <span class="stat-label">Satisfaction</span>
+                        <div class="hero-stat">
+                            <span class="hero-stat-value" id="stat-rooms">500+</span>
+                            <span class="hero-stat-label">Chambres</span>
                         </div>
-                        <div class="stat-divider"></div>
-                        <div class="stat-item">
-                            <span class="stat-number">24/7</span>
-                            <span class="stat-label">Disponibilité</span>
+                        <div class="hero-stat">
+                            <span class="hero-stat-value" id="stat-uptime">99.9%</span>
+                            <span class="hero-stat-label">Disponibilite</span>
+                        </div>
+                        <div class="hero-stat">
+                            <span class="hero-stat-value" id="stat-users">150+</span>
+                            <span class="hero-stat-label">Utilisateurs</span>
                         </div>
                     </div>
                 </div>
                 <div class="hero-visual">
-                    <div class="hero-card hero-card-main">
-                        <div class="card-header-bar">
-                            <div class="card-dots">
-                                <span></span><span></span><span></span>
-                            </div>
+                    <div class="hero-mockup">
+                        <div class="mockup-header">
+                            <span class="mockup-dot red"></span>
+                            <span class="mockup-dot yellow"></span>
+                            <span class="mockup-dot green"></span>
                         </div>
-                        <div class="card-preview">
-                            <div class="preview-sidebar">
-                                <div class="preview-logo"></div>
-                                <div class="preview-menu">
-                                    <div class="menu-item active"></div>
-                                    <div class="menu-item"></div>
-                                    <div class="menu-item"></div>
-                                    <div class="menu-item"></div>
-                                </div>
+                        <div class="mockup-content">
+                            <div class="mockup-sidebar">
+                                <div class="mockup-menu-item active"></div>
+                                <div class="mockup-menu-item"></div>
+                                <div class="mockup-menu-item"></div>
+                                <div class="mockup-menu-item"></div>
+                                <div class="mockup-menu-item"></div>
                             </div>
-                            <div class="preview-content">
-                                <div class="preview-header"></div>
-                                <div class="preview-cards">
-                                    <div class="p-card blue"></div>
-                                    <div class="p-card green"></div>
-                                    <div class="p-card orange"></div>
+                            <div class="mockup-main">
+                                <div class="mockup-card-row">
+                                    <div class="mockup-kpi">
+                                        <div class="mockup-kpi-value">94%</div>
+                                        <div class="mockup-kpi-label">Occupation</div>
+                                    </div>
+                                    <div class="mockup-kpi">
+                                        <div class="mockup-kpi-value">12</div>
+                                        <div class="mockup-kpi-label">Tickets</div>
+                                    </div>
+                                    <div class="mockup-kpi">
+                                        <div class="mockup-kpi-value">98%</div>
+                                        <div class="mockup-kpi-label">Qualite</div>
+                                    </div>
                                 </div>
-                                <div class="preview-chart"></div>
+                                <div class="mockup-chart">
+                                    <div class="mockup-bar" style="height: 60%"></div>
+                                    <div class="mockup-bar" style="height: 80%"></div>
+                                    <div class="mockup-bar" style="height: 45%"></div>
+                                    <div class="mockup-bar" style="height: 90%"></div>
+                                    <div class="mockup-bar" style="height: 70%"></div>
+                                    <div class="mockup-bar" style="height: 85%"></div>
+                                    <div class="mockup-bar" style="height: 95%"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="hero-card hero-card-float hero-card-1">
+                    <div class="hero-floating-card floating-card-1">
                         <i class="fas fa-check-circle"></i>
-                        <span>12 chambres nettoyées</span>
+                        <div>
+                            <strong>Chambre 204</strong>
+                            <span>Nettoyage termine</span>
+                        </div>
                     </div>
-                    <div class="hero-card hero-card-float hero-card-2">
-                        <i class="fas fa-wrench"></i>
-                        <span>Maintenance terminée</span>
+                    <div class="hero-floating-card floating-card-2">
+                        <i class="fas fa-tools"></i>
+                        <div>
+                            <strong>Maintenance</strong>
+                            <span>3 tickets resolus</span>
+                        </div>
+                    </div>
+                    <div class="hero-floating-card floating-card-3">
+                        <i class="fas fa-chart-line"></i>
+                        <div>
+                            <strong>RevPAR</strong>
+                            <span>+12% ce mois</span>
+                        </div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Features Section -->
+        <!-- Trusted By / Social Proof -->
+        <section class="trust-section">
+            <div class="section-container">
+                <p class="trust-label">Solution deployee dans les groupes hoteliers francais</p>
+                <div class="trust-logos">
+                    <div class="trust-item"><i class="fas fa-hotel"></i> Hotels Premium</div>
+                    <div class="trust-item"><i class="fas fa-concierge-bell"></i> Groupes Independants</div>
+                    <div class="trust-item"><i class="fas fa-star"></i> Residences de Tourisme</div>
+                    <div class="trust-item"><i class="fas fa-bed"></i> Boutique Hotels</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Overview -->
         <section class="features-section" id="features">
             <div class="section-container">
                 <div class="section-header">
-                    <span class="section-tag">Fonctionnalités</span>
-                    <h2>Tout ce dont vous avez besoin</h2>
-                    <p>Des outils puissants et intuitifs pour optimiser chaque aspect de votre gestion hôtelière</p>
+                    <span class="section-tag">Fonctionnalites</span>
+                    <h2>Une plateforme complete pour chaque metier</h2>
+                    <p>Des outils conçus specifiquement pour les besoins quotidiens de l'hotellerie</p>
                 </div>
                 <div class="features-grid">
-                    <div class="feature-item">
-                        <div class="feature-icon blue">
-                            <i class="fas fa-building"></i>
-                        </div>
-                        <h3>Multi-établissements</h3>
-                        <p>Gérez plusieurs hôtels depuis une interface unique avec des tableaux de bord personnalisés pour chaque établissement.</p>
+                    <div class="feature-card">
+                        <div class="feature-icon blue"><i class="fas fa-tachometer-alt"></i></div>
+                        <h3>Dashboard temps reel</h3>
+                        <p>Vue d'ensemble de tous vos etablissements avec KPIs, alertes et indicateurs personnalisables par role.</p>
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-icon green">
-                            <i class="fas fa-wrench"></i>
-                        </div>
-                        <h3>Maintenance</h3>
-                        <p>Suivi des interventions en temps réel, historique complet, photos et alertes automatiques pour ne rien manquer.</p>
+                    <div class="feature-card">
+                        <div class="feature-icon green"><i class="fas fa-shield-alt"></i></div>
+                        <h3>Securite renforcee</h3>
+                        <p>Authentification JWT, rate limiting, protection CSRF, validation des uploads et conformite RGPD integree.</p>
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-icon purple">
-                            <i class="fas fa-broom"></i>
-                        </div>
-                        <h3>Gouvernante</h3>
-                        <p>Dispatch intelligent des chambres, suivi des statuts de nettoyage et contrôles qualité intégrés.</p>
+                    <div class="feature-card">
+                        <div class="feature-icon orange"><i class="fas fa-users-cog"></i></div>
+                        <h3>Gestion multi-roles</h3>
+                        <p>7 niveaux d'acces (admin, groupe, hotel, comptabilite, RH, reception, employe) avec permissions granulaires.</p>
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-icon orange">
-                            <i class="fas fa-tshirt"></i>
-                        </div>
-                        <h3>Blanchisserie</h3>
-                        <p>Gestion complète du linge avec suivi des envois, réceptions et inventaire en temps réel.</p>
+                    <div class="feature-card">
+                        <div class="feature-icon purple"><i class="fas fa-bell"></i></div>
+                        <h3>Alertes intelligentes</h3>
+                        <p>Notifications push en temps reel, alertes automatiques par cron, et rappels par email configurable.</p>
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-icon pink">
-                            <i class="fas fa-calendar-check"></i>
-                        </div>
-                        <h3>Congés & Planning</h3>
-                        <p>Demandes dématérialisées, validation hiérarchique automatique et vue planning pour toute l'équipe.</p>
+                    <div class="feature-card">
+                        <div class="feature-icon cyan"><i class="fas fa-language"></i></div>
+                        <h3>Multi-langue</h3>
+                        <p>Interface disponible en français, anglais et espagnol. Changement de langue instantane sans rechargement.</p>
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-icon teal">
-                            <i class="fas fa-clipboard-check"></i>
+                    <div class="feature-card">
+                        <div class="feature-icon red"><i class="fas fa-moon"></i></div>
+                        <h3>Mode sombre</h3>
+                        <p>Theme clair et sombre adaptatif. Detection automatique des preferences systeme de l'utilisateur.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Modules Detail Section -->
+        <section class="modules-section" id="modules">
+            <div class="section-container">
+                <div class="section-header">
+                    <span class="section-tag">Modules</span>
+                    <h2>16 modules metiers integres</h2>
+                    <p>Chaque aspect de votre gestion hoteliere est couvert</p>
+                </div>
+                <div class="modules-grid">
+                    <div class="module-card">
+                        <div class="module-icon"><i class="fas fa-wrench"></i></div>
+                        <div class="module-info">
+                            <h4>Maintenance</h4>
+                            <p>Tickets d'intervention, suivi photos, priorites et historique complet</p>
                         </div>
-                        <h3>Audits & Évaluations</h3>
-                        <p>Créez vos grilles personnalisées, évaluez vos équipes et suivez les performances avec des rapports détaillés.</p>
+                    </div>
+                    <div class="module-card">
+                        <div class="module-icon"><i class="fas fa-broom"></i></div>
+                        <div class="module-info">
+                            <h4>Gouvernante</h4>
+                            <p>Dispatch chambres, controles qualite, statuts en temps reel</p>
+                        </div>
+                    </div>
+                    <div class="module-card">
+                        <div class="module-icon"><i class="fas fa-tshirt"></i></div>
+                        <div class="module-info">
+                            <h4>Blanchisserie</h4>
+                            <p>Envois, receptions, bons PDF, suivi des quantites par article</p>
+                        </div>
+                    </div>
+                    <div class="module-card">
+                        <div class="module-icon"><i class="fas fa-calendar-alt"></i></div>
+                        <div class="module-info">
+                            <h4>Conges</h4>
+                            <p>Demandes, validation hierarchique, compteurs, vue planning equipe</p>
+                        </div>
+                    </div>
+                    <div class="module-card">
+                        <div class="module-icon"><i class="fas fa-chart-line"></i></div>
+                        <div class="module-info">
+                            <h4>Revenue Management</h4>
+                            <p>RevPAR, ADR, taux d'occupation, historique et comparaisons</p>
+                        </div>
+                    </div>
+                    <div class="module-card">
+                        <div class="module-icon"><i class="fas fa-cash-register"></i></div>
+                        <div class="module-info">
+                            <h4>Clotures & Remises</h4>
+                            <p>Clotures de caisse, PJ, rapprochement comptable, archivage</p>
+                        </div>
+                    </div>
+                    <div class="module-card">
+                        <div class="module-icon"><i class="fas fa-clipboard-check"></i></div>
+                        <div class="module-info">
+                            <h4>Audits</h4>
+                            <p>Grilles personnalisees, scoring, rapports PDF, suivi des actions</p>
+                        </div>
+                    </div>
+                    <div class="module-card">
+                        <div class="module-icon"><i class="fas fa-star-half-alt"></i></div>
+                        <div class="module-info">
+                            <h4>Evaluations</h4>
+                            <p>Evaluations personnel, criteres parametrables, historique</p>
+                        </div>
+                    </div>
+                    <div class="module-card">
+                        <div class="module-icon"><i class="fas fa-tasks"></i></div>
+                        <div class="module-info">
+                            <h4>Taches</h4>
+                            <p>Kanban, assignation, dates limites, archivage automatique</p>
+                        </div>
+                    </div>
+                    <div class="module-card">
+                        <div class="module-icon"><i class="fas fa-envelope"></i></div>
+                        <div class="module-info">
+                            <h4>Messagerie</h4>
+                            <p>Messages internes entre employes, temps reel, notifications</p>
+                        </div>
+                    </div>
+                    <div class="module-card">
+                        <div class="module-icon"><i class="fas fa-building"></i></div>
+                        <div class="module-info">
+                            <h4>Hotels</h4>
+                            <p>Configuration multi-hotel, etages, chambres, parametres</p>
+                        </div>
+                    </div>
+                    <div class="module-card">
+                        <div class="module-icon"><i class="fas fa-robot"></i></div>
+                        <div class="module-info">
+                            <h4>Automatisations</h4>
+                            <p>Regles automatiques, alertes planifiees, actions programmatiques</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -189,61 +318,68 @@
             <div class="section-container">
                 <div class="benefits-grid">
                     <div class="benefits-content">
-                        <span class="section-tag">Pourquoi nous choisir</span>
-                        <h2>Simplifiez votre quotidien</h2>
-                        <p>ACL GESTION a été conçu par des professionnels de l'hôtellerie, pour des professionnels de l'hôtellerie.</p>
+                        <span class="section-tag">Pourquoi ACL GESTION</span>
+                        <h2>Conçu par des hoteliers, pour des hoteliers</h2>
+                        <p>Ne perdez plus de temps avec des outils generiques. ACL GESTION est pense pour votre realite terrain.</p>
                         <ul class="benefits-list">
                             <li>
-                                <div class="benefit-icon"><i class="fas fa-bolt"></i></div>
+                                <div class="benefit-check"><i class="fas fa-check"></i></div>
                                 <div>
-                                    <strong>Gain de temps</strong>
-                                    <span>Automatisez les tâches répétitives et concentrez-vous sur l'essentiel</span>
+                                    <strong>Deploiement rapide</strong>
+                                    <span>Operationnel en quelques heures, sans installation complexe</span>
                                 </div>
                             </li>
                             <li>
-                                <div class="benefit-icon"><i class="fas fa-eye"></i></div>
+                                <div class="benefit-check"><i class="fas fa-check"></i></div>
                                 <div>
-                                    <strong>Visibilité totale</strong>
-                                    <span>Tableau de bord centralisé pour suivre tous vos établissements</span>
+                                    <strong>Multi-etablissements</strong>
+                                    <span>Gerez 1 ou 50 hotels depuis la meme interface centralisee</span>
                                 </div>
                             </li>
                             <li>
-                                <div class="benefit-icon"><i class="fas fa-mobile-alt"></i></div>
+                                <div class="benefit-check"><i class="fas fa-check"></i></div>
                                 <div>
                                     <strong>Accessible partout</strong>
-                                    <span>Interface responsive, utilisable sur ordinateur, tablette et mobile</span>
+                                    <span>Web app responsive, utilisable sur PC, tablette et smartphone</span>
                                 </div>
                             </li>
                             <li>
-                                <div class="benefit-icon"><i class="fas fa-shield-alt"></i></div>
+                                <div class="benefit-check"><i class="fas fa-check"></i></div>
                                 <div>
-                                    <strong>Sécurisé & RGPD</strong>
-                                    <span>Données hébergées en France, conformité RGPD garantie</span>
+                                    <strong>Donnees en France</strong>
+                                    <span>Hebergement francais, securite renforcee, conformite RGPD</span>
+                                </div>
+                            </li>
+                            <li>
+                                <div class="benefit-check"><i class="fas fa-check"></i></div>
+                                <div>
+                                    <strong>Sans engagement</strong>
+                                    <span>Tarification transparente, export de vos donnees a tout moment</span>
                                 </div>
                             </li>
                         </ul>
                     </div>
                     <div class="benefits-visual">
                         <div class="benefits-image">
-                            <div class="floating-card fc-1">
-                                <div class="fc-icon green"><i class="fas fa-chart-line"></i></div>
-                                <div class="fc-content">
-                                    <span class="fc-label">Performance</span>
-                                    <span class="fc-value">+45%</span>
+                            <div class="benefit-metric metric-1">
+                                <div class="metric-icon"><i class="fas fa-clock"></i></div>
+                                <div class="metric-data">
+                                    <span class="metric-value">-40%</span>
+                                    <span class="metric-label">Temps administratif</span>
                                 </div>
                             </div>
-                            <div class="floating-card fc-2">
-                                <div class="fc-icon blue"><i class="fas fa-users"></i></div>
-                                <div class="fc-content">
-                                    <span class="fc-label">Équipe active</span>
-                                    <span class="fc-value">24 membres</span>
+                            <div class="benefit-metric metric-2">
+                                <div class="metric-icon"><i class="fas fa-chart-bar"></i></div>
+                                <div class="metric-data">
+                                    <span class="metric-value">+25%</span>
+                                    <span class="metric-label">Productivite equipes</span>
                                 </div>
                             </div>
-                            <div class="floating-card fc-3">
-                                <div class="fc-icon orange"><i class="fas fa-bed"></i></div>
-                                <div class="fc-content">
-                                    <span class="fc-label">Chambres</span>
-                                    <span class="fc-value">156 prêtes</span>
+                            <div class="benefit-metric metric-3">
+                                <div class="metric-icon"><i class="fas fa-smile"></i></div>
+                                <div class="metric-data">
+                                    <span class="metric-value">98%</span>
+                                    <span class="metric-label">Satisfaction clients</span>
                                 </div>
                             </div>
                         </div>
@@ -255,33 +391,46 @@
         <!-- Contact Section -->
         <section class="contact-section" id="contact">
             <div class="section-container">
-                <div class="contact-wrapper">
+                <div class="contact-grid">
                     <div class="contact-info">
                         <span class="section-tag light">Contact</span>
-                        <h2>Prêt à transformer votre gestion ?</h2>
-                        <p>Remplissez le formulaire et notre équipe vous contactera pour une démonstration personnalisée de la plateforme.</p>
+                        <h2>Pret a transformer votre gestion ?</h2>
+                        <p>Demandez une demonstration gratuite et personnalisee. Notre equipe vous accompagne dans la prise en main.</p>
                         <div class="contact-details">
                             <div class="contact-item">
-                                <div class="contact-icon"><i class="fas fa-envelope"></i></div>
+                                <div class="contact-item-icon"><i class="fas fa-envelope"></i></div>
                                 <div>
                                     <span class="contact-label">Email</span>
                                     <span class="contact-value">contact@acl-gestion.com</span>
                                 </div>
                             </div>
                             <div class="contact-item">
-                                <div class="contact-icon"><i class="fas fa-map-marker-alt"></i></div>
+                                <div class="contact-item-icon"><i class="fas fa-phone"></i></div>
+                                <div>
+                                    <span class="contact-label">Telephone</span>
+                                    <span class="contact-value">+33 1 XX XX XX XX</span>
+                                </div>
+                            </div>
+                            <div class="contact-item">
+                                <div class="contact-item-icon"><i class="fas fa-map-marker-alt"></i></div>
                                 <div>
                                     <span class="contact-label">Localisation</span>
                                     <span class="contact-value">Paris, France</span>
                                 </div>
                             </div>
                         </div>
+                        <div class="contact-trust">
+                            <div class="contact-trust-item"><i class="fas fa-lock"></i> Donnees securisees</div>
+                            <div class="contact-trust-item"><i class="fas fa-headset"></i> Support reactif</div>
+                            <div class="contact-trust-item"><i class="fas fa-undo"></i> Sans engagement</div>
+                        </div>
                     </div>
                     <div class="contact-form-card">
+                        <h3 class="contact-form-title">Demandez votre demo</h3>
                         <form id="contact-form" onsubmit="submitContactForm(event)">
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label>Prénom *</label>
+                                    <label>Prenom *</label>
                                     <input type="text" name="firstname" required placeholder="Jean">
                                 </div>
                                 <div class="form-group">
@@ -295,51 +444,47 @@
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label>Société *</label>
+                                    <label>Societe *</label>
                                     <input type="text" name="company" required placeholder="Nom de votre groupe">
                                 </div>
                                 <div class="form-group">
-                                    <label>Établissements</label>
+                                    <label>Etablissements</label>
                                     <select name="hotels_count">
-                                        <option value="">Sélectionner</option>
-                                        <option value="1">1 établissement</option>
-                                        <option value="2-5">2 à 5</option>
-                                        <option value="6-10">6 à 10</option>
+                                        <option value="">Selectionner</option>
+                                        <option value="1">1 etablissement</option>
+                                        <option value="2-5">2 a 5</option>
+                                        <option value="6-10">6 a 10</option>
                                         <option value="10+">Plus de 10</option>
                                     </select>
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label>Téléphone</label>
+                                <label>Telephone</label>
                                 <input type="tel" name="phone" placeholder="+33 6 00 00 00 00">
                             </div>
                             <div class="form-group">
                                 <label>Message</label>
-                                <textarea name="message" rows="3" placeholder="Décrivez votre besoin..."></textarea>
+                                <textarea name="message" rows="3" placeholder="Decrivez votre besoin..."></textarea>
                             </div>
-                            
                             <!-- Honeypot -->
                             <div style="position:absolute;left:-9999px;">
                                 <input type="text" name="website" tabindex="-1" autocomplete="off">
                             </div>
-                            
                             <!-- Captcha -->
                             <div class="form-group captcha-box">
-                                <label><i class="fas fa-shield-alt"></i> Vérification *</label>
+                                <label><i class="fas fa-shield-alt"></i> Verification *</label>
                                 <div class="captcha-row">
                                     <span class="captcha-question" id="captcha-question"></span>
                                     <input type="number" name="captcha" required placeholder="?" id="captcha-answer">
                                 </div>
                             </div>
-                            
                             <div class="form-group">
                                 <label class="checkbox-label">
                                     <input type="checkbox" name="consent" required>
-                                    <span>J'accepte que mes données soient traitées pour cette demande *</span>
+                                    <span>J'accepte que mes donnees soient traitees pour cette demande *</span>
                                 </label>
                             </div>
-                            
-                            <button type="submit" class="btn-submit" id="contact-submit-btn">
+                            <button type="submit" class="landing-btn landing-btn-submit" id="contact-submit-btn">
                                 Envoyer ma demande
                                 <i class="fas fa-paper-plane"></i>
                             </button>
@@ -350,32 +495,32 @@
         </section>
 
         <!-- Footer -->
-        <footer class="site-footer">
+        <footer class="landing-footer">
             <div class="footer-container">
-                <div class="footer-main">
+                <div class="footer-grid">
                     <div class="footer-brand">
-                        <a href="#" class="footer-logo">
-                            <div class="logo-icon"><i class="fas fa-hotel"></i></div>
+                        <a href="#" class="landing-logo footer-logo-link">
+                            <div class="landing-logo-icon"><i class="fas fa-hotel"></i></div>
                             <span>ACL GESTION</span>
                         </a>
-                        <p>Solution de gestion hôtelière complète et intuitive pour les professionnels exigeants.</p>
+                        <p>Plateforme de gestion hoteliere complete, securisee et intuitive pour les professionnels exigeants.</p>
                     </div>
-                    <div class="footer-links">
-                        <div class="footer-col">
-                            <h4>Navigation</h4>
-                            <a href="#features">Fonctionnalités</a>
-                            <a href="#benefits">Avantages</a>
-                            <a href="#contact">Contact</a>
-                        </div>
-                        <div class="footer-col">
-                            <h4>Légal</h4>
-                            <a href="#" onclick="showLegalNotice(); return false;">Mentions légales</a>
-                            <a href="#" onclick="showPrivacyPolicy(); return false;">Confidentialité</a>
-                        </div>
+                    <div class="footer-col">
+                        <h4>Plateforme</h4>
+                        <a href="#features">Fonctionnalites</a>
+                        <a href="#modules">Modules</a>
+                        <a href="#benefits">Avantages</a>
+                        <a href="#contact">Contact</a>
+                    </div>
+                    <div class="footer-col">
+                        <h4>Legal</h4>
+                        <a href="#" onclick="showLegalNotice(); return false;">Mentions legales</a>
+                        <a href="#" onclick="showPrivacyPolicy(); return false;">Confidentialite</a>
+                        <a href="#" onclick="showPrivacyPolicy(); return false;">RGPD</a>
                     </div>
                 </div>
                 <div class="footer-bottom">
-                    <p>&copy; 2024 ACL GESTION. Tous droits réservés.</p>
+                    <p>&copy; 2025 ACL GESTION. Tous droits reserves. Heberge en France.</p>
                 </div>
             </div>
         </footer>
@@ -393,7 +538,7 @@
                     <i class="fas fa-hotel"></i>
                 </div>
                 <h2>Espace Client</h2>
-                <p>Connectez-vous à votre compte</p>
+                <p>Connectez-vous a votre compte</p>
             </div>
             <form id="login-form">
                 <div class="form-group">
@@ -416,7 +561,7 @@
                 </button>
             </form>
             <div class="login-footer">
-                <a href="#" onclick="showForgotPassword(); return false;">Mot de passe oublié ?</a>
+                <a href="#" onclick="showForgotPassword(); return false;">Mot de passe oublie ?</a>
             </div>
         </div>
     </div>
