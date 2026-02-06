@@ -45,6 +45,7 @@ switch ($action) {
         break;
     case 'revenue':
         updateAllRevenueRates();
+        checkPriceAlerts();
         break;
     case 'price_alerts':
         checkPriceAlerts();
