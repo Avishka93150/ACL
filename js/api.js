@@ -224,7 +224,7 @@ const API = {
         const url = `${CONFIG.API_URL}/dispatch/${id}/control`;
         const headers = {};
         if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-        const response = await fetch(url, { method: 'POST', headers, body: formData });
+        const response = await fetch(url, { method: 'PUT', headers, body: formData });
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || 'Erreur');
         return data;

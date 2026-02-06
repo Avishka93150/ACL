@@ -525,7 +525,8 @@ function t(key, params = {}) {
 
     // Substitution des parametres {name}, {count}, etc.
     for (const [k, v] of Object.entries(params)) {
-        text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+        const escapedKey = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        text = text.replace(new RegExp(`\\{${escapedKey}\\}`, 'g'), v);
     }
 
     return text;

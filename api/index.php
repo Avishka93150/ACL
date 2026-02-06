@@ -1414,12 +1414,13 @@ try {
                 
                 // Congés
                 try {
-                    $stats['leaves_pending'] = db()->count("SELECT COUNT(*) FROM leave_requests WHERE status = 'pending'");
+                    $stats['leaves_pending'] = db()->count("SELECT COUNT(*) FROM leave_requests WHERE status = 'pending'" . $hotelFilter, $hotelIds);
                 } catch (Exception $e) { $stats['leaves_pending'] = 0; }
                 
                 try {
                     $stats['leaves_approved_month'] = db()->count(
-                        "SELECT COUNT(*) FROM leave_requests WHERE status = 'approved' AND MONTH(start_date) = MONTH(CURDATE()) AND YEAR(start_date) = YEAR(CURDATE())"
+                        "SELECT COUNT(*) FROM leave_requests WHERE status = 'approved' AND MONTH(start_date) = MONTH(CURDATE()) AND YEAR(start_date) = YEAR(CURDATE())" . $hotelFilter,
+                        $hotelIds
                     );
                 } catch (Exception $e) { $stats['leaves_approved_month'] = 0; }
                 
@@ -1458,7 +1459,8 @@ try {
                 // Évaluations
                 try {
                     $stats['evaluations_month'] = db()->count(
-                        "SELECT COUNT(*) FROM evaluations WHERE MONTH(evaluation_date) = MONTH(CURDATE()) AND YEAR(evaluation_date) = YEAR(CURDATE())"
+                        "SELECT COUNT(*) FROM evaluations WHERE MONTH(evaluation_date) = MONTH(CURDATE()) AND YEAR(evaluation_date) = YEAR(CURDATE())" . $hotelFilter,
+                        $hotelIds
                     );
                 } catch (Exception $e) { $stats['evaluations_month'] = 0; }
                 
@@ -5938,7 +5940,9 @@ try {
                     $user = require_auth();
                     $data = get_input();
                     if (empty($data['entry_ids'])) json_error('entry_ids requis');
-                    $ids = implode(',', array_map('intval', $data['entry_ids']));
+                    $ids_array = array_filter(array_map('intval', $data['entry_ids']));
+                    if (empty($ids_array)) json_error('entry_ids invalides');
+                    $ids = implode(',', $ids_array);
                     db()->execute("UPDATE time_entries SET status = 'validated', validated_by = ?, validated_at = NOW() WHERE id IN ($ids)", [$user['id']]);
                     json_out(['success' => true]);
                 }
