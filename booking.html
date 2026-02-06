@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Réservation en ligne</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        :root {
+            --primary: #2563EB;
+            --primary-dark: #1D4ED8;
+            --primary-light: #DBEAFE;
+            --success: #059669;
+            --danger: #DC2626;
+            --warning: #D97706;
+            --gray-50: #F9FAFB;
+            --gray-100: #F3F4F6;
+            --gray-200: #E5E7EB;
+            --gray-300: #D1D5DB;
+            --gray-400: #9CA3AF;
+            --gray-500: #6B7280;
+            --gray-700: #374151;
+            --gray-800: #1F2937;
+            --gray-900: #111827;
+            --radius: 12px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--gray-50); color: var(--gray-800); min-height: 100vh; }
+
+        .booking-header { background: white; border-bottom: 1px solid var(--gray-200); padding: 16px 0; }
+        .booking-header .container { display: flex; align-items: center; justify-content: space-between; }
+        .hotel-brand { display: flex; align-items: center; gap: 12px; }
+        .hotel-brand img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; }
+        .hotel-brand h1 { font-size: 20px; font-weight: 600; }
+        .hotel-brand .stars { color: #F59E0B; font-size: 14px; }
+        .hotel-info-header { font-size: 13px; color: var(--gray-500); }
+
+        .container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+
+        .booking-main { padding: 32px 0; }
+
+        .booking-steps { display: flex; justify-content: center; gap: 0; margin-bottom: 32px; }
+        .step { display: flex; align-items: center; gap: 8px; padding: 10px 20px; font-size: 14px; font-weight: 500; color: var(--gray-400); position: relative; }
+        .step .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--gray-200); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; }
+        .step.active { color: var(--primary); }
+        .step.active .step-num { background: var(--primary); color: white; }
+        .step.done { color: var(--success); }
+        .step.done .step-num { background: var(--success); color: white; }
+        .step-arrow { color: var(--gray-300); margin: 0 4px; }
+
+        .card { background: white; border-radius: var(--radius); border: 1px solid var(--gray-200); box-shadow: var(--shadow); }
+        .card-body { padding: 24px; }
+        .card-header { padding: 20px 24px; border-bottom: 1px solid var(--gray-100); }
+        .card-header h2 { font-size: 18px; font-weight: 600; }
+
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 500; color: var(--gray-700); }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 14px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 14px; font-family: inherit; transition: border-color 0.2s; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-help { font-size: 12px; color: var(--gray-400); margin-top: 4px; }
+
+        .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-outline { background: white; color: var(--gray-700); border: 1px solid var(--gray-300); }
+        .btn-outline:hover { background: var(--gray-50); }
+        .btn-lg { padding: 14px 32px; font-size: 16px; }
+        .btn-block { width: 100%; justify-content: center; }
+
+        .room-cards { display: flex; flex-direction: column; gap: 12px; }
+        .room-card { border: 2px solid var(--gray-200); border-radius: var(--radius); padding: 20px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        .room-card:hover { border-color: var(--primary); background: var(--primary-light); }
+        .room-card.selected { border-color: var(--primary); background: var(--primary-light); }
+        .room-card .room-info h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+        .room-card .room-info p { font-size: 13px; color: var(--gray-500); }
+        .room-card .room-price { text-align: right; }
+        .room-card .room-price .price-night { font-size: 20px; font-weight: 700; color: var(--primary); }
+        .room-card .room-price .price-total { font-size: 13px; color: var(--gray-500); }
+        .room-card .room-price .available { font-size: 12px; color: var(--success); margin-top: 2px; }
+        .room-card.unavailable { opacity: 0.4; cursor: not-allowed; }
+
+        .booking-summary { background: var(--gray-50); border-radius: var(--radius); padding: 20px; margin-top: 20px; }
+        .booking-summary h4 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+        .summary-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
+        .summary-row.total { border-top: 2px solid var(--gray-200); margin-top: 8px; padding-top: 12px; font-weight: 700; font-size: 16px; }
+
+        #stripe-card-element { padding: 12px 14px; border: 1px solid var(--gray-300); border-radius: 8px; background: white; }
+        .stripe-errors { color: var(--danger); font-size: 13px; margin-top: 8px; }
+
+        .success-page { text-align: center; padding: 60px 20px; }
+        .success-icon { width: 80px; height: 80px; background: #ECFDF5; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+        .success-icon i { font-size: 36px; color: var(--success); }
+        .success-page h2 { font-size: 24px; margin-bottom: 12px; }
+        .success-page p { color: var(--gray-500); margin-bottom: 8px; }
+        .booking-ref { font-size: 20px; font-weight: 700; color: var(--primary); letter-spacing: 2px; margin: 16px 0; }
+
+        .loading-spinner { text-align: center; padding: 40px; color: var(--gray-400); }
+        .loading-spinner i { font-size: 24px; margin-bottom: 10px; }
+
+        .alert { padding: 14px 18px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
+        .alert-danger { background: #FEF2F2; color: var(--danger); border: 1px solid #FECACA; }
+
+        @media (max-width: 640px) {
+            .form-row { grid-template-columns: 1fr; }
+            .booking-steps { flex-wrap: wrap; justify-content: center; }
+            .step { padding: 8px 12px; font-size: 13px; }
+            .room-card { flex-direction: column; gap: 12px; text-align: center; }
+            .room-card .room-price { text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="booking-app">
+    <div class="loading-spinner" style="padding:80px">
+        <i class="fas fa-spinner fa-spin fa-2x"></i>
+        <p style="margin-top:12px">Chargement...</p>
+    </div>
+</div>
+
+<script>
+const API_BASE = window.location.origin + '/api';
+let hotelSlug = null;
+let hotelData = null;
+let stripe = null;
+let stripeElements = null;
+let cardElement = null;
+let selectedRoom = null;
+let bookingState = {
+    checkin: '',
+    checkout: '',
+    guests: 2,
+    guest_first_name: '',
+    guest_last_name: '',
+    guest_email: '',
+    guest_phone: '',
+    special_requests: ''
+};
+
+// Init
+(function() {
+    const params = new URLSearchParams(window.location.search);
+    hotelSlug = params.get('hotel');
+    if (!hotelSlug) {
+        document.getElementById('booking-app').innerHTML = '<div class="container" style="padding:80px 20px;text-align:center"><h2>Lien invalide</h2><p style="color:#6B7280">Aucun hotel specifi&eacute; dans l\'URL.</p></div>';
+        return;
+    }
+    loadHotel();
+})();
+
+async function apiGet(url) {
+    const res = await fetch(API_BASE + url);
+    if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Erreur serveur'); }
+    return res.json();
+}
+
+async function apiPost(url, body) {
+    const res = await fetch(API_BASE + url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Erreur serveur'); }
+    return res.json();
+}
+
+async function loadHotel() {
+    try {
+        const res = await apiGet(`/booking/${hotelSlug}`);
+        hotelData = res.hotel;
+
+        if (hotelData.stripe_public_key) {
+            stripe = Stripe(hotelData.stripe_public_key);
+        }
+
+        // Default dates: tomorrow + day after
+        const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+        const dayAfter = new Date(); dayAfter.setDate(dayAfter.getDate() + 2);
+        bookingState.checkin = tomorrow.toISOString().split('T')[0];
+        bookingState.checkout = dayAfter.toISOString().split('T')[0];
+
+        renderStep1();
+    } catch (err) {
+        document.getElementById('booking-app').innerHTML = `<div class="container" style="padding:80px 20px;text-align:center"><h2>Hotel non disponible</h2><p style="color:#6B7280">${esc(err.message)}</p></div>`;
+    }
+}
+
+function renderHeader() {
+    return `
+        <div class="booking-header">
+            <div class="container">
+                <div class="hotel-brand">
+                    ${hotelData.logo_url ? `<img src="${hotelData.logo_url}" alt="">` : '<i class="fas fa-hotel" style="font-size:28px;color:var(--primary)"></i>'}
+                    <div>
+                        <h1>${esc(hotelData.name)}</h1>
+                        <div class="stars">${'&#9733;'.repeat(hotelData.stars || 0)}</div>
+                    </div>
+                </div>
+                <div class="hotel-info-header">
+                    <i class="fas fa-map-marker-alt"></i> ${esc(hotelData.city || '')}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderSteps(current) {
+    const steps = [
+        { num: 1, label: 'Dates & Chambre' },
+        { num: 2, label: 'Vos informations' },
+        { num: 3, label: 'Paiement' }
+    ];
+    return `
+        <div class="booking-steps">
+            ${steps.map((s, i) => {
+                const cls = s.num === current ? 'active' : s.num < current ? 'done' : '';
+                return `${i > 0 ? '<span class="step-arrow"><i class="fas fa-chevron-right"></i></span>' : ''}<div class="step ${cls}"><span class="step-num">${s.num < current ? '<i class="fas fa-check"></i>' : s.num}</span><span>${s.label}</span></div>`;
+            }).join('')}
+        </div>
+    `;
+}
+
+// ============ STEP 1: Dates & Room ============
+function renderStep1() {
+    const today = new Date().toISOString().split('T')[0];
+
+    document.getElementById('booking-app').innerHTML = `
+        ${renderHeader()}
+        <div class="booking-main">
+            <div class="container">
+                ${renderSteps(1)}
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-calendar-alt"></i> Choisissez vos dates</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Date d'arriv&eacute;e</label>
+                                <input type="date" id="checkin" value="${bookingState.checkin}" min="${today}" onchange="onDateChange()">
+                            </div>
+                            <div class="form-group">
+                                <label>Date de d&eacute;part</label>
+                                <input type="date" id="checkout" value="${bookingState.checkout}" min="${bookingState.checkin || today}" onchange="onDateChange()">
+                            </div>
+                        </div>
+                        <div class="form-group" style="max-width:200px">
+                            <label>Voyageurs</label>
+                            <select id="guests" onchange="bookingState.guests = parseInt(this.value)">
+                                ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${bookingState.guests === n ? 'selected' : ''}>${n} personne${n > 1 ? 's' : ''}</option>`).join('')}
+                            </select>
+                        </div>
+                        <button class="btn btn-primary btn-lg" onclick="searchAvailability()">
+                            <i class="fas fa-search"></i> Rechercher la disponibilit&eacute;
+                        </button>
+                    </div>
+                </div>
+                <div id="rooms-container"></div>
+            </div>
+        </div>
+    `;
+}
+
+function onDateChange() {
+    bookingState.checkin = document.getElementById('checkin').value;
+    bookingState.checkout = document.getElementById('checkout').value;
+
+    const checkoutInput = document.getElementById('checkout');
+    if (checkoutInput && bookingState.checkin) {
+        checkoutInput.min = bookingState.checkin;
+        if (bookingState.checkout <= bookingState.checkin) {
+            const next = new Date(bookingState.checkin);
+            next.setDate(next.getDate() + 1);
+            bookingState.checkout = next.toISOString().split('T')[0];
+            checkoutInput.value = bookingState.checkout;
+        }
+    }
+}
+
+async function searchAvailability() {
+    const container = document.getElementById('rooms-container');
+    if (!bookingState.checkin || !bookingState.checkout) {
+        container.innerHTML = '<div class="alert alert-danger">Veuillez s&eacute;lectionner vos dates</div>';
+        return;
+    }
+
+    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top:10px">Recherche en cours...</p></div>';
+
+    try {
+        const res = await apiGet(`/booking/${hotelSlug}/availability?checkin=${bookingState.checkin}&checkout=${bookingState.checkout}&guests=${bookingState.guests}`);
+        const rooms = res.rooms || [];
+        const nights = Math.ceil((new Date(bookingState.checkout) - new Date(bookingState.checkin)) / 86400000);
+
+        if (rooms.length === 0) {
+            container.innerHTML = '<div class="card" style="margin-top:20px"><div class="card-body" style="text-align:center;padding:40px"><i class="fas fa-bed" style="font-size:32px;color:var(--gray-300);margin-bottom:12px"></i><h3>Aucune chambre disponible</h3><p style="color:var(--gray-500)">Essayez d\'autres dates</p></div></div>';
+            return;
+        }
+
+        const roomTypeIcons = { standard: 'fa-bed', superieure: 'fa-star', suite: 'fa-crown', familiale: 'fa-users', pmr: 'fa-wheelchair' };
+
+        container.innerHTML = `
+            <div class="card" style="margin-top:20px">
+                <div class="card-header">
+                    <h2><i class="fas fa-door-open"></i> Chambres disponibles <span style="font-weight:400;color:var(--gray-500)">(${nights} nuit${nights > 1 ? 's' : ''})</span></h2>
+                </div>
+                <div class="card-body">
+                    <div class="room-cards">
+                        ${rooms.map(r => {
+                            const total = r.total || (r.rate_per_night * nights);
+                            const icon = roomTypeIcons[r.room_type] || 'fa-bed';
+                            const avail = r.available > 0;
+                            return `
+                                <div class="room-card ${avail ? '' : 'unavailable'}" onclick="${avail ? `selectRoom('${r.room_type}', '${esc(r.room_type_label)}', ${r.rate_per_night}, ${total}, ${nights})` : ''}">
+                                    <div class="room-info">
+                                        <h3><i class="fas ${icon}"></i> ${esc(r.room_type_label || r.room_type)}</h3>
+                                        <p>${avail ? `${r.available} chambre${r.available > 1 ? 's' : ''} disponible${r.available > 1 ? 's' : ''}` : 'Non disponible'}</p>
+                                    </div>
+                                    <div class="room-price">
+                                        ${avail ? `
+                                            <div class="price-night">${r.rate_per_night.toFixed(0)} &euro; <small style="font-size:13px;font-weight:400">/nuit</small></div>
+                                            <div class="price-total">Total : ${total.toFixed(2)} &euro;</div>
+                                        ` : '<div style="color:var(--gray-400)">Complet</div>'}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        container.innerHTML = `<div class="alert alert-danger" style="margin-top:20px">${esc(err.message)}</div>`;
+    }
+}
+
+function selectRoom(type, label, ratePerNight, total, nights) {
+    selectedRoom = { type, label, ratePerNight, total, nights };
+
+    // Highlight selected
+    document.querySelectorAll('.room-card').forEach(c => c.classList.remove('selected'));
+    event.currentTarget.classList.add('selected');
+
+    renderStep2();
+}
+
+// ============ STEP 2: Guest Info ============
+function renderStep2() {
+    const nights = selectedRoom.nights;
+
+    document.getElementById('booking-app').innerHTML = `
+        ${renderHeader()}
+        <div class="booking-main">
+            <div class="container">
+                ${renderSteps(2)}
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-user"></i> Vos informations</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Pr&eacute;nom *</label>
+                                <input type="text" id="guest_first_name" value="${esc(bookingState.guest_first_name)}" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Nom *</label>
+                                <input type="text" id="guest_last_name" value="${esc(bookingState.guest_last_name)}" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Email *</label>
+                                <input type="email" id="guest_email" value="${esc(bookingState.guest_email)}" required>
+                            </div>
+                            <div class="form-group">
+                                <label>T&eacute;l&eacute;phone</label>
+                                <input type="tel" id="guest_phone" value="${esc(bookingState.guest_phone)}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Demandes sp&eacute;ciales</label>
+                            <textarea id="special_requests" rows="3" placeholder="Lit b&eacute;b&eacute;, &eacute;tage haut, etc.">${esc(bookingState.special_requests)}</textarea>
+                        </div>
+
+                        <div class="booking-summary">
+                            <h4><i class="fas fa-receipt"></i> R&eacute;capitulatif</h4>
+                            <div class="summary-row"><span>${esc(selectedRoom.label)}</span><span>${selectedRoom.ratePerNight.toFixed(0)} &euro; / nuit</span></div>
+                            <div class="summary-row"><span>${nights} nuit${nights > 1 ? 's' : ''}</span><span>${bookingState.checkin} &rarr; ${bookingState.checkout}</span></div>
+                            <div class="summary-row"><span>${bookingState.guests} voyageur${bookingState.guests > 1 ? 's' : ''}</span><span></span></div>
+                            <div class="summary-row total"><span>Total</span><span>${selectedRoom.total.toFixed(2)} &euro;</span></div>
+                        </div>
+
+                        <div style="display:flex;gap:12px;margin-top:24px">
+                            <button class="btn btn-outline" onclick="renderStep1()"><i class="fas fa-arrow-left"></i> Retour</button>
+                            <button class="btn btn-primary btn-lg" style="flex:1" onclick="goToPayment()"><i class="fas fa-lock"></i> Proc&eacute;der au paiement</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function goToPayment() {
+    bookingState.guest_first_name = document.getElementById('guest_first_name').value.trim();
+    bookingState.guest_last_name = document.getElementById('guest_last_name').value.trim();
+    bookingState.guest_email = document.getElementById('guest_email').value.trim();
+    bookingState.guest_phone = document.getElementById('guest_phone').value.trim();
+    bookingState.special_requests = document.getElementById('special_requests').value.trim();
+
+    if (!bookingState.guest_first_name || !bookingState.guest_last_name || !bookingState.guest_email) {
+        alert('Veuillez remplir les champs obligatoires (Prenom, Nom, Email)');
+        return;
+    }
+
+    if (!bookingState.guest_email.includes('@')) {
+        alert('Veuillez saisir un email valide');
+        return;
+    }
+
+    renderStep3();
+}
+
+// ============ STEP 3: Payment ============
+function renderStep3() {
+    const nights = selectedRoom.nights;
+
+    document.getElementById('booking-app').innerHTML = `
+        ${renderHeader()}
+        <div class="booking-main">
+            <div class="container">
+                ${renderSteps(3)}
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-credit-card"></i> Paiement s&eacute;curis&eacute;</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="booking-summary" style="margin-bottom:24px">
+                            <h4><i class="fas fa-receipt"></i> Votre r&eacute;servation</h4>
+                            <div class="summary-row"><span>${esc(hotelData.name)}</span><span></span></div>
+                            <div class="summary-row"><span>${esc(selectedRoom.label)} - ${nights} nuit${nights > 1 ? 's' : ''}</span><span></span></div>
+                            <div class="summary-row"><span>${bookingState.checkin} &rarr; ${bookingState.checkout}</span><span></span></div>
+                            <div class="summary-row"><span>${esc(bookingState.guest_first_name)} ${esc(bookingState.guest_last_name)}</span><span>${esc(bookingState.guest_email)}</span></div>
+                            <div class="summary-row total"><span>Total &agrave; payer</span><span>${selectedRoom.total.toFixed(2)} &euro;</span></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label><i class="fas fa-credit-card"></i> Carte bancaire</label>
+                            <div id="stripe-card-element"></div>
+                            <div class="stripe-errors" id="card-errors"></div>
+                        </div>
+
+                        <div id="payment-error" style="display:none" class="alert alert-danger"></div>
+
+                        <div style="display:flex;gap:12px;margin-top:24px">
+                            <button class="btn btn-outline" onclick="renderStep2()"><i class="fas fa-arrow-left"></i> Retour</button>
+                            <button class="btn btn-primary btn-lg" style="flex:1" id="pay-btn" onclick="processPayment()">
+                                <i class="fas fa-lock"></i> Payer ${selectedRoom.total.toFixed(2)} &euro;
+                            </button>
+                        </div>
+
+                        <p style="text-align:center;margin-top:16px;font-size:12px;color:var(--gray-400)">
+                            <i class="fas fa-shield-alt"></i> Paiement s&eacute;curis&eacute; par Stripe. Vos donn&eacute;es bancaires ne sont jamais stock&eacute;es sur nos serveurs.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Mount Stripe Elements
+    if (stripe) {
+        stripeElements = stripe.elements();
+        cardElement = stripeElements.create('card', {
+            style: {
+                base: { fontSize: '16px', color: '#1F2937', fontFamily: 'Inter, sans-serif', '::placeholder': { color: '#9CA3AF' } },
+                invalid: { color: '#DC2626' }
+            }
+        });
+        cardElement.mount('#stripe-card-element');
+        cardElement.on('change', (ev) => {
+            document.getElementById('card-errors').textContent = ev.error ? ev.error.message : '';
+        });
+    }
+}
+
+async function processPayment() {
+    const payBtn = document.getElementById('pay-btn');
+    const errorDiv = document.getElementById('payment-error');
+    errorDiv.style.display = 'none';
+    payBtn.disabled = true;
+    payBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Traitement en cours...';
+
+    try {
+        // 1. Create reservation + get Stripe client_secret
+        const reserveRes = await apiPost(`/booking/${hotelSlug}/reserve`, {
+            checkin_date: bookingState.checkin,
+            checkout_date: bookingState.checkout,
+            room_type: selectedRoom.type,
+            guests_count: bookingState.guests,
+            guest_first_name: bookingState.guest_first_name,
+            guest_last_name: bookingState.guest_last_name,
+            guest_email: bookingState.guest_email,
+            guest_phone: bookingState.guest_phone,
+            special_requests: bookingState.special_requests,
+            total_amount: selectedRoom.total
+        });
+
+        const clientSecret = reserveRes.client_secret;
+        const bookingRef = reserveRes.booking_ref;
+        const paymentIntentId = reserveRes.payment_intent_id;
+
+        // 2. Confirm payment with Stripe
+        const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+            payment_method: {
+                card: cardElement,
+                billing_details: {
+                    name: `${bookingState.guest_first_name} ${bookingState.guest_last_name}`,
+                    email: bookingState.guest_email
+                }
+            }
+        });
+
+        if (error) {
+            throw new Error(error.message);
+        }
+
+        if (paymentIntent.status === 'succeeded') {
+            // 3. Confirm booking on our backend
+            await apiPost(`/booking/${hotelSlug}/confirm`, {
+                booking_ref: bookingRef,
+                payment_intent_id: paymentIntentId
+            });
+
+            renderSuccess(bookingRef);
+        } else {
+            throw new Error('Paiement non finalis&eacute;. Statut: ' + paymentIntent.status);
+        }
+
+    } catch (err) {
+        errorDiv.textContent = err.message;
+        errorDiv.style.display = 'block';
+        payBtn.disabled = false;
+        payBtn.innerHTML = `<i class="fas fa-lock"></i> Payer ${selectedRoom.total.toFixed(2)} &euro;`;
+    }
+}
+
+// ============ SUCCESS ============
+function renderSuccess(bookingRef) {
+    document.getElementById('booking-app').innerHTML = `
+        ${renderHeader()}
+        <div class="booking-main">
+            <div class="container">
+                <div class="card">
+                    <div class="card-body success-page">
+                        <div class="success-icon"><i class="fas fa-check"></i></div>
+                        <h2>R&eacute;servation confirm&eacute;e !</h2>
+                        <p>Merci pour votre r&eacute;servation &agrave; <strong>${esc(hotelData.name)}</strong></p>
+                        <div class="booking-ref">${esc(bookingRef)}</div>
+                        <p>Un email de confirmation a &eacute;t&eacute; envoy&eacute; &agrave; <strong>${esc(bookingState.guest_email)}</strong></p>
+
+                        <div class="booking-summary" style="max-width:400px;margin:24px auto;text-align:left">
+                            <div class="summary-row"><span>Arriv&eacute;e</span><span>${bookingState.checkin} &agrave; ${hotelData.checkin_time ? hotelData.checkin_time.substring(0,5) : '15:00'}</span></div>
+                            <div class="summary-row"><span>D&eacute;part</span><span>${bookingState.checkout} &agrave; ${hotelData.checkout_time ? hotelData.checkout_time.substring(0,5) : '11:00'}</span></div>
+                            <div class="summary-row"><span>Chambre</span><span>${esc(selectedRoom.label)}</span></div>
+                            <div class="summary-row total"><span>Pay&eacute;</span><span>${selectedRoom.total.toFixed(2)} &euro;</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function esc(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
