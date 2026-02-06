@@ -31,7 +31,7 @@ function renderClosuresPage(container) {
     container.innerHTML = `
         <div class="page-header">
             <div class="page-header-left">
-                <h2><i class="fas fa-cash-register"></i> Clôtures & Remises</h2>
+                <h2><i class="fas fa-cash-register"></i> ${t('closures.title')}</h2>
             </div>
             <div class="page-header-right">
                 ${closureHotels.length > 1 ? `
@@ -45,15 +45,15 @@ function renderClosuresPage(container) {
         <div class="closure-tabs">
             <button class="closure-tab ${closureCurrentTab === 'daily' ? 'active' : ''}" data-tab="daily" onclick="showClosureTab('daily')">
                 <i class="fas fa-calendar-day"></i>
-                <span>Clôture Journalière</span>
+                <span>${t('closures.daily')}</span>
             </button>
             <button class="closure-tab ${closureCurrentTab === 'monthly' ? 'active' : ''}" data-tab="monthly" onclick="showClosureTab('monthly')">
                 <i class="fas fa-calendar-alt"></i>
-                <span>Clôture Mensuelle</span>
+                <span>${t('closures.monthly')}</span>
             </button>
             <button class="closure-tab ${closureCurrentTab === 'cash' ? 'active' : ''}" data-tab="cash" onclick="showClosureTab('cash')">
                 <i class="fas fa-coins"></i>
-                <span>Suivi Caisse</span>
+                <span>${t('closures.cash')}</span>
             </button>
         </div>
         
@@ -130,11 +130,11 @@ async function loadDailyClosures(container) {
             
             <div class="card">
                 <div class="card-header">
-                    <h4><i class="fas fa-calendar-day"></i> Clôtures Journalières</h4>
+                    <h4><i class="fas fa-calendar-day"></i> ${t('closures.daily')}</h4>
                     <div class="card-actions">
                         ${hasPermission('closures.create') ? `
                         <button class="btn btn-primary" onclick="closureNewDaily()">
-                            <i class="fas fa-plus"></i> Nouvelle clôture
+                            <i class="fas fa-plus"></i> ${t('closures.new_daily')}
                         </button>
                         ` : ''}
                     </div>
@@ -143,10 +143,10 @@ async function loadDailyClosures(container) {
                     ${closures.length === 0 ? `
                         <div class="empty-state">
                             <i class="fas fa-calendar-times"></i>
-                            <p>Aucune clôture journalière</p>
+                            <p>${t('closures.no_closures')}</p>
                             ${hasPermission('closures.create') ? `
                             <button class="btn btn-primary mt-15" onclick="closureNewDaily()">
-                                <i class="fas fa-plus"></i> Créer la première clôture
+                                <i class="fas fa-plus"></i> ${t('closures.new_daily')}
                             </button>
                             ` : ''}
                         </div>
@@ -155,12 +155,12 @@ async function loadDailyClosures(container) {
                             <table class="table closures-table">
                                 <thead>
                                     <tr>
-                                        <th>Date</th>
-                                        <th>Encaissements</th>
-                                        <th>Dépenses</th>
-                                        <th>Solde</th>
+                                        <th>${t('closures.date')}</th>
+                                        <th>${t('closures.cash')}</th>
+                                        <th>${t('closures.other')}</th>
+                                        <th>${t('closures.total')}</th>
                                         <th>Documents</th>
-                                        <th>Statut</th>
+                                        <th>${t('closures.status')}</th>
                                         <th>Soumis par</th>
                                         <th>Actions</th>
                                     </tr>
@@ -218,9 +218,9 @@ function closureNewDaily() {
         <div class="closure-form-page">
             <div class="closure-form-header">
                 <button class="btn btn-outline" onclick="showClosureTab('daily')">
-                    <i class="fas fa-arrow-left"></i> Retour
+                    <i class="fas fa-arrow-left"></i> ${t('common.back')}
                 </button>
-                <h3><i class="fas fa-calendar-plus"></i> Nouvelle Clôture Journalière</h3>
+                <h3><i class="fas fa-calendar-plus"></i> ${t('closures.new_daily')}</h3>
             </div>
             
             <div class="card">
@@ -246,7 +246,7 @@ function closureNewDaily() {
                         </div>
                         
                         <div class="form-actions mt-20">
-                            <button type="button" class="btn btn-outline" onclick="showClosureTab('daily')">Annuler</button>
+                            <button type="button" class="btn btn-outline" onclick="showClosureTab('daily')">${t('common.cancel')}</button>
                             <button type="submit" class="btn btn-primary" id="closure-date-submit">
                                 <i class="fas fa-arrow-right"></i> Continuer
                             </button>
@@ -325,7 +325,7 @@ async function closureOpenDailyForm(date, closureId = null) {
             <div class="closure-form-page">
                 <div class="closure-form-header">
                     <button class="btn btn-outline" onclick="showClosureTab('daily')">
-                        <i class="fas fa-arrow-left"></i> Retour à la liste
+                        <i class="fas fa-arrow-left"></i> ${t('common.back')}
                     </button>
                     <h3>
                         <i class="fas fa-calendar-day"></i> 
@@ -473,7 +473,7 @@ async function closureOpenDailyForm(date, closureId = null) {
                     <!-- Section Commentaire -->
                     <div class="card mb-20">
                         <div class="card-header">
-                            <h4><i class="fas fa-comment-alt"></i> Commentaire</h4>
+                            <h4><i class="fas fa-comment-alt"></i> ${t('closures.notes')}</h4>
                             <span class="badge badge-warning">Si dépenses > 0</span>
                         </div>
                         <div class="card-body">
@@ -585,19 +585,19 @@ async function closureOpenDailyForm(date, closureId = null) {
                     ${!isReadOnly ? `
                         <div class="closure-form-actions">
                             <button type="button" class="btn btn-outline btn-lg" onclick="showClosureTab('daily')">
-                                <i class="fas fa-times"></i> Annuler
+                                <i class="fas fa-times"></i> ${t('common.cancel')}
                             </button>
                             <button type="button" class="btn btn-secondary btn-lg" onclick="closureSaveDraft()">
-                                <i class="fas fa-save"></i> Enregistrer brouillon
+                                <i class="fas fa-save"></i> ${t('closures.save_draft')}
                             </button>
                             <button type="submit" class="btn btn-primary btn-lg">
-                                <i class="fas fa-check"></i> Soumettre la clôture
+                                <i class="fas fa-check"></i> ${t('closures.validate')}
                             </button>
                         </div>
                     ` : `
                         <div class="closure-form-actions">
                             <button type="button" class="btn btn-outline btn-lg" onclick="showClosureTab('daily')">
-                                <i class="fas fa-arrow-left"></i> Retour
+                                <i class="fas fa-arrow-left"></i> ${t('common.back')}
                             </button>
                         </div>
                     `}
@@ -610,7 +610,7 @@ async function closureOpenDailyForm(date, closureId = null) {
             <div class="closure-form-page">
                 <div class="closure-form-header">
                     <button class="btn btn-outline" onclick="showClosureTab('daily')">
-                        <i class="fas fa-arrow-left"></i> Retour
+                        <i class="fas fa-arrow-left"></i> ${t('common.back')}
                     </button>
                     <h3><i class="fas fa-calendar-day"></i> Clôture du ${formatDateLong(date)}</h3>
                 </div>
@@ -644,7 +644,7 @@ async function closureSaveDraft() {
         if (btn) btn.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i></div>';
         
         await API.upload('/closures/daily', formData);
-        toast('Brouillon enregistré', 'success');
+        toast(t('closures.save_draft'), 'success');
         showClosureTab('daily');
     } catch (e) {
         toast(e.message, 'error');
@@ -689,7 +689,7 @@ async function closureSaveDaily(e) {
         if (btn) btn.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i></div>';
         
         await API.upload('/closures/daily', formData);
-        toast('Clôture soumise avec succès', 'success');
+        toast(t('closures.created'), 'success');
         showClosureTab('daily');
     } catch (e) {
         toast(e.message, 'error');
@@ -698,11 +698,11 @@ async function closureSaveDaily(e) {
 }
 
 async function closureValidate(id) {
-    if (!confirm('Valider cette clôture ? Cette action est irréversible.')) return;
+    if (!confirm(t('closures.delete_confirm'))) return;
     
     try {
         await API.put(`/closures/daily/${id}/validate`);
-        toast('Clôture validée', 'success');
+        toast(t('closures.validated'), 'success');
         showClosureTab('daily');
     } catch (e) {
         toast(e.message, 'error');
@@ -711,9 +711,9 @@ async function closureValidate(id) {
 
 function closureStatusBadge(status) {
     const badges = {
-        'draft': '<span class="badge badge-secondary"><i class="fas fa-pencil-alt"></i> Brouillon</span>',
-        'submitted': '<span class="badge badge-warning"><i class="fas fa-clock"></i> En attente</span>',
-        'validated': '<span class="badge badge-success"><i class="fas fa-check"></i> Validée</span>',
+        'draft': '<span class="badge badge-secondary"><i class="fas fa-pencil-alt"></i> ' + t('closures.draft') + '</span>',
+        'submitted': '<span class="badge badge-warning"><i class="fas fa-clock"></i> ' + t('closures.pending') + '</span>',
+        'validated': '<span class="badge badge-success"><i class="fas fa-check"></i> ' + t('closures.validated') + '</span>',
         'rejected': '<span class="badge badge-danger"><i class="fas fa-times"></i> Rejetée</span>'
     };
     return badges[status] || `<span class="badge">${status}</span>`;
@@ -731,13 +731,13 @@ async function loadMonthlyClosures(container) {
         container.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h4><i class="fas fa-calendar-alt"></i> Clôtures Mensuelles</h4>
+                    <h4><i class="fas fa-calendar-alt"></i> ${t('closures.monthly')}</h4>
                 </div>
                 <div class="card-body">
                     ${closures.length === 0 ? `
                         <div class="empty-state">
                             <i class="fas fa-calendar-times"></i>
-                            <p>Aucune clôture mensuelle</p>
+                            <p>${t('closures.no_closures')}</p>
                             <small>Les clôtures mensuelles sont générées automatiquement à partir des clôtures journalières</small>
                         </div>
                     ` : `
@@ -745,12 +745,12 @@ async function loadMonthlyClosures(container) {
                             <table class="table">
                                 <thead>
                                     <tr>
-                                        <th>Mois</th>
-                                        <th>Nb clôtures</th>
-                                        <th>Total encaissé</th>
-                                        <th>Total dépenses</th>
-                                        <th>Solde</th>
-                                        <th>Statut</th>
+                                        <th>${t('closures.date')}</th>
+                                        <th>${t('closures.history')}</th>
+                                        <th>${t('closures.total')}</th>
+                                        <th>${t('closures.amount')}</th>
+                                        <th>${t('closures.total')}</th>
+                                        <th>${t('closures.status')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -823,11 +823,11 @@ async function renderCashTracking(container, month, year) {
                 <div class="cash-tracking-actions">
                     ${canEdit ? `
                         <button class="btn btn-primary" onclick="showBankDepositModal()">
-                            <i class="fas fa-university"></i> Saisir Remise Banque
+                            <i class="fas fa-university"></i> ${t('closures.deposit')}
                         </button>
                     ` : ''}
                     <button class="btn btn-outline" onclick="exportCashTracking()">
-                        <i class="fas fa-download"></i> Exporter CSV
+                        <i class="fas fa-download"></i> ${t('closures.export')}
                     </button>
                 </div>
             </div>
@@ -981,7 +981,7 @@ async function exportCashTracking() {
         a.click();
         window.URL.revokeObjectURL(url);
         
-        toast('Export téléchargé', 'success');
+        toast(t('closures.export_downloaded'), 'success');
     } catch (e) {
         toast('Erreur lors de l\'export', 'error');
     }
@@ -1224,30 +1224,30 @@ function formatMoney(amount) {
 // Modal pour saisir une remise banque
 function showBankDepositModal() {
     const today = new Date().toISOString().split('T')[0];
-    openModal('Saisir une Remise Banque', `
+    openModal(t('closures.deposit'), `
         <form onsubmit="saveBankDeposit(event)">
             <div class="form-group">
-                <label><i class="fas fa-calendar"></i> Date de la remise *</label>
+                <label><i class="fas fa-calendar"></i> ${t('closures.deposit_date')} *</label>
                 <input type="date" name="deposit_date" value="${today}" required class="form-control">
             </div>
             <div class="form-group">
-                <label><i class="fas fa-euro-sign"></i> Montant remis *</label>
+                <label><i class="fas fa-euro-sign"></i> ${t('closures.deposit_amount')} *</label>
                 <div class="input-group">
                     <input type="number" name="amount" step="0.01" min="0.01" required class="form-control" placeholder="0.00">
                     <span class="input-group-text">€</span>
                 </div>
             </div>
             <div class="form-group">
-                <label><i class="fas fa-file-alt"></i> Référence / N° bordereau</label>
+                <label><i class="fas fa-file-alt"></i> ${t('closures.deposit_ref')}</label>
                 <input type="text" name="reference" class="form-control" placeholder="Ex: BOR-2025-001">
             </div>
             <div class="form-group">
-                <label><i class="fas fa-comment"></i> Notes</label>
+                <label><i class="fas fa-comment"></i> ${t('closures.notes')}</label>
                 <textarea name="notes" rows="2" class="form-control" placeholder="Notes optionnelles..."></textarea>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Enregistrer</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> ${t('common.save')}</button>
             </div>
         </form>
     `);
@@ -1266,7 +1266,7 @@ async function saveBankDeposit(e) {
     
     try {
         await API.post('/closures/bank-deposits', data);
-        toast('Remise banque enregistrée', 'success');
+        toast(t('closures.created'), 'success');
         closeModal();
         refreshCashTracking();
     } catch (error) {

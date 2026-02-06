@@ -23,18 +23,18 @@ async function loadMessages(container) {
 
         container.innerHTML = `
             <div class="page-header">
-                <h1>Messagerie</h1>
+                <h1>${t('messages.title')}</h1>
             </div>
             <div class="messenger">
                 <div class="messenger-sidebar">
                     <div class="messenger-header">
-                        <h3><i class="fas fa-comments"></i> Messages</h3>
-                        <button class="btn btn-sm btn-outline" onclick="msgNewConvModal()" title="Nouvelle conversation">
+                        <h3><i class="fas fa-comments"></i> ${t('messages.conversations')}</h3>
+                        <button class="btn btn-sm btn-outline" onclick="msgNewConvModal()" title="${t('messages.new_conversation')}">
                             <i class="fas fa-edit"></i>
                         </button>
                     </div>
                     <div class="messenger-search">
-                        <input type="text" placeholder="Rechercher..." oninput="msgFilterConvs(this.value)">
+                        <input type="text" placeholder="${t('messages.search_user')}" oninput="msgFilterConvs(this.value)">
                     </div>
                     <div class="messenger-convs" id="msg-conv-list">
                         ${renderConversationList()}
@@ -43,7 +43,7 @@ async function loadMessages(container) {
                 <div class="messenger-main" id="msg-main">
                     <div class="messenger-empty">
                         <i class="fas fa-comments"></i>
-                        <p>Sélectionnez une conversation</p>
+                        <p>${t('messages.no_conversations_desc')}</p>
                     </div>
                 </div>
             </div>
@@ -59,7 +59,7 @@ async function loadMessages(container) {
 
 function renderConversationList() {
     if (!msgConversations.length) {
-        return '<div class="conv-empty">Aucune conversation</div>';
+        return '<div class="conv-empty">' + t('messages.no_conversations') + '</div>';
     }
 
     return msgConversations.map(c => {
@@ -73,7 +73,7 @@ function renderConversationList() {
                 <div class="conv-avatar">${getInitials(c.other_name)}</div>
                 <div class="conv-info">
                     <div class="conv-name">${esc(c.other_name || 'Utilisateur')}</div>
-                    <div class="conv-preview">${esc(c.last_message || 'Aucun message')}</div>
+                    <div class="conv-preview">${esc(c.last_message || t('messages.no_messages'))}</div>
                 </div>
                 <div class="conv-meta">
                     <div class="conv-time">${formatTimeAgo(c.last_at)}</div>
@@ -98,7 +98,7 @@ function formatTimeAgo(dateStr) {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'À l\'instant';
+    if (diffMins < 1) return t('messages.just_now');
     if (diffMins < 60) return `${diffMins} min`;
     if (diffHours < 24) return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     if (diffDays < 7) return date.toLocaleDateString('fr-FR', { weekday: 'short' });
@@ -155,7 +155,7 @@ async function msgOpenConv(convId) {
             </div>
             <div class="messenger-input">
                 <form id="msg-send-form" onsubmit="msgSendMessage(event)">
-                    <input type="text" name="content" placeholder="Écrire un message..." autocomplete="off" required>
+                    <input type="text" name="content" placeholder="${t('messages.write_message')}" autocomplete="off" required>
                     <button type="submit"><i class="fas fa-paper-plane"></i></button>
                 </form>
             </div>
@@ -179,7 +179,7 @@ async function msgOpenConv(convId) {
 
 function renderMessages(messages) {
     if (!messages || messages.length === 0) {
-        return '<div class="msg-empty">Aucun message. Commencez la conversation !</div>';
+        return '<div class="msg-empty">' + t('messages.no_messages_desc') + '</div>';
     }
 
     const currentUserId = parseInt(API.user?.id);
@@ -353,7 +353,7 @@ function msgNewConvModal() {
         return;
     }
 
-    openModal('Nouvelle conversation', `
+    openModal(t('messages.new_conversation'), `
         <form id="new-conv-form" onsubmit="msgStartNewConv(event)">
             <div class="form-group">
                 <label>Destinataire *</label>
@@ -366,11 +366,11 @@ function msgNewConvModal() {
             </div>
             <div class="form-group">
                 <label>Message *</label>
-                <textarea name="content" rows="4" required placeholder="Votre message..."></textarea>
+                <textarea name="content" rows="4" required placeholder="${t('messages.write_message')}"></textarea>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Envoyer</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('messages.send')}</button>
             </div>
         </form>
     `);
@@ -390,7 +390,7 @@ async function msgStartNewConv(e) {
 
     try {
         const res = await API.startConversation(parseInt(recipientId), content);
-        toast('Message envoyé', 'success');
+        toast(t('messages.message_sent'), 'success');
         closeModal();
 
         // Rafraîchir et ouvrir la nouvelle conversation

@@ -47,12 +47,12 @@ async function loadHotels(container) {
         container.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-building"></i> Liste des hôtels</h3>
-                    ${canCreate ? '<button class="btn btn-primary" onclick="showNewHotelModal()"><i class="fas fa-plus"></i> Nouvel hôtel</button>' : ''}
+                    <h3 class="card-title"><i class="fas fa-building"></i> ${t('hotels.title')}</h3>
+                    ${canCreate ? `<button class="btn btn-primary" onclick="showNewHotelModal()"><i class="fas fa-plus"></i> ${t('hotels.add')}</button>` : ''}
                 </div>
                 ${hotels.length ? `
                     <table>
-                        <thead><tr><th>Nom</th><th>Ville</th><th>Téléphone</th><th>Étoiles</th><th>Chambres</th><th>Statut</th><th>Actions</th></tr></thead>
+                        <thead><tr><th>${t('hotels.name')}</th><th>${t('hotels.city')}</th><th>${t('hotels.phone')}</th><th>${t('hotels.stars')}</th><th>${t('hotels.rooms_count')}</th><th>${t('hotels.status')}</th><th>${t('hotels.actions')}</th></tr></thead>
                         <tbody>
                             ${hotels.map(h => `
                                 <tr>
@@ -65,38 +65,38 @@ async function loadHotels(container) {
                                     <td>
                                         <div class="table-actions">
                                             <button onclick="viewHotelRooms(${h.id})" title="Gérer les chambres"><i class="fas fa-door-open"></i></button>
-                                            ${canEdit ? `<button onclick="showEditHotelModal(${h.id})" title="Modifier l'hôtel"><i class="fas fa-edit"></i></button>` : ''}
-                                            ${canDelete ? `<button onclick="deleteHotel(${h.id})" title="Supprimer" style="color:var(--danger)"><i class="fas fa-trash"></i></button>` : ''}
+                                            ${canEdit ? `<button onclick="showEditHotelModal(${h.id})" title="${t('hotels.edit')}"><i class="fas fa-edit"></i></button>` : ''}
+                                            ${canDelete ? `<button onclick="deleteHotel(${h.id})" title="${t('common.delete')}" style="color:var(--danger)"><i class="fas fa-trash"></i></button>` : ''}
                                         </div>
                                     </td>
                                 </tr>
                             `).join('')}
                         </tbody>
                     </table>
-                ` : '<div class="empty-state"><i class="fas fa-building"></i><h3>Aucun hôtel</h3></div>'}
+                ` : `<div class="empty-state"><i class="fas fa-building"></i><h3>${t('hotels.no_hotels')}</h3></div>`}
             </div>
         `;
     } catch (error) {
-        container.innerHTML = `<div class="card"><p class="text-danger">Erreur: ${error.message}</p></div>`;
+        container.innerHTML = `<div class="card"><p class="text-danger">${t('common.error')}: ${error.message}</p></div>`;
     }
 }
 
 // ============ HOTEL CRUD ============
 
 function showNewHotelModal() {
-    openModal('Nouvel hôtel', `
+    openModal(t('hotels.add'), `
         <form onsubmit="createHotel(event)">
             <div class="form-group">
-                <label>Nom commercial *</label>
+                <label>${t('hotels.name')} *</label>
                 <input type="text" name="name" required>
             </div>
             <div class="form-group">
-                <label>Adresse</label>
+                <label>${t('hotels.address')}</label>
                 <input type="text" name="address" placeholder="Rue, numéro...">
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>Ville</label>
+                    <label>${t('hotels.city')}</label>
                     <input type="text" name="city">
                 </div>
                 <div class="form-group">
@@ -106,7 +106,7 @@ function showNewHotelModal() {
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>Téléphone</label>
+                    <label>${t('hotels.phone')}</label>
                     <input type="tel" name="phone" placeholder="01 23 45 67 89">
                 </div>
                 <div class="form-group">
@@ -116,7 +116,7 @@ function showNewHotelModal() {
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>Étoiles</label>
+                    <label>${t('hotels.stars')}</label>
                     <select name="stars">
                         <option value="1">1 ⭐</option>
                         <option value="2">2 ⭐</option>
@@ -141,8 +141,8 @@ function showNewHotelModal() {
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Créer</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.create')}</button>
             </div>
         </form>
     `);
@@ -154,7 +154,7 @@ async function createHotel(e) {
 
     try {
         await API.createHotel(data);
-        toast('Hôtel créé', 'success');
+        toast(t('hotels.created'), 'success');
         closeModal();
         loadHotels(document.getElementById('page-content'));
     } catch (error) {
@@ -167,19 +167,19 @@ async function showEditHotelModal(id) {
         const result = await API.getHotel(id);
         const h = result.hotel;
 
-        openModal('Modifier l\'hôtel', `
+        openModal(t('hotels.edit'), `
             <form onsubmit="updateHotel(event, ${h.id})">
                 <div class="form-group">
-                    <label>Nom commercial *</label>
+                    <label>${t('hotels.name')} *</label>
                     <input type="text" name="name" value="${esc(h.name)}" required>
                 </div>
                 <div class="form-group">
-                    <label>Adresse</label>
+                    <label>${t('hotels.address')}</label>
                     <input type="text" name="address" value="${esc(h.address || '')}">
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Ville</label>
+                        <label>${t('hotels.city')}</label>
                         <input type="text" name="city" value="${esc(h.city || '')}">
                     </div>
                     <div class="form-group">
@@ -189,7 +189,7 @@ async function showEditHotelModal(id) {
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Téléphone</label>
+                        <label>${t('hotels.phone')}</label>
                         <input type="tel" name="phone" value="${esc(h.phone || '')}">
                     </div>
                     <div class="form-group">
@@ -199,7 +199,7 @@ async function showEditHotelModal(id) {
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Étoiles</label>
+                        <label>${t('hotels.stars')}</label>
                         <select name="stars">
                             ${[1,2,3,4,5].map(n => `<option value="${n}" ${h.stars == n ? 'selected' : ''}>${n} ⭐</option>`).join('')}
                         </select>
@@ -220,7 +220,7 @@ async function showEditHotelModal(id) {
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Statut</label>
+                    <label>${t('hotels.status')}</label>
                     <select name="status">
                         <option value="active" ${h.status === 'active' ? 'selected' : ''}>Actif</option>
                         <option value="inactive" ${h.status === 'inactive' ? 'selected' : ''}>Inactif</option>
@@ -246,8 +246,8 @@ async function showEditHotelModal(id) {
                 </div>
                 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                    <button type="submit" class="btn btn-primary">${t('common.save')}</button>
                 </div>
             </form>
         `);
@@ -262,7 +262,7 @@ async function updateHotel(e, id) {
 
     try {
         await API.updateHotel(id, data);
-        toast('Hôtel modifié', 'success');
+        toast(t('hotels.updated'), 'success');
         closeModal();
         loadHotels(document.getElementById('page-content'));
     } catch (error) {
@@ -271,11 +271,11 @@ async function updateHotel(e, id) {
 }
 
 async function deleteHotel(id) {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cet hôtel ?\nCette action est irréversible.')) return;
+    if (!confirm(t('hotels.delete_confirm'))) return;
 
     try {
         await API.deleteHotel(id);
-        toast('Hôtel supprimé', 'success');
+        toast(t('hotels.deleted'), 'success');
         loadHotels(document.getElementById('page-content'));
     } catch (error) {
         toast(error.message, 'error');
@@ -318,7 +318,7 @@ async function viewHotelRooms(hotelId) {
         container.innerHTML = `
             <div class="page-header-actions">
                 <button class="btn btn-outline" onclick="loadHotels(document.getElementById('page-content'))">
-                    <i class="fas fa-arrow-left"></i> Retour aux hôtels
+                    <i class="fas fa-arrow-left"></i> ${t('common.back')}
                 </button>
             </div>
 
@@ -330,7 +330,7 @@ async function viewHotelRooms(hotelId) {
                             <i class="fas fa-layer-group"></i> Ajout multiple
                         </button>
                         <button class="btn btn-primary" onclick="showAddRoomModal(${hotelId})">
-                            <i class="fas fa-plus"></i> Nouvelle chambre
+                            <i class="fas fa-plus"></i> ${t('hotels.add_room')}
                         </button>
                     </div>
                 </div>
@@ -399,7 +399,7 @@ async function viewHotelRooms(hotelId) {
             ` : ''}
         `;
     } catch (error) {
-        container.innerHTML = `<div class="card"><p class="text-danger">Erreur: ${error.message}</p></div>`;
+        container.innerHTML = `<div class="card"><p class="text-danger">${t('common.error')}: ${error.message}</p></div>`;
     }
 }
 
@@ -421,21 +421,21 @@ function getStatusLabel(status) {
 // ============ ROOM CRUD ============
 
 function showAddRoomModal(hotelId) {
-    openModal('Nouvelle chambre', `
+    openModal(t('hotels.add_room'), `
         <form onsubmit="createRoom(event, ${hotelId})">
             <div class="form-row">
                 <div class="form-group">
-                    <label>Numéro de chambre *</label>
+                    <label>${t('hotels.room_number')} *</label>
                     <input type="text" name="room_number" required placeholder="Ex: 101, A12...">
                 </div>
                 <div class="form-group">
-                    <label>Étage *</label>
+                    <label>${t('hotels.room_floor')} *</label>
                     <input type="number" name="floor" value="1" min="0" required>
                 </div>
             </div>
             
             <div class="form-group">
-                <label>Type de chambre</label>
+                <label>${t('hotels.room_type')}</label>
                 <div class="room-type-selector">
                     ${ROOM_TYPES.map((t, i) => `
                         <label class="type-option">
@@ -457,14 +457,14 @@ function showAddRoomModal(hotelId) {
             </div>
             
             <div class="form-group">
-                <label>Statut</label>
+                <label>${t('hotels.status')}</label>
                 <select name="status">
                     ${ROOM_STATUSES.map(s => `<option value="${s.value}">${s.label}</option>`).join('')}
                 </select>
             </div>
             
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
                 <button type="submit" class="btn btn-primary">Ajouter</button>
             </div>
         </form>
@@ -478,7 +478,7 @@ async function createRoom(e, hotelId) {
 
     try {
         await API.createRoom(data);
-        toast('Chambre ajoutée', 'success');
+        toast(t('hotels.room_created'), 'success');
         closeModal();
         viewHotelRooms(hotelId);
     } catch (error) {
@@ -495,17 +495,17 @@ async function showEditRoomModal(roomId, hotelId) {
             <form onsubmit="updateRoom(event, ${r.id}, ${hotelId})">
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Numéro de chambre *</label>
+                        <label>${t('hotels.room_number')} *</label>
                         <input type="text" name="room_number" value="${esc(r.room_number)}" required>
                     </div>
                     <div class="form-group">
-                        <label>Étage *</label>
+                        <label>${t('hotels.room_floor')} *</label>
                         <input type="number" name="floor" value="${r.floor}" min="0" required>
                     </div>
                 </div>
                 
                 <div class="form-group">
-                    <label>Type de chambre</label>
+                    <label>${t('hotels.room_type')}</label>
                     <div class="room-type-selector">
                         ${ROOM_TYPES.map(t => `
                             <label class="type-option">
@@ -527,7 +527,7 @@ async function showEditRoomModal(roomId, hotelId) {
                 </div>
                 
                 <div class="form-group">
-                    <label>Statut</label>
+                    <label>${t('hotels.status')}</label>
                     <select name="status">
                         ${ROOM_STATUSES.map(s => `<option value="${s.value}" ${r.status === s.value ? 'selected' : ''}>${s.label}</option>`).join('')}
                     </select>
@@ -535,10 +535,10 @@ async function showEditRoomModal(roomId, hotelId) {
                 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-danger" onclick="deleteRoom(${r.id}, ${hotelId})" style="margin-right:auto">
-                        <i class="fas fa-trash"></i> Supprimer
+                        <i class="fas fa-trash"></i> ${t('common.delete')}
                     </button>
-                    <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                    <button type="submit" class="btn btn-primary">${t('common.save')}</button>
                 </div>
             </form>
         `);
@@ -553,7 +553,7 @@ async function updateRoom(e, roomId, hotelId) {
 
     try {
         await API.updateRoom(roomId, data);
-        toast('Chambre modifiée', 'success');
+        toast(t('hotels.room_updated'), 'success');
         closeModal();
         viewHotelRooms(hotelId);
     } catch (error) {
@@ -562,11 +562,11 @@ async function updateRoom(e, roomId, hotelId) {
 }
 
 async function deleteRoom(roomId, hotelId) {
-    if (!confirm('Supprimer cette chambre ?')) return;
+    if (!confirm(t('hotels.room_delete_confirm'))) return;
 
     try {
         await API.deleteRoom(roomId);
-        toast('Chambre supprimée', 'success');
+        toast(t('hotels.room_deleted'), 'success');
         closeModal();
         viewHotelRooms(hotelId);
     } catch (error) {
@@ -583,7 +583,7 @@ function showBulkAddRoomsModal(hotelId) {
             
             <div class="form-row">
                 <div class="form-group">
-                    <label>Étage *</label>
+                    <label>${t('hotels.room_floor')} *</label>
                     <input type="number" name="floor" value="1" min="0" required>
                 </div>
                 <div class="form-group">
@@ -604,7 +604,7 @@ function showBulkAddRoomsModal(hotelId) {
             </div>
             
             <div class="form-group">
-                <label>Type de chambre</label>
+                <label>${t('hotels.room_type')}</label>
                 <select name="room_type">
                     ${ROOM_TYPES.map(t => `<option value="${t.value}">${t.icon} ${t.label}</option>`).join('')}
                 </select>
@@ -620,7 +620,7 @@ function showBulkAddRoomsModal(hotelId) {
             <div class="bulk-preview" id="bulk-preview"></div>
             
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
                 <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Créer les chambres</button>
             </div>
         </form>
@@ -736,10 +736,10 @@ function renderClosureConfigModal(hotelId, hotelName) {
             
             <div class="modal-footer mt-20">
                 <button type="button" class="btn btn-outline" onclick="closeModal(); showEditHotelModal(${hotelId})">
-                    <i class="fas fa-arrow-left"></i> Retour à l'hôtel
+                    <i class="fas fa-arrow-left"></i> ${t('common.back')}
                 </button>
                 <button type="button" class="btn btn-primary" onclick="saveClosureConfig(${hotelId})">
-                    <i class="fas fa-save"></i> Enregistrer
+                    <i class="fas fa-save"></i> ${t('common.save')}
                 </button>
             </div>
         </div>

@@ -18,7 +18,7 @@ let revenueAvailableOtas = []; // OTAs disponibles dans les données
 
 // OTAs supportées par Xotelo
 const XOTELO_OTAS = [
-    { value: '', label: 'Toutes les OTAs' },
+    { value: '', label: t('revenue.all_otas') },
     { value: 'Booking.com', label: 'Booking.com' },
     { value: 'Expedia', label: 'Expedia' },
     { value: 'Hotels.com', label: 'Hotels.com' },
@@ -74,30 +74,30 @@ async function loadRevenue(container) {
             <div class="revenue-page">
                 <div class="revenue-header">
                     <div class="revenue-header-left">
-                        <h2><i class="fas fa-chart-line"></i> Revenue Management</h2>
-                        <p>Veille concurrentielle et analyse tarifaire</p>
+                        <h2><i class="fas fa-chart-line"></i> ${t('revenue.title')}</h2>
+                        <p>${t('revenue.subtitle')}</p>
                     </div>
                     <div class="revenue-header-actions">
                         <div class="last-update-info" id="revenue-last-update">
-                            <i class="fas fa-clock"></i> <span>Chargement...</span>
+                            <i class="fas fa-clock"></i> <span>${t('revenue.loading')}</span>
                         </div>
-                        <button class="btn btn-outline" onclick="showPriceAlerts()"><i class="fas fa-bell"></i> Alertes</button>
-                        ${canSettings ? `<button class="btn btn-outline" onclick="showRevenueSettings()"><i class="fas fa-cog"></i> Paramètres</button>` : ''}
+                        <button class="btn btn-outline" onclick="showPriceAlerts()"><i class="fas fa-bell"></i> ${t('revenue.alerts')}</button>
+                        ${canSettings ? `<button class="btn btn-outline" onclick="showRevenueSettings()"><i class="fas fa-cog"></i> ${t('revenue.settings')}</button>` : ''}
                     </div>
                 </div>
                 
                 <div class="revenue-filters card">
                     <div class="filters-row">
                         <div class="filter-group">
-                            <label><i class="fas fa-hotel"></i> Hôtel</label>
+                            <label><i class="fas fa-hotel"></i> ${t('revenue.hotel')}</label>
                             <select id="revenue-hotel-select" onchange="revenueChangeHotel(this.value)">
                                 ${revenueHotels.map(h => `<option value="${h.id}" ${h.id == revenueSelectedHotel ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}
                             </select>
                         </div>
                         <div class="filter-group">
-                            <label><i class="fas fa-users"></i> Personnes</label>
+                            <label><i class="fas fa-users"></i> ${t('revenue.persons')}</label>
                             <select id="revenue-guests" onchange="revenueFilters.guests = parseInt(this.value); loadMonthRates();">
-                                ${[1,2,3,4].map(n => `<option value="${n}" ${revenueFilters.guests === n ? 'selected' : ''}>${n} pers.</option>`).join('')}
+                                ${[1,2,3,4].map(n => `<option value="${n}" ${revenueFilters.guests === n ? 'selected' : ''}>${n} ${t('revenue.pers')}</option>`).join('')}
                             </select>
                         </div>
                     </div>
@@ -105,23 +105,23 @@ async function loadRevenue(container) {
                     <!-- Filtres dynamiques sources -->
                     <div class="dynamic-filters-section">
                         <div class="dynamic-filter-group">
-                            <label><i class="fas fa-building"></i> Sources à afficher</label>
+                            <label><i class="fas fa-building"></i> ${t('revenue.sources')}</label>
                             <div class="dynamic-filter-chips" id="calendar-source-filters">
                                 <!-- Rempli dynamiquement -->
                             </div>
                         </div>
                         <div class="dynamic-filter-group">
-                            <label><i class="fas fa-globe"></i> OTAs</label>
+                            <label><i class="fas fa-globe"></i> ${t('revenue.ota')}</label>
                             <div class="dynamic-filter-chips" id="calendar-ota-filters">
                                 <!-- Rempli dynamiquement -->
                             </div>
                         </div>
                         <div class="dynamic-filter-actions">
                             <button type="button" class="btn btn-sm btn-outline" onclick="selectAllCalendarFilters()">
-                                <i class="fas fa-check-double"></i> Tout
+                                <i class="fas fa-check-double"></i> ${t('common.all')}
                             </button>
                             <button type="button" class="btn btn-sm btn-outline" onclick="clearAllCalendarFilters()">
-                                <i class="fas fa-times"></i> Aucun
+                                <i class="fas fa-times"></i> ${t('common.none')}
                             </button>
                         </div>
                     </div>
@@ -134,7 +134,7 @@ async function loadRevenue(container) {
                 </div>
                 
                 <div class="revenue-calendar-container card" id="revenue-calendar-container">
-                    <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>
+                    <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> ${t('revenue.loading')}</div>
                 </div>
             </div>
         `;
@@ -189,7 +189,7 @@ async function loadMonthRates() {
     
     const container = document.getElementById('revenue-calendar-container');
     if (container) {
-        container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Chargement des tarifs...</div>';
+        container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> ' + t('revenue.loading') + '</div>';
     }
     
     try {
@@ -230,10 +230,10 @@ function updateLastFetchTime(rates) {
     if (!container) return;
     
     if (!rates || rates.length === 0) {
-        container.innerHTML = '<i class="fas fa-clock"></i> <span>Aucune donnée</span>';
+        container.innerHTML = '<i class="fas fa-clock"></i> <span>' + t('revenue.no_data') + '</span>';
         return;
     }
-    
+
     // Trouver la date de fetch la plus récente
     let lastFetch = null;
     rates.forEach(r => {
@@ -262,10 +262,10 @@ function updateLastFetchTime(rates) {
             timeAgo = lastFetch.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
         }
         
-        container.innerHTML = `<i class="fas fa-sync-alt"></i> <span>Màj : ${timeAgo}</span>`;
+        container.innerHTML = `<i class="fas fa-sync-alt"></i> <span>${t('revenue.last_update')} : ${timeAgo}</span>`;
         container.title = `Dernière actualisation : ${lastFetch.toLocaleString('fr-FR')}`;
     } else {
-        container.innerHTML = '<i class="fas fa-clock"></i> <span>Aucune donnée</span>';
+        container.innerHTML = '<i class="fas fa-clock"></i> <span>' + t('revenue.no_data') + '</span>';
     }
 }
 
@@ -292,7 +292,7 @@ function renderCalendarSourceFilters() {
         <button type="button" class="filter-chip ${revenueFilters.sources.includes('own') ? 'active' : ''}" 
                 data-source="own" style="--chip-color: ${HOTEL_COLORS[0]}" onclick="toggleCalendarSource('own')">
             <span class="chip-dot"></span>
-            ${hotel ? esc(hotel.name) : 'Mon hôtel'}
+            ${hotel ? esc(hotel.name) : t('revenue.your_hotel')}
             <span class="chip-badge">Vous</span>
         </button>
     `;
@@ -431,7 +431,7 @@ function renderRevenueCalendar() {
     
     // Mon hôtel (si sélectionné)
     if (revenueFilters.sources.includes('own')) {
-        sourcesList.push({ key: 'own', name: hotel ? hotel.name : 'Mon hôtel', type: 'own', color: HOTEL_COLORS[0] });
+        sourcesList.push({ key: 'own', name: hotel ? hotel.name : t('revenue.your_hotel'), type: 'own', color: HOTEL_COLORS[0] });
     }
     
     // Concurrents (si sélectionnés)
@@ -508,14 +508,14 @@ function renderRevenueCalendar() {
 // ============ DÉTAILS ET COMPARAISON ============
 function showRateDetails(date, sourceKey) {
     const dateData = revenueRatesData.filter(r => r.check_date === date && (sourceKey === 'own' ? r.source_type === 'own' : r.source_hotel_key === sourceKey));
-    if (dateData.length === 0) { toast('Aucune donnée', 'warning'); return; }
+    if (dateData.length === 0) { toast(t('revenue.no_data'), 'warning'); return; }
     
     let filteredData = revenueFilters.ota ? dateData.filter(r => r.ota_name === revenueFilters.ota) : dateData;
     const sourceName = dateData[0].source_name;
     const dateFormatted = formatDateLong(date);
     const currencySymbol = CURRENCY_SYMBOL;
     
-    let html = `<div class="rate-details-header"><h4>${esc(sourceName)}</h4><p>${dateFormatted}</p><button class="btn btn-sm btn-outline mt-10" onclick="closeModal(); showDayComparison('${date}')"><i class="fas fa-chart-bar"></i> Comparaison complète</button></div><table class="rate-details-table"><thead><tr><th>OTA</th><th>Tarif</th></tr></thead><tbody>`;
+    let html = `<div class="rate-details-header"><h4>${esc(sourceName)}</h4><p>${dateFormatted}</p><button class="btn btn-sm btn-outline mt-10" onclick="closeModal(); showDayComparison('${date}')"><i class="fas fa-chart-bar"></i> ${t('revenue.comparison')}</button></div><table class="rate-details-table"><thead><tr><th>${t('revenue.ota')}</th><th>${t('revenue.rate')}</th></tr></thead><tbody>`;
     
     filteredData.sort((a, b) => a.rate_amount - b.rate_amount).forEach(rate => {
         html += `<tr><td><strong>${esc(rate.ota_name || 'N/A')}</strong></td><td class="rate-cell">${parseFloat(rate.rate_amount).toFixed(2)}${currencySymbol}</td></tr>`;
@@ -531,7 +531,7 @@ function showDayComparison(date) {
     
     let dayData = revenueRatesData.filter(r => r.check_date === date);
     if (revenueFilters.ota) dayData = dayData.filter(r => r.ota_name === revenueFilters.ota);
-    if (dayData.length === 0) { toast('Aucune donnée pour cette date', 'warning'); return; }
+    if (dayData.length === 0) { toast(t('revenue.no_data'), 'warning'); return; }
     
     const sourceMap = {};
     const otaSet = new Set();
@@ -592,9 +592,9 @@ function showDayComparison(date) {
         html += prices.length > 0 ? `<td class="price-cell summary"><strong>${Math.min(...prices).toFixed(0)}${currencySymbol}</strong></td>` : `<td class="price-cell no-price">—</td>`;
     });
     html += `</tr></tbody></table></div>`;
-    html += `<div class="comparison-legend"><span class="legend-item"><span class="legend-dot best"></span> Meilleur</span><span class="legend-item"><span class="legend-dot worst"></span> Plus élevé</span><span class="legend-item"><span class="price-diff lower">-X%</span> Moins cher</span><span class="legend-item"><span class="price-diff higher">+X%</span> Plus cher</span></div></div>`;
+    html += `<div class="comparison-legend"><span class="legend-item"><span class="legend-dot best"></span> ${t('revenue.best_rate')}</span><span class="legend-item"><span class="legend-dot worst"></span> ${t('revenue.worst_rate')}</span><span class="legend-item"><span class="price-diff lower">-X%</span> Moins cher</span><span class="legend-item"><span class="price-diff higher">+X%</span> Plus cher</span></div></div>`;
     
-    openModal(`Comparaison du ${dateFormatted}`, html, 'modal-xl');
+    openModal(`${t('revenue.comparison')} - ${dateFormatted}`, html, 'modal-xl');
 }
 
 // ============ ÉVOLUTION DES PRIX ============
@@ -607,14 +607,14 @@ async function showPriceEvolution(checkDate) {
     const dateFormatted = formatDateLong(checkDate);
     evolutionCurrencySymbol = CURRENCY_SYMBOL;
     
-    openModal(`Évolution des prix - ${dateFormatted}`, `<div class="loading-spinner" style="padding: 40px; text-align: center;"><i class="fas fa-spinner fa-spin fa-2x"></i><p class="mt-10">Chargement...</p></div>`, 'modal-xl');
+    openModal(`${t('revenue.evolution')} - ${dateFormatted}`, `<div class="loading-spinner" style="padding: 40px; text-align: center;"><i class="fas fa-spinner fa-spin fa-2x"></i><p class="mt-10">${t('revenue.loading')}</p></div>`, 'modal-xl');
     
     try {
         const res = await API.get(`/revenue/history/${revenueSelectedHotel}?check_date=${checkDate}&currency=EUR`);
         const historyData = res.history || [];
         
         if (historyData.length === 0) {
-            document.getElementById('modal-body').innerHTML = `<div class="empty-state"><i class="fas fa-chart-line"></i><h3>Pas encore d'historique</h3><p>L'historique se construit au fil des actualisations.</p></div>`;
+            document.getElementById('modal-body').innerHTML = `<div class="empty-state"><i class="fas fa-chart-line"></i><h3>${t('revenue.no_history')}</h3><p>${t('revenue.no_history_desc')}</p></div>`;
             return;
         }
         
@@ -643,13 +643,13 @@ async function showPriceEvolution(checkDate) {
         let html = `
             <div class="price-evolution">
                 <div class="evolution-header">
-                    <h3><i class="fas fa-chart-line"></i> Évolution pour le ${dateFormatted}</h3>
+                    <h3><i class="fas fa-chart-line"></i> ${t('revenue.evolution')} - ${dateFormatted}</h3>
                     <p class="text-muted">Cliquez sur les filtres pour afficher/masquer les données</p>
                 </div>
                 
                 <div class="evolution-filters">
                     <div class="evolution-filter-group">
-                        <label><i class="fas fa-hotel"></i> Hôtels</label>
+                        <label><i class="fas fa-hotel"></i> ${t('revenue.hotel')}</label>
                         <div class="evolution-filter-chips" id="evolution-source-filters">
                             ${evolutionSourcesList.map(s => `
                                 <button type="button" class="filter-chip active" data-source="${s.key}" style="--chip-color: ${s.color}" onclick="toggleEvolutionSource('${s.key}')">
@@ -661,7 +661,7 @@ async function showPriceEvolution(checkDate) {
                         </div>
                     </div>
                     <div class="evolution-filter-group">
-                        <label><i class="fas fa-globe"></i> OTAs</label>
+                        <label><i class="fas fa-globe"></i> ${t('revenue.ota')}</label>
                         <div class="evolution-filter-chips" id="evolution-ota-filters">
                             ${Array.from(allOtas).sort().map(ota => `
                                 <button type="button" class="filter-chip active" data-ota="${ota}" onclick="toggleEvolutionOta('${esc(ota)}')">
@@ -672,10 +672,10 @@ async function showPriceEvolution(checkDate) {
                     </div>
                     <div class="evolution-filter-actions">
                         <button type="button" class="btn btn-sm btn-outline" onclick="selectAllEvolutionFilters()">
-                            <i class="fas fa-check-double"></i> Tout
+                            <i class="fas fa-check-double"></i> ${t('common.all')}
                         </button>
                         <button type="button" class="btn btn-sm btn-outline" onclick="clearAllEvolutionFilters()">
-                            <i class="fas fa-times"></i> Aucun
+                            <i class="fas fa-times"></i> ${t('common.none')}
                         </button>
                     </div>
                 </div>
@@ -799,8 +799,8 @@ function renderPriceEvolutionChart() {
             maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             scales: {
-                x: { type: 'time', time: { unit: 'day', displayFormats: { day: 'dd/MM HH:mm' } }, title: { display: true, text: 'Date de relevé' } },
-                y: { beginAtZero: false, title: { display: true, text: `Prix (${evolutionCurrencySymbol})` } }
+                x: { type: 'time', time: { unit: 'day', displayFormats: { day: 'dd/MM HH:mm' } }, title: { display: true, text: t('revenue.date') } },
+                y: { beginAtZero: false, title: { display: true, text: `${t('revenue.rate')} (${evolutionCurrencySymbol})` } }
             },
             plugins: {
                 legend: { display: false },
@@ -823,21 +823,21 @@ async function showRevenueSettings() {
         let competitorsHtml = '';
         for (let i = 0; i < 10; i++) {
             const comp = competitors[i] || {};
-            competitorsHtml += `<div class="competitor-row"><div class="competitor-num">${i + 1}</div><div class="form-group"><input type="text" name="competitor_name_${i}" value="${esc(comp.competitor_name || '')}" placeholder="Nom"></div><div class="form-group"><input type="text" name="competitor_key_${i}" value="${esc(comp.xotelo_hotel_key || '')}" placeholder="Clé Xotelo"></div><div class="form-group small"><select name="competitor_stars_${i}"><option value="">⭐</option>${[1,2,3,4,5].map(n => `<option value="${n}" ${comp.competitor_stars == n ? 'selected' : ''}>${n}⭐</option>`).join('')}</select></div></div>`;
+            competitorsHtml += `<div class="competitor-row"><div class="competitor-num">${i + 1}</div><div class="form-group"><input type="text" name="competitor_name_${i}" value="${esc(comp.competitor_name || '')}" placeholder="${t('revenue.competitor_name')}"></div><div class="form-group"><input type="text" name="competitor_key_${i}" value="${esc(comp.xotelo_hotel_key || '')}" placeholder="${t('revenue.competitor_key')}"></div><div class="form-group small"><select name="competitor_stars_${i}"><option value="">${t('revenue.competitor_stars')}</option>${[1,2,3,4,5].map(n => `<option value="${n}" ${comp.competitor_stars == n ? 'selected' : ''}>${n}⭐</option>`).join('')}</select></div></div>`;
         }
         
-        openModal('Paramètres Revenue Management', `
+        openModal(t('revenue.settings_title'), `
             <form onsubmit="saveRevenueSettings(event)">
                 <div class="settings-section">
-                    <h4><i class="fas fa-hotel"></i> Configuration de l'hôtel</h4>
+                    <h4><i class="fas fa-hotel"></i> ${t('revenue.hotel_config')}</h4>
                     <div class="form-group"><label>Hôtel</label><input type="text" value="${esc(hotel.name)}" disabled><input type="hidden" name="hotel_id" value="${hotel.id}"></div>
-                    <div class="form-group"><label>Clé Xotelo *</label><input type="text" name="xotelo_hotel_key" value="${esc(hotel.xotelo_hotel_key || '')}" placeholder="Ex: h12345678" required><small class="form-help">Trouvez cette clé sur <a href="https://xotelo.com" target="_blank">xotelo.com</a></small></div>
+                    <div class="form-group"><label>${t('revenue.xotelo_key')} *</label><input type="text" name="xotelo_hotel_key" value="${esc(hotel.xotelo_hotel_key || '')}" placeholder="Ex: h12345678" required><small class="form-help">Trouvez cette clé sur <a href="https://xotelo.com" target="_blank">xotelo.com</a></small></div>
                 </div>
                 <div class="settings-section">
-                    <h4><i class="fas fa-users"></i> Concurrents (max 10)</h4>
+                    <h4><i class="fas fa-users"></i> ${t('revenue.competitors_max')}</h4>
                     <div class="competitors-list"><div class="competitors-header"><div class="competitor-num">#</div><div>Nom</div><div>Clé Xotelo</div><div class="small">Étoiles</div></div>${competitorsHtml}</div>
                 </div>
-                <div class="modal-footer"><button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button><button type="submit" class="btn btn-primary">Enregistrer</button></div>
+                <div class="modal-footer"><button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button><button type="submit" class="btn btn-primary">${t('common.save')}</button></div>
             </form>
         `, 'modal-wide');
         
@@ -868,7 +868,7 @@ async function saveRevenueSettings(e) {
         if (hotel) hotel.xotelo_hotel_key = xoteloKey;
         revenueCompetitors = competitors;
         
-        toast(`Configuration enregistrée (${compRes.saved || 0} concurrent(s))`, 'success');
+        toast(t('revenue.config_saved'), 'success');
         closeModal();
         renderCompetitorsLegend();
     } catch (error) {
@@ -899,17 +899,17 @@ async function showPriceAlerts() {
         const alerts = alertsRes || [];
         const competitors = compRes.competitors || [];
 
-        const directionLabels = { any: 'Hausse ou baisse', up: 'Hausse uniquement', down: 'Baisse uniquement' };
+        const directionLabels = { any: t('revenue.direction_any'), up: t('revenue.direction_up'), down: t('revenue.direction_down') };
         const typeLabels = { delta_amount: '€', delta_percent: '%' };
 
         let alertsHtml = '';
         if (alerts.length === 0) {
-            alertsHtml = '<div class="empty-state" style="padding:30px"><i class="fas fa-bell-slash"></i><h3>Aucune alerte configurée</h3><p>Ajoutez une alerte pour être notifié des changements de tarifs concurrents</p></div>';
+            alertsHtml = '<div class="empty-state" style="padding:30px"><i class="fas fa-bell-slash"></i><h3>' + t('revenue.no_alerts') + '</h3><p>' + t('revenue.no_alerts_desc') + '</p></div>';
         } else {
             alertsHtml = '<div class="price-alerts-list">';
             for (const a of alerts) {
-                const compLabel = a.competitor_name || 'Tous les concurrents';
-                const otaLabel = a.ota_name || 'Toutes les OTAs';
+                const compLabel = a.competitor_name || t('revenue.all_competitors');
+                const otaLabel = a.ota_name || t('revenue.all_otas');
                 const typeUnit = typeLabels[a.alert_type];
                 const dirLabel = directionLabels[a.direction];
                 alertsHtml += `
@@ -943,15 +943,15 @@ async function showPriceAlerts() {
             alertsHtml += '</div>';
         }
 
-        openModal('Alertes tarifaires', `
+        openModal(t('revenue.alerts_title'), `
             <div class="price-alerts-container">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                    <p style="margin:0;color:#6B7280;font-size:13px">Recevez une notification quand un concurrent change ses tarifs</p>
-                    <button class="btn btn-primary btn-sm" onclick="showPriceAlertForm()"><i class="fas fa-plus"></i> Nouvelle alerte</button>
+                    <p style="margin:0;color:#6B7280;font-size:13px">${t('revenue.alerts_desc')}</p>
+                    <button class="btn btn-primary btn-sm" onclick="showPriceAlertForm()"><i class="fas fa-plus"></i> ${t('revenue.new_alert')}</button>
                 </div>
                 <div id="price-alerts-list">${alertsHtml}</div>
                 <div style="margin-top:16px;border-top:1px solid #F3F4F6;padding-top:16px">
-                    <button class="btn btn-outline btn-sm" onclick="showPriceAlertLogs()"><i class="fas fa-history"></i> Historique des alertes</button>
+                    <button class="btn btn-outline btn-sm" onclick="showPriceAlertLogs()"><i class="fas fa-history"></i> ${t('revenue.alert_history')}</button>
                 </div>
             </div>
         `, 'modal-lg');
@@ -970,62 +970,62 @@ async function showPriceAlertForm(alertId) {
             alert = await API.get(`/price_alerts/${alertId}`);
         }
 
-        const competitorOptions = `<option value="">Tous les concurrents</option>` +
+        const competitorOptions = `<option value="">${t('revenue.all_competitors')}</option>` +
             competitors.map(c => `<option value="${c.id}" ${alert && alert.competitor_id == c.id ? 'selected' : ''}>${esc(c.competitor_name)}</option>`).join('');
 
-        const otaOptions = `<option value="">Toutes les OTAs</option>` +
+        const otaOptions = `<option value="">${t('revenue.all_otas')}</option>` +
             XOTELO_OTAS.filter(o => o.value).map(o => `<option value="${o.value}" ${alert && alert.ota_name === o.value ? 'selected' : ''}>${o.label}</option>`).join('');
 
-        openModal(alertId ? 'Modifier l\'alerte' : 'Nouvelle alerte tarifaire', `
+        openModal(alertId ? t('revenue.edit_alert') : t('revenue.new_alert'), `
             <form onsubmit="savePriceAlert(event, ${alertId || 'null'})">
                 <input type="hidden" name="hotel_id" value="${revenueSelectedHotel}">
                 <div class="form-group">
-                    <label>Concurrent</label>
+                    <label>${t('revenue.competitor')}</label>
                     <select name="competitor_id" class="form-control">${competitorOptions}</select>
                     <small class="form-help">Laissez vide pour surveiller tous les concurrents</small>
                 </div>
                 <div class="form-group">
-                    <label>OTA</label>
+                    <label>${t('revenue.ota')}</label>
                     <select name="ota_name" class="form-control">${otaOptions}</select>
                     <small class="form-help">Laissez vide pour surveiller toutes les plateformes</small>
                 </div>
                 <div class="grid-2">
                     <div class="form-group">
-                        <label>Type de seuil</label>
+                        <label>${t('revenue.threshold_type')}</label>
                         <select name="alert_type" class="form-control">
-                            <option value="delta_percent" ${!alert || alert.alert_type === 'delta_percent' ? 'selected' : ''}>Variation en %</option>
-                            <option value="delta_amount" ${alert && alert.alert_type === 'delta_amount' ? 'selected' : ''}>Variation en €</option>
+                            <option value="delta_percent" ${!alert || alert.alert_type === 'delta_percent' ? 'selected' : ''}>${t('revenue.threshold_percent')}</option>
+                            <option value="delta_amount" ${alert && alert.alert_type === 'delta_amount' ? 'selected' : ''}>${t('revenue.threshold_amount')}</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Seuil</label>
+                        <label>${t('revenue.threshold')}</label>
                         <input type="number" name="threshold_value" class="form-control" step="0.01" min="0.01" required value="${alert ? parseFloat(alert.threshold_value) : '5'}" placeholder="Ex: 5">
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Direction</label>
+                    <label>${t('revenue.direction')}</label>
                     <select name="direction" class="form-control">
-                        <option value="any" ${!alert || alert.direction === 'any' ? 'selected' : ''}>Hausse ou baisse</option>
-                        <option value="up" ${alert && alert.direction === 'up' ? 'selected' : ''}>Hausse uniquement</option>
-                        <option value="down" ${alert && alert.direction === 'down' ? 'selected' : ''}>Baisse uniquement</option>
+                        <option value="any" ${!alert || alert.direction === 'any' ? 'selected' : ''}>${t('revenue.direction_any')}</option>
+                        <option value="up" ${alert && alert.direction === 'up' ? 'selected' : ''}>${t('revenue.direction_up')}</option>
+                        <option value="down" ${alert && alert.direction === 'down' ? 'selected' : ''}>${t('revenue.direction_down')}</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Canaux de notification</label>
+                    <label>${t('revenue.notify_channels')}</label>
                     <div style="display:flex;gap:20px;margin-top:6px">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400">
                             <input type="checkbox" name="notify_app" value="1" ${!alert || alert.notify_app == 1 ? 'checked' : ''}>
-                            <i class="fas fa-bell"></i> Notification in-app
+                            <i class="fas fa-bell"></i> ${t('revenue.notify_app')}
                         </label>
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400">
                             <input type="checkbox" name="notify_email" value="1" ${alert && alert.notify_email == 1 ? 'checked' : ''}>
-                            <i class="fas fa-envelope"></i> Email
+                            <i class="fas fa-envelope"></i> ${t('revenue.notify_email')}
                         </label>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="showPriceAlerts()">Retour</button>
-                    <button type="submit" class="btn btn-primary">${alertId ? 'Enregistrer' : 'Créer l\'alerte'}</button>
+                    <button type="button" class="btn btn-outline" onclick="showPriceAlerts()">${t('revenue.back_to_alerts')}</button>
+                    <button type="submit" class="btn btn-primary">${alertId ? t('common.save') : t('revenue.new_alert')}</button>
                 </div>
             </form>
         `);
@@ -1051,10 +1051,10 @@ async function savePriceAlert(e, alertId) {
     try {
         if (alertId) {
             await API.put(`/price_alerts/${alertId}`, data);
-            toast('Alerte mise à jour', 'success');
+            toast(t('revenue.alert_updated'), 'success');
         } else {
             await API.post('/price_alerts', data);
-            toast('Alerte créée', 'success');
+            toast(t('revenue.alert_created'), 'success');
         }
         showPriceAlerts();
     } catch (err) {
@@ -1077,10 +1077,10 @@ async function editPriceAlert(id) {
 }
 
 async function deletePriceAlert(id) {
-    if (!confirm('Supprimer cette alerte ?')) return;
+    if (!confirm(t('revenue.delete_alert_confirm'))) return;
     try {
         await API.delete(`/price_alerts/${id}`);
-        toast('Alerte supprimée', 'success');
+        toast(t('revenue.alert_deleted'), 'success');
         showPriceAlerts();
     } catch (err) {
         toast(err.message || 'Erreur', 'error');
@@ -1092,10 +1092,10 @@ async function showPriceAlertLogs() {
         const logs = await API.get(`/price_alerts/logs?hotel_id=${revenueSelectedHotel}&limit=50`);
         let html = '';
         if (!logs || logs.length === 0) {
-            html = '<div class="empty-state" style="padding:30px"><i class="fas fa-history"></i><h3>Aucun historique</h3><p>Les alertes déclenchées apparaîtront ici</p></div>';
+            html = '<div class="empty-state" style="padding:30px"><i class="fas fa-history"></i><h3>' + t('revenue.no_history') + '</h3><p>' + t('revenue.no_history_desc') + '</p></div>';
         } else {
             html = `<div class="table-responsive"><table class="table table-compact">
-                <thead><tr><th>Date</th><th>Concurrent</th><th>OTA</th><th>Ancien</th><th>Nouveau</th><th>Delta</th><th>Canaux</th></tr></thead><tbody>`;
+                <thead><tr><th>${t('revenue.date')}</th><th>${t('revenue.competitor')}</th><th>${t('revenue.ota')}</th><th>${t('revenue.old_rate')}</th><th>${t('revenue.new_rate')}</th><th>${t('revenue.delta')}</th><th>${t('revenue.channels')}</th></tr></thead><tbody>`;
             for (const l of logs) {
                 const delta = parseFloat(l.delta_amount);
                 const pct = parseFloat(l.delta_percent);
@@ -1115,10 +1115,10 @@ async function showPriceAlertLogs() {
             html += '</tbody></table></div>';
         }
 
-        openModal('Historique des alertes tarifaires', `
+        openModal(t('revenue.alert_history'), `
             <div>
                 <div style="margin-bottom:12px">
-                    <button class="btn btn-outline btn-sm" onclick="showPriceAlerts()"><i class="fas fa-arrow-left"></i> Retour aux alertes</button>
+                    <button class="btn btn-outline btn-sm" onclick="showPriceAlerts()"><i class="fas fa-arrow-left"></i> ${t('revenue.back_to_alerts')}</button>
                 </div>
                 ${html}
             </div>

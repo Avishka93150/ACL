@@ -50,14 +50,14 @@ async function loadAudit(container) {
         container.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-clipboard-check"></i> Audits</h3>
+                    <h3 class="card-title"><i class="fas fa-clipboard-check"></i> ${t('audit.title')}</h3>
                     <div class="header-controls">
                         ${auditHotels.length > 0 ? `
                             <select id="audit-hotel" onchange="auditChangeHotel(this.value)">
                                 ${auditHotels.map(h => `<option value="${h.id}" ${h.id == auditCurrentHotel ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}
                             </select>
                         ` : ''}
-                        ${canManageGrids ? `<button class="btn btn-outline" onclick="auditShowGridsManager()"><i class="fas fa-cog"></i> Gérer les grilles</button>` : ''}
+                        ${canManageGrids ? `<button class="btn btn-outline" onclick="auditShowGridsManager()"><i class="fas fa-cog"></i> ${t('audit.grids')}</button>` : ''}
                     </div>
                 </div>
 
@@ -101,29 +101,29 @@ async function loadAudit(container) {
                                     </div>
                                     <div class="audit-grid-actions">
                                         <button class="btn btn-primary btn-sm" onclick="auditStartNew(${g.id})">
-                                            <i class="fas fa-plus"></i> Nouvel audit
+                                            <i class="fas fa-plus"></i> ${t('audit.new_audit')}
                                         </button>
                                     </div>
                                 </div>
                             `).join('')}
                         </div>
-                    ` : '<p class="text-muted text-center py-20">Aucune grille d\'audit disponible</p>'}
+                    ` : '<p class="text-muted text-center py-20">' + t('audit.no_grids') + '</p>'}
                 </div>
             </div>
 
             <!-- Historique des audits -->
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-history"></i> Historique des audits</h3>
+                    <h3 class="card-title"><i class="fas fa-history"></i> ${t('audit.my_audits')}</h3>
                 </div>
                 ${audits.length > 0 ? `
                     <table>
                         <thead>
                             <tr>
-                                <th>Date</th>
-                                <th>Grille</th>
-                                <th>Réalisé par</th>
-                                <th>Score</th>
+                                <th>${t('audit.date')}</th>
+                                <th>${t('audit.grid_name')}</th>
+                                <th>${t('audit.conducted_by')}</th>
+                                <th>${t('audit.overall_score')}</th>
                                 <th>Statut</th>
                                 <th>Actions</th>
                             </tr>
@@ -153,12 +153,12 @@ async function loadAudit(container) {
                             `).join('')}
                         </tbody>
                     </table>
-                ` : '<p class="text-muted text-center py-20">Aucun audit réalisé</p>'}
+                ` : '<p class="text-muted text-center py-20">' + t('audit.no_audits') + '</p>'}
             </div>
         `;
 
     } catch (error) {
-        container.innerHTML = `<div class="card"><p class="text-danger">Erreur: ${error.message}</p></div>`;
+        container.innerHTML = `<div class="card"><p class="text-danger">${t('common.error')}: ${error.message}</p></div>`;
     }
 }
 
@@ -213,11 +213,11 @@ async function auditShowGridsManager() {
         const res = await API.getAuditGrids(null, true); // all grids for management
         const grids = res.grids || [];
 
-        openModal('Gestion des grilles d\'audit', `
+        openModal(t('audit.grids'), `
             <div class="audit-grids-manager">
                 <div class="manager-header">
                     <button class="btn btn-primary" onclick="auditCreateGrid()">
-                        <i class="fas fa-plus"></i> Nouvelle grille
+                        <i class="fas fa-plus"></i> ${t('audit.new_grid')}
                     </button>
                 </div>
                 
@@ -225,7 +225,7 @@ async function auditShowGridsManager() {
                     <table class="mt-20">
                         <thead>
                             <tr>
-                                <th>Nom</th>
+                                <th>${t('audit.grid_name')}</th>
                                 <th>Hôtels</th>
                                 <th>Questions</th>
                                 <th>Fréquence</th>
@@ -254,7 +254,7 @@ async function auditShowGridsManager() {
                             `).join('')}
                         </tbody>
                     </table>
-                ` : '<p class="text-muted text-center py-20">Aucune grille créée</p>'}
+                ` : '<p class="text-muted text-center py-20">' + t('audit.no_grids') + '</p>'}
             </div>
         `, 'modal-xl');
     } catch (e) {
@@ -301,13 +301,13 @@ async function auditShowGridEditor() {
     container.innerHTML = `
         <div class="card">
             <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-clipboard-list"></i> ${isEdit ? 'Modifier la grille' : 'Nouvelle grille d\'audit'}</h3>
+                <h3 class="card-title"><i class="fas fa-clipboard-list"></i> ${isEdit ? t('audit.edit_question') : t('audit.new_grid')}</h3>
                 <div class="header-controls">
                     <button class="btn btn-outline" onclick="loadAudit(document.getElementById('page-content'))">
                         <i class="fas fa-arrow-left"></i> Retour
                     </button>
                     <button class="btn btn-primary" onclick="auditSaveGrid()">
-                        <i class="fas fa-save"></i> Enregistrer
+                        <i class="fas fa-save"></i> ${t('common.save')}
                     </button>
                 </div>
             </div>
@@ -318,7 +318,7 @@ async function auditShowGridEditor() {
                     <h4><i class="fas fa-info-circle"></i> Informations générales</h4>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Nom de la grille *</label>
+                            <label>${t('audit.grid_name')} *</label>
                             <input type="text" name="name" value="${esc(grid.name || '')}" required placeholder="Ex: Audit qualité mensuel">
                         </div>
                     </div>
@@ -439,8 +439,8 @@ async function auditShowGridEditor() {
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-question-circle"></i> Questions (${auditQuestions.length})</h3>
                 <div class="header-controls">
-                    <button class="btn btn-outline" onclick="auditAddSection()"><i class="fas fa-folder-plus"></i> Ajouter section</button>
-                    <button class="btn btn-primary" onclick="auditAddQuestion()"><i class="fas fa-plus"></i> Ajouter question</button>
+                    <button class="btn btn-outline" onclick="auditAddSection()"><i class="fas fa-folder-plus"></i> ${t('audit.new_section')}</button>
+                    <button class="btn btn-primary" onclick="auditAddQuestion()"><i class="fas fa-plus"></i> ${t('audit.new_question')}</button>
                 </div>
             </div>
             <div id="audit-questions-list" class="audit-questions-container">
@@ -507,7 +507,7 @@ function auditHasPermission(grid, permType, targetType, targetId) {
 
 function auditRenderQuestions() {
     if (auditQuestions.length === 0) {
-        return '<div class="empty-state py-40"><i class="fas fa-question-circle"></i><h3>Aucune question</h3><p>Ajoutez des questions à votre grille d\'audit</p></div>';
+        return '<div class="empty-state py-40"><i class="fas fa-question-circle"></i><h3>' + t('audit.no_grids') + '</h3></div>';
     }
 
     let currentSection = null;
@@ -562,15 +562,15 @@ function auditQuestionTypeBadge(type) {
 }
 
 function auditAddSection() {
-    openModal('Nouvelle section', `
+    openModal(t('audit.new_section'), `
         <form onsubmit="auditSaveSection(event)">
             <div class="form-group">
-                <label>Nom de la section *</label>
+                <label>${t('audit.new_section')} *</label>
                 <input type="text" id="section-name" required placeholder="Ex: Propreté, Accueil, Sécurité...">
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Ajouter</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.save')}</button>
             </div>
         </form>
     `);
@@ -607,7 +607,7 @@ function auditSaveSection(e) {
 function auditAddQuestion(defaultSection = null) {
     const sections = [...new Set(auditQuestions.map(q => q.section).filter(s => s))];
     
-    openModal('Nouvelle question', `
+    openModal(t('audit.new_question'), `
         <form id="question-form" onsubmit="auditSaveQuestion(event)">
             <div class="form-row">
                 <div class="form-group">
@@ -634,13 +634,13 @@ function auditAddQuestion(defaultSection = null) {
             </div>
             
             <div class="form-section">
-                <h5>Type de réponse</h5>
+                <h5>${t('audit.conformity')}</h5>
                 <div class="response-type-selector">
                     <label class="response-type-option">
                         <input type="radio" name="question_type" value="rating" checked onchange="auditToggleQuestionOptions(this.value)">
                         <div class="response-type-card">
                             <i class="fas fa-star"></i>
-                            <span>Note</span>
+                            <span>${t('audit.conform')}</span>
                             <small>Échelle de notation</small>
                         </div>
                     </label>
@@ -648,8 +648,8 @@ function auditAddQuestion(defaultSection = null) {
                         <input type="radio" name="question_type" value="yes_no" onchange="auditToggleQuestionOptions(this.value)">
                         <div class="response-type-card">
                             <i class="fas fa-check-circle"></i>
-                            <span>Oui / Non</span>
-                            <small>+ Non applicable</small>
+                            <span>${t('audit.conform')} / ${t('audit.non_conform')}</span>
+                            <small>+ ${t('audit.na')}</small>
                         </div>
                     </label>
                     <label class="response-type-option">
@@ -664,7 +664,7 @@ function auditAddQuestion(defaultSection = null) {
                         <input type="radio" name="question_type" value="text" onchange="auditToggleQuestionOptions(this.value)">
                         <div class="response-type-card">
                             <i class="fas fa-comment-alt"></i>
-                            <span>Texte</span>
+                            <span>${t('audit.observation')}</span>
                             <small>Réponse libre</small>
                         </div>
                     </label>
@@ -724,10 +724,10 @@ function auditAddQuestion(defaultSection = null) {
             </div>
             
             <input type="hidden" name="edit_index" value="-1">
-            
+
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Ajouter</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.save')}</button>
             </div>
         </form>
         <script>
@@ -757,7 +757,7 @@ function auditEditQuestion(idx) {
     const isText = q.question_type === 'text';
     const isRating = !isYesNo && !isChoice && !isText;
     
-    openModal('Modifier la question', `
+    openModal(t('audit.edit_question'), `
         <form id="question-form" onsubmit="auditSaveQuestion(event)">
             <div class="form-row">
                 <div class="form-group">
@@ -784,13 +784,13 @@ function auditEditQuestion(idx) {
             </div>
             
             <div class="form-section">
-                <h5>Type de réponse</h5>
+                <h5>${t('audit.conformity')}</h5>
                 <div class="response-type-selector">
                     <label class="response-type-option">
                         <input type="radio" name="question_type" value="rating" ${isRating ? 'checked' : ''} onchange="auditToggleQuestionOptions(this.value)">
                         <div class="response-type-card">
                             <i class="fas fa-star"></i>
-                            <span>Note</span>
+                            <span>${t('audit.conform')}</span>
                             <small>Échelle de notation</small>
                         </div>
                     </label>
@@ -798,8 +798,8 @@ function auditEditQuestion(idx) {
                         <input type="radio" name="question_type" value="yes_no" ${isYesNo ? 'checked' : ''} onchange="auditToggleQuestionOptions(this.value)">
                         <div class="response-type-card">
                             <i class="fas fa-check-circle"></i>
-                            <span>Oui / Non</span>
-                            <small>+ Non applicable</small>
+                            <span>${t('audit.conform')} / ${t('audit.non_conform')}</span>
+                            <small>+ ${t('audit.na')}</small>
                         </div>
                     </label>
                     <label class="response-type-option">
@@ -814,7 +814,7 @@ function auditEditQuestion(idx) {
                         <input type="radio" name="question_type" value="text" ${isText ? 'checked' : ''} onchange="auditToggleQuestionOptions(this.value)">
                         <div class="response-type-card">
                             <i class="fas fa-comment-alt"></i>
-                            <span>Texte</span>
+                            <span>${t('audit.observation')}</span>
                             <small>Réponse libre</small>
                         </div>
                     </label>
@@ -874,10 +874,10 @@ function auditEditQuestion(idx) {
             </div>
             
             <input type="hidden" name="edit_index" value="${idx}">
-            
+
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Enregistrer</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.save')}</button>
             </div>
         </form>
         <script>
@@ -928,7 +928,7 @@ function auditSaveQuestion(e) {
 }
 
 function auditDeleteQuestion(idx) {
-    if (!confirm('Supprimer cette question ?')) return;
+    if (!confirm(t('audit.delete_question_confirm'))) return;
     auditQuestions.splice(idx, 1);
     document.getElementById('audit-questions-list').innerHTML = auditRenderQuestions();
 }
@@ -984,10 +984,10 @@ async function auditSaveGrid() {
     try {
         if (gridData.id) {
             await API.updateAuditGrid(gridData.id, gridData);
-            toast('Grille mise à jour', 'success');
+            toast(t('audit.grid_updated'), 'success');
         } else {
             await API.createAuditGrid(gridData);
-            toast('Grille créée', 'success');
+            toast(t('audit.grid_created'), 'success');
         }
         loadAudit(document.getElementById('page-content'));
     } catch (e) {
@@ -996,10 +996,10 @@ async function auditSaveGrid() {
 }
 
 async function auditDeleteGrid(gridId) {
-    if (!confirm('Supprimer cette grille et tous ses audits ?')) return;
+    if (!confirm(t('audit.delete_grid_confirm'))) return;
     try {
         await API.deleteAuditGrid(gridId);
-        toast('Grille supprimée', 'success');
+        toast(t('audit.grid_deleted'), 'success');
         auditShowGridsManager();
     } catch (e) {
         toast(e.message, 'error');
@@ -1009,7 +1009,7 @@ async function auditDeleteGrid(gridId) {
 async function auditDuplicateGrid(gridId) {
     try {
         await API.duplicateAuditGrid(gridId);
-        toast('Grille dupliquée', 'success');
+        toast(t('audit.grid_duplicated'), 'success');
         auditShowGridsManager();
     } catch (e) {
         toast(e.message, 'error');
@@ -1064,10 +1064,10 @@ async function auditShowExecute(auditId) {
                     <h3 class="card-title"><i class="fas fa-clipboard-check"></i> ${esc(audit.grid_name)}</h3>
                     <div class="header-controls">
                         <button class="btn btn-outline" onclick="auditSaveDraft(${auditId})">
-                            <i class="fas fa-save"></i> Sauvegarder brouillon
+                            <i class="fas fa-save"></i> ${t('common.save')}
                         </button>
                         <button class="btn btn-primary" onclick="auditComplete(${auditId})">
-                            <i class="fas fa-check"></i> Terminer l'audit
+                            <i class="fas fa-check"></i> ${t('audit.audit_saved')}
                         </button>
                     </div>
                 </div>
@@ -1101,14 +1101,14 @@ async function auditShowExecute(auditId) {
                                     
                                     ${q.comment_optional || q.comment_required ? `
                                         <div class="question-comment">
-                                            <label>${q.comment_required ? 'Commentaire *' : 'Commentaire'}</label>
+                                            <label>${q.comment_required ? t('audit.observation') + ' *' : t('audit.observation')}</label>
                                             <textarea name="comment_${q.id}" rows="2" ${q.comment_required ? 'required' : ''} placeholder="Ajoutez un commentaire...">${esc(answer.answer_text || '')}</textarea>
                                         </div>
                                     ` : ''}
                                     
                                     ${q.photo_optional || q.photo_required ? `
                                         <div class="question-photo">
-                                            <label>${q.photo_required ? 'Photo *' : 'Photo'}</label>
+                                            <label>${q.photo_required ? t('audit.proof') + ' *' : t('audit.proof')}</label>
                                             <div class="photo-upload-area">
                                                 <input type="file" name="photo_${q.id}" accept="image/*" onchange="auditPreviewPhoto(this, ${q.id})" ${q.photo_required && !answer.photo_url ? 'required' : ''}>
                                                 <div class="photo-preview" id="photo-preview-${q.id}">
@@ -1123,8 +1123,8 @@ async function auditShowExecute(auditId) {
                     `).join('')}
                     
                     <div class="audit-notes">
-                        <label>Notes générales (optionnel)</label>
-                        <textarea name="notes" rows="3" placeholder="Notes additionnelles sur cet audit...">${esc(audit.notes || '')}</textarea>
+                        <label>${t('audit.notes')}</label>
+                        <textarea name="notes" rows="3" placeholder="${t('audit.notes')}...">${esc(audit.notes || '')}</textarea>
                     </div>
                 </form>
             </div>
@@ -1140,7 +1140,7 @@ async function auditShowExecute(auditId) {
         `;
         
     } catch (e) {
-        container.innerHTML = `<div class="card"><p class="text-danger">Erreur: ${e.message}</p></div>`;
+        container.innerHTML = `<div class="card"><p class="text-danger">${t('common.error')}: ${e.message}</p></div>`;
     }
 }
 
@@ -1268,10 +1268,10 @@ async function auditSaveAnswers(auditId, status) {
         await API.saveAuditAnswers(uploadData);
         
         if (status === 'completed') {
-            toast('Audit terminé avec succès', 'success');
+            toast(t('audit.audit_saved'), 'success');
             loadAudit(document.getElementById('page-content'));
         } else {
-            toast('Brouillon sauvegardé', 'success');
+            toast(t('audit.audit_saved'), 'success');
         }
     } catch (e) {
         toast(e.message, 'error');
@@ -1302,12 +1302,12 @@ async function auditView(auditId) {
                 <div class="audit-view-header">
                     <div class="audit-view-info">
                         <p><strong>Hôtel:</strong> ${esc(audit.hotel_name)}</p>
-                        <p><strong>Réalisé par:</strong> ${esc(audit.performer_name)}</p>
-                        <p><strong>Date:</strong> ${formatDateFr(audit.completed_at || audit.created_at)}</p>
+                        <p><strong>${t('audit.conducted_by')}:</strong> ${esc(audit.performer_name)}</p>
+                        <p><strong>${t('audit.date')}:</strong> ${formatDateFr(audit.completed_at || audit.created_at)}</p>
                     </div>
                     <div class="audit-view-score ${auditScoreClass(audit.score_percentage)}">
                         <div class="score-value">${audit.score_percentage ? parseFloat(audit.score_percentage).toFixed(1) + '%' : '-'}</div>
-                        <div class="score-label">Score global</div>
+                        <div class="score-label">${t('audit.overall_score')}</div>
                     </div>
                 </div>
                 
@@ -1330,12 +1330,12 @@ async function auditView(auditId) {
                     </div>
                 `).join('')}
                 
-                ${audit.notes ? `<div class="audit-view-notes"><strong>Notes:</strong> ${esc(audit.notes)}</div>` : ''}
+                ${audit.notes ? `<div class="audit-view-notes"><strong>${t('audit.notes')}:</strong> ${esc(audit.notes)}</div>` : ''}
             </div>
             
             <div class="modal-footer">
-                <button class="btn btn-outline" onclick="closeModal()">Fermer</button>
-                <button class="btn btn-primary" onclick="auditExportPDF(${auditId})"><i class="fas fa-file-pdf"></i> Exporter PDF</button>
+                <button class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button class="btn btn-primary" onclick="auditExportPDF(${auditId})"><i class="fas fa-file-pdf"></i> PDF</button>
             </div>
         `, 'modal-xl');
         
@@ -1429,16 +1429,16 @@ function auditCreatePDF(audit, sections, answersMap) {
         
         <div class="info-grid">
             <div class="info-item">
-                <div class="label">Réalisé par</div>
+                <div class="label">${t('audit.conducted_by')}</div>
                 <div class="value">${esc(audit.performer_name)}</div>
             </div>
             <div class="info-item">
-                <div class="label">Date</div>
+                <div class="label">${t('audit.date')}</div>
                 <div class="value">${formatDateFr(audit.completed_at || audit.created_at)}</div>
             </div>
             <div class="score-box">
                 <div class="score">${audit.score_percentage ? parseFloat(audit.score_percentage).toFixed(1) + '%' : '-'}</div>
-                <div class="label">Score global</div>
+                <div class="label">${t('audit.overall_score')}</div>
             </div>
         </div>
     </div>
@@ -1470,7 +1470,7 @@ function auditCreatePDF(audit, sections, answersMap) {
     
     ${audit.notes ? `
         <div class="section">
-            <h3>Notes générales</h3>
+            <h3>${t('audit.notes')}</h3>
             <p style="padding: 15px;">${esc(audit.notes)}</p>
         </div>
     ` : ''}

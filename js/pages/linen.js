@@ -48,12 +48,12 @@ async function loadLinen(container) {
         container.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-tshirt"></i> Blanchisserie</h3>
+                    <h3 class="card-title"><i class="fas fa-tshirt"></i> ${t('linen.title')}</h3>
                     <div class="header-controls">
                         <select id="bl-hotel" onchange="blChangeHotel(this.value)">
                             ${blHotels.map(h => `<option value="${h.id}" ${h.id == blCurrentHotel ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}
                         </select>
-                        <button class="btn btn-primary" onclick="blNewEntryModal()"><i class="fas fa-plus"></i> Nouvelle saisie</button>
+                        <button class="btn btn-primary" onclick="blNewEntryModal()"><i class="fas fa-plus"></i> ${t('linen.new_entry')}</button>
                     </div>
                 </div>
 
@@ -64,18 +64,18 @@ async function loadLinen(container) {
                         <input type="date" id="bl-start" value="${blPeriodStart}" onchange="blChangePeriod()">
                         <span>au</span>
                         <input type="date" id="bl-end" value="${blPeriodEnd}" onchange="blChangePeriod()">
-                        <button class="btn btn-outline" onclick="blExportPDF()" title="Exporter en PDF"><i class="fas fa-file-pdf"></i> PDF</button>
+                        <button class="btn btn-outline" onclick="blExportPDF()" title="${t('linen.export')}"><i class="fas fa-file-pdf"></i> PDF</button>
                     </div>
 
                     <div class="bl-summary-table">
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Type de linge</th>
-                                    <th>Envoyé</th>
-                                    <th>Reçu</th>
-                                    <th>Différence</th>
-                                    <th>Stock actuel</th>
+                                    <th>${t('linen.title')}</th>
+                                    <th>${t('linen.collection')}</th>
+                                    <th>${t('linen.delivery')}</th>
+                                    <th>${t('linen.total')}</th>
+                                    <th>${t('linen.stock')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -100,13 +100,13 @@ async function loadLinen(container) {
 
 function blRenderSummaryRows(config, summary) {
     const linenTypes = [];
-    if (config.petit_draps) linenTypes.push({ key: 'petit_draps', label: 'Petits draps' });
-    if (config.petite_housse) linenTypes.push({ key: 'petite_housse', label: 'Petites housses' });
-    if (config.grand_draps) linenTypes.push({ key: 'grand_draps', label: 'Grands draps' });
-    if (config.grande_housse) linenTypes.push({ key: 'grande_housse', label: 'Grandes housses' });
+    if (config.petit_draps) linenTypes.push({ key: 'petit_draps', label: t('linen.small_sheets') });
+    if (config.petite_housse) linenTypes.push({ key: 'petite_housse', label: t('linen.small_covers') });
+    if (config.grand_draps) linenTypes.push({ key: 'grand_draps', label: t('linen.large_sheets') });
+    if (config.grande_housse) linenTypes.push({ key: 'grande_housse', label: t('linen.large_covers') });
 
     if (!linenTypes.length) {
-        return `<tr><td colspan="5" class="text-center text-muted">Aucun type de linge configuré</td></tr>`;
+        return `<tr><td colspan="5" class="text-center text-muted">${t('linen.no_entries')}</td></tr>`;
     }
 
     return linenTypes.map(t => {
@@ -126,7 +126,7 @@ function blRenderSummaryRows(config, summary) {
 
 function blRenderTransactions(transactions, config) {
     if (!transactions.length) {
-        return '<div class="empty-state"><i class="fas fa-tshirt"></i><h3>Aucun mouvement</h3></div>';
+        return '<div class="empty-state"><i class="fas fa-tshirt"></i><h3>' + t('linen.no_entries') + '</h3></div>';
     }
     
     const canEdit = hasPermission('linen.manage');
@@ -177,23 +177,23 @@ function blRenderTransactions(transactions, config) {
 
 function blFormatDetailsArray(t, config) {
     const details = [];
-    if (config.petit_draps && t.petit_draps > 0) details.push({ label: 'Petits draps', value: t.petit_draps });
-    if (config.petite_housse && t.petite_housse > 0) details.push({ label: 'Petites housses', value: t.petite_housse });
-    if (config.grand_draps && t.grand_draps > 0) details.push({ label: 'Grands draps', value: t.grand_draps });
-    if (config.grande_housse && t.grande_housse > 0) details.push({ label: 'Grandes housses', value: t.grande_housse });
+    if (config.petit_draps && t.petit_draps > 0) details.push({ label: window.t('linen.small_sheets'), value: t.petit_draps });
+    if (config.petite_housse && t.petite_housse > 0) details.push({ label: window.t('linen.small_covers'), value: t.petite_housse });
+    if (config.grand_draps && t.grand_draps > 0) details.push({ label: window.t('linen.large_sheets'), value: t.grand_draps });
+    if (config.grande_housse && t.grande_housse > 0) details.push({ label: window.t('linen.large_covers'), value: t.grande_housse });
     return details;
 }
 
 function blTypeLabel(type) {
-    return { collecte: 'Envoyé', reception: 'Reçu', stock: 'Stock' }[type] || type;
+    return { collecte: t('linen.collection'), reception: t('linen.delivery'), stock: t('linen.stock') }[type] || type;
 }
 
 function blFormatDetails(t, config) {
     const parts = [];
-    if (config.petit_draps && t.petit_draps > 0) parts.push(`Petits draps: ${t.petit_draps}`);
-    if (config.petite_housse && t.petite_housse > 0) parts.push(`Petites housses: ${t.petite_housse}`);
-    if (config.grand_draps && t.grand_draps > 0) parts.push(`Grands draps: ${t.grand_draps}`);
-    if (config.grande_housse && t.grande_housse > 0) parts.push(`Grandes housses: ${t.grande_housse}`);
+    if (config.petit_draps && t.petit_draps > 0) parts.push(`${window.t('linen.small_sheets')}: ${t.petit_draps}`);
+    if (config.petite_housse && t.petite_housse > 0) parts.push(`${window.t('linen.small_covers')}: ${t.petite_housse}`);
+    if (config.grand_draps && t.grand_draps > 0) parts.push(`${window.t('linen.large_sheets')}: ${t.grand_draps}`);
+    if (config.grande_housse && t.grande_housse > 0) parts.push(`${window.t('linen.large_covers')}: ${t.grande_housse}`);
     return parts.join(', ') || '-';
 }
 
@@ -214,29 +214,29 @@ async function blNewEntryModal() {
         const config = configRes.config || { petit_draps: 1, petite_housse: 1, grand_draps: 1, grande_housse: 1 };
 
         const linenTypes = [];
-        if (config.petit_draps) linenTypes.push({ key: 'petit_draps', label: 'Petits draps' });
-        if (config.petite_housse) linenTypes.push({ key: 'petite_housse', label: 'Petites housses' });
-        if (config.grand_draps) linenTypes.push({ key: 'grand_draps', label: 'Grands draps' });
-        if (config.grande_housse) linenTypes.push({ key: 'grande_housse', label: 'Grandes housses' });
+        if (config.petit_draps) linenTypes.push({ key: 'petit_draps', label: t('linen.small_sheets') });
+        if (config.petite_housse) linenTypes.push({ key: 'petite_housse', label: t('linen.small_covers') });
+        if (config.grand_draps) linenTypes.push({ key: 'grand_draps', label: t('linen.large_sheets') });
+        if (config.grande_housse) linenTypes.push({ key: 'grande_housse', label: t('linen.large_covers') });
 
         if (!linenTypes.length) {
-            toast('Aucun type de linge configuré pour cet hôtel', 'warning');
+            toast(t('linen.no_entries'), 'warning');
             return;
         }
 
         const today = new Date().toISOString().split('T')[0];
         const hotelName = blHotels.find(h => h.id == blCurrentHotel)?.name || '';
 
-        openModal('Nouvelle saisie', `
+        openModal(t('linen.new_entry'), `
             <form id="bl-form" onsubmit="blCreateEntry(event)">
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Hôtel</label>
+                        <label>${t('linen.hotel')}</label>
                         <input type="text" value="${esc(hotelName)}" disabled>
                         <input type="hidden" name="hotel_id" value="${blCurrentHotel}">
                     </div>
                     <div class="form-group">
-                        <label>Date *</label>
+                        <label>${t('linen.date')} *</label>
                         <input type="date" name="transaction_date" value="${today}" required>
                     </div>
                 </div>
@@ -278,13 +278,13 @@ async function blNewEntryModal() {
                 </div>
 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                    <button type="submit" class="btn btn-primary">${t('common.save')}</button>
                 </div>
             </form>
         `);
-    } catch (e) { 
-        toast(e.message, 'error'); 
+    } catch (e) {
+        toast(e.message, 'error');
     }
 }
 
@@ -295,7 +295,7 @@ async function blCreateEntry(e) {
 
     try {
         await API.createLinenTransaction(formData);
-        toast('Mouvement enregistré', 'success');
+        toast(t('linen.saved'), 'success');
         closeModal();
         loadLinen(document.getElementById('page-content'));
     } catch (e) { 
@@ -308,7 +308,7 @@ async function blExportPDF() {
     const startDate = document.getElementById('bl-start').value;
     const endDate = document.getElementById('bl-end').value;
     
-    toast('Génération du rapport...', 'info');
+    toast(t('linen.export') + '...', 'info');
     
     try {
         // Charger les données
@@ -336,10 +336,10 @@ function blCreatePDF(transactions, summary, config, hotelName, startDate, endDat
     
     // Préparer les types de linge actifs
     const linenTypes = [];
-    if (config.petit_draps) linenTypes.push({ key: 'petit_draps', label: 'Petits draps' });
-    if (config.petite_housse) linenTypes.push({ key: 'petite_housse', label: 'Petites housses' });
-    if (config.grand_draps) linenTypes.push({ key: 'grand_draps', label: 'Grands draps' });
-    if (config.grande_housse) linenTypes.push({ key: 'grande_housse', label: 'Grandes housses' });
+    if (config.petit_draps) linenTypes.push({ key: 'petit_draps', label: t('linen.small_sheets') });
+    if (config.petite_housse) linenTypes.push({ key: 'petite_housse', label: t('linen.small_covers') });
+    if (config.grand_draps) linenTypes.push({ key: 'grand_draps', label: t('linen.large_sheets') });
+    if (config.grande_housse) linenTypes.push({ key: 'grande_housse', label: t('linen.large_covers') });
     
     // Calculer totaux
     let totalSent = 0, totalReceived = 0;
@@ -463,10 +463,10 @@ function blCreatePDF(transactions, summary, config, hotelName, startDate, endDat
                     const badgeClass = t.transaction_type === 'collecte' ? 'badge-warning' : (t.transaction_type === 'reception' ? 'badge-success' : 'badge-primary');
                     
                     const details = [];
-                    if (config.petit_draps && t.petit_draps > 0) details.push('Petits draps: ' + t.petit_draps);
-                    if (config.petite_housse && t.petite_housse > 0) details.push('Petites housses: ' + t.petite_housse);
-                    if (config.grand_draps && t.grand_draps > 0) details.push('Grands draps: ' + t.grand_draps);
-                    if (config.grande_housse && t.grande_housse > 0) details.push('Grandes housses: ' + t.grande_housse);
+                    if (config.petit_draps && t.petit_draps > 0) details.push(window.t('linen.small_sheets') + ': ' + t.petit_draps);
+                    if (config.petite_housse && t.petite_housse > 0) details.push(window.t('linen.small_covers') + ': ' + t.petite_housse);
+                    if (config.grand_draps && t.grand_draps > 0) details.push(window.t('linen.large_sheets') + ': ' + t.grand_draps);
+                    if (config.grande_housse && t.grande_housse > 0) details.push(window.t('linen.large_covers') + ': ' + t.grande_housse);
                     
                     return `
                     <tr>
@@ -500,7 +500,7 @@ async function blEditEntry(id) {
         const res = await API.get(`linen/transactions/${id}`);
         
         if (!res.transaction) {
-            toast('Transaction non trouvée', 'error');
+            toast(window.t('common.error'), 'error');
             console.error('API response:', res);
             return;
         }
@@ -512,20 +512,20 @@ async function blEditEntry(id) {
         const config = configRes.config || { petit_draps: 1, petite_housse: 1, grand_draps: 1, grande_housse: 1 };
         
         const linenTypes = [];
-        if (config.petit_draps) linenTypes.push({ key: 'petit_draps', label: 'Petits draps', value: t.petit_draps || 0 });
-        if (config.petite_housse) linenTypes.push({ key: 'petite_housse', label: 'Petites housses', value: t.petite_housse || 0 });
-        if (config.grand_draps) linenTypes.push({ key: 'grand_draps', label: 'Grands draps', value: t.grand_draps || 0 });
-        if (config.grande_housse) linenTypes.push({ key: 'grande_housse', label: 'Grandes housses', value: t.grande_housse || 0 });
+        if (config.petit_draps) linenTypes.push({ key: 'petit_draps', label: window.t('linen.small_sheets'), value: t.petit_draps || 0 });
+        if (config.petite_housse) linenTypes.push({ key: 'petite_housse', label: window.t('linen.small_covers'), value: t.petite_housse || 0 });
+        if (config.grand_draps) linenTypes.push({ key: 'grand_draps', label: window.t('linen.large_sheets'), value: t.grand_draps || 0 });
+        if (config.grande_housse) linenTypes.push({ key: 'grande_housse', label: window.t('linen.large_covers'), value: t.grande_housse || 0 });
         
-        openModal('Modifier la saisie', `
+        openModal(window.t('common.edit'), `
             <form onsubmit="blUpdateEntry(event, ${id})">
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Hôtel</label>
+                        <label>${window.t('linen.hotel')}</label>
                         <input type="text" value="${esc(t.hotel_name)}" disabled>
                     </div>
                     <div class="form-group">
-                        <label>Date *</label>
+                        <label>${window.t('linen.date')} *</label>
                         <input type="date" name="transaction_date" value="${t.transaction_date}" required>
                     </div>
                 </div>
@@ -568,12 +568,12 @@ async function blEditEntry(id) {
                 ` : ''}
                 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    <button type="button" class="btn btn-outline" onclick="closeModal()">${window.t('common.cancel')}</button>
+                    <button type="submit" class="btn btn-primary">${window.t('common.save')}</button>
                 </div>
             </form>
         `);
-        
+
         // Toggle buttons
         document.querySelectorAll('.btn-toggle').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -594,7 +594,7 @@ async function blUpdateEntry(e, id) {
     
     try {
         await API.put(`linen/transactions/${id}`, data);
-        toast('Saisie modifiée', 'success');
+        toast(t('linen.saved'), 'success');
         closeModal();
         loadLinen(document.getElementById('page-content'));
     } catch (error) {
@@ -603,11 +603,11 @@ async function blUpdateEntry(e, id) {
 }
 
 async function blDeleteEntry(id) {
-    if (!confirm('Voulez-vous vraiment supprimer cette saisie ?')) return;
+    if (!confirm(t('common.delete') + ' ?')) return;
     
     try {
         await API.delete(`linen/transactions/${id}`);
-        toast('Saisie supprimée', 'success');
+        toast(t('linen.deleted'), 'success');
         loadLinen(document.getElementById('page-content'));
     } catch (error) {
         toast(error.message, 'error');

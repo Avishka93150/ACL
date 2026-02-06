@@ -41,16 +41,16 @@ async function loadMaintenance(container) {
         container.innerHTML = `
             <!-- KPI Principaux -->
             <div class="kpi-grid">
-                <div class="kpi-card"><div class="kpi-icon orange"><i class="fas fa-exclamation-circle"></i></div><div><div class="kpi-value">${stats.open || 0}</div><div class="kpi-label">Ouverts</div></div></div>
-                <div class="kpi-card"><div class="kpi-icon blue"><i class="fas fa-wrench"></i></div><div><div class="kpi-value">${stats.in_progress || 0}</div><div class="kpi-label">En cours</div></div></div>
-                <div class="kpi-card"><div class="kpi-icon green"><i class="fas fa-check-circle"></i></div><div><div class="kpi-value">${stats.resolved || 0}</div><div class="kpi-label">Résolus</div></div></div>
-                <div class="kpi-card"><div class="kpi-icon red"><i class="fas fa-fire"></i></div><div><div class="kpi-value">${stats.critical || 0}</div><div class="kpi-label">Critiques</div></div></div>
+                <div class="kpi-card"><div class="kpi-icon orange"><i class="fas fa-exclamation-circle"></i></div><div><div class="kpi-value">${stats.open || 0}</div><div class="kpi-label">${t('maintenance.open')}</div></div></div>
+                <div class="kpi-card"><div class="kpi-icon blue"><i class="fas fa-wrench"></i></div><div><div class="kpi-value">${stats.in_progress || 0}</div><div class="kpi-label">${t('maintenance.in_progress')}</div></div></div>
+                <div class="kpi-card"><div class="kpi-icon green"><i class="fas fa-check-circle"></i></div><div><div class="kpi-value">${stats.resolved || 0}</div><div class="kpi-label">${t('maintenance.resolved')}</div></div></div>
+                <div class="kpi-card"><div class="kpi-icon red"><i class="fas fa-fire"></i></div><div><div class="kpi-value">${stats.critical || 0}</div><div class="kpi-label">${t('maintenance.critical')}</div></div></div>
             </div>
             
             <!-- KPI Chambres bloquées du mois -->
             <div class="card blocked-rooms-summary">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-ban"></i> Chambres bloquées - ${new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</h3>
+                    <h3 class="card-title"><i class="fas fa-ban"></i> ${t('maintenance.blocked_rooms')} - ${new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</h3>
                 </div>
                 <div class="blocked-stats-grid">
                     <div class="blocked-stat-card">
@@ -78,7 +78,7 @@ async function loadMaintenance(container) {
                         <div class="blocked-stat-icon green"><i class="fas fa-chart-line"></i></div>
                         <div class="blocked-stat-info">
                             <span class="blocked-stat-value">${availabilityPct}%</span>
-                            <span class="blocked-stat-label">Disponibilité</span>
+                            <span class="blocked-stat-label">${t('maintenance.availability')}</span>
                         </div>
                     </div>
                 </div>
@@ -94,25 +94,25 @@ async function loadMaintenance(container) {
 
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-tools"></i> Tickets de maintenance</h3>
+                    <h3 class="card-title"><i class="fas fa-tools"></i> ${t('maintenance.title')}</h3>
                     <div class="header-controls">
                         <select id="mt-hotel" onchange="mtChangeHotel(this.value)">
-                            <option value="" ${!mtCurrentHotel ? 'selected' : ''}>🏨 Tous les hôtels</option>
+                            <option value="" ${!mtCurrentHotel ? 'selected' : ''}>🏨 ${t('maintenance.all_hotels')}</option>
                             ${mtHotels.map(h => `<option value="${h.id}" ${h.id == mtCurrentHotel ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}
                         </select>
-                        ${hasPermission('maintenance.create') ? '<button class="btn btn-primary" onclick="mtNewTicketModal()"><i class="fas fa-plus"></i> Nouveau ticket</button>' : ''}
+                        ${hasPermission('maintenance.create') ? '<button class="btn btn-primary" onclick="mtNewTicketModal()"><i class="fas fa-plus"></i> ' + t('maintenance.new_ticket') + '</button>' : ''}
                     </div>
                 </div>
 
                 <div class="form-row mb-20">
                     <select id="mt-filter-status" onchange="mtReloadTickets()">
-                        <option value="">Tous les statuts</option>
-                        <option value="open">Ouverts</option>
-                        <option value="in_progress">En cours</option>
-                        <option value="resolved">Résolus</option>
+                        <option value="">${t('maintenance.all_statuses')}</option>
+                        <option value="open">${t('maintenance.open')}</option>
+                        <option value="in_progress">${t('maintenance.in_progress')}</option>
+                        <option value="resolved">${t('maintenance.resolved')}</option>
                     </select>
                     <select id="mt-filter-priority" onchange="mtReloadTickets()">
-                        <option value="">Toutes priorités</option>
+                        <option value="">${t('maintenance.all_priorities')}</option>
                         <option value="critical">Critique</option>
                         <option value="high">Haute</option>
                         <option value="medium">Moyenne</option>
@@ -126,7 +126,7 @@ async function loadMaintenance(container) {
             <!-- Section Analyse des chambres bloquées -->
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-chart-bar"></i> Analyse des chambres bloquées</h3>
+                    <h3 class="card-title"><i class="fas fa-chart-bar"></i> ${t('maintenance.blocked_rooms')}</h3>
                     <button class="btn btn-outline" onclick="mtExportBlockedRoomsPDF()">
                         <i class="fas fa-file-pdf"></i> Exporter PDF
                     </button>
@@ -136,7 +136,7 @@ async function loadMaintenance(container) {
                         <div class="filter-group">
                             <label><i class="fas fa-building"></i> Hôtel</label>
                             <select id="blocked-hotel" onchange="mtLoadBlockedRooms()">
-                                <option value="">Tous les hôtels</option>
+                                <option value="">${t('maintenance.all_hotels')}</option>
                                 ${mtHotels.map(h => `<option value="${h.id}">${esc(h.name)}</option>`).join('')}
                             </select>
                         </div>
@@ -175,7 +175,7 @@ async function loadMaintenance(container) {
 }
 
 function mtRenderTickets(tickets) {
-    if (!tickets.length) return '<div class="empty-state"><i class="fas fa-tools"></i><h3>Aucun ticket</h3></div>';
+    if (!tickets.length) return '<div class="empty-state"><i class="fas fa-tools"></i><h3>' + t('maintenance.no_tickets') + '</h3></div>';
 
     // Afficher la colonne Hôtel si "Tous les hôtels" est sélectionné
     const showHotelColumn = !mtCurrentHotel;
@@ -245,13 +245,13 @@ async function mtReloadTickets(page) {
             html += renderPagination(res.pagination, (p) => mtReloadTickets(p));
         }
         document.getElementById('mt-tickets-list').innerHTML = html;
-    } catch (e) { toast('Erreur chargement tickets', 'error'); }
+    } catch (e) { toast(t('common.error'), 'error'); }
 }
 
 function mtNewTicketModal() {
     const defaultHotel = mtCurrentHotel || (mtHotels.length > 0 ? mtHotels[0].id : null);
     
-    openModal('Nouveau ticket', `
+    openModal(t('maintenance.new_ticket'), `
         <form onsubmit="mtCreateTicket(event)" enctype="multipart/form-data" id="new-ticket-form">
             <div class="form-row">
                 <div class="form-group">
@@ -261,7 +261,7 @@ function mtNewTicketModal() {
                     </select>
                 </div>
                 <div class="form-group">
-                    <label><i class="fas fa-door-open"></i> Localisation *</label>
+                    <label><i class="fas fa-door-open"></i> ${t('maintenance.location')} *</label>
                     <select name="room_number" id="mt-room-select" required onchange="mtToggleRoomBlocked(this.value)">
                         <option value="">Chargement...</option>
                     </select>
@@ -304,7 +304,7 @@ function mtNewTicketModal() {
                 <textarea name="description" rows="3" required placeholder="Décrivez le problème en détail..."></textarea>
             </div>
             <div class="form-group">
-                <label><i class="fas fa-camera"></i> Photo (preuve du problème)</label>
+                <label><i class="fas fa-camera"></i> ${t('maintenance.photo')}</label>
                 <div class="photo-upload-zone" onclick="document.getElementById('mt-photo-input').click()">
                     <div class="photo-upload-content" id="mt-photo-content">
                         <i class="fas fa-cloud-upload-alt"></i>
@@ -321,8 +321,8 @@ function mtNewTicketModal() {
                 <input type="file" id="mt-photo-input" name="photo" accept="image/*" style="display: none" onchange="mtPreviewPhoto(this)">
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Créer le ticket</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> ${t('maintenance.new_ticket')}</button>
             </div>
         </form>
     `);
@@ -444,7 +444,7 @@ async function mtCreateTicket(e) {
 
     try {
         await API.createTicketWithPhoto(formData);
-        toast('Ticket créé', 'success');
+        toast(t('maintenance.ticket_created'), 'success');
         closeModal();
         loadMaintenance(document.getElementById('page-content'));
     } catch (e) { toast(e.message, 'error'); }
@@ -465,22 +465,22 @@ async function mtViewTicket(id) {
         const daysInProgress = t.days_in_progress || 0;
 
         // Construire le HTML de la timeline
-        let timelineHtml = '<div class="timeline-item timeline-blue"><div class="timeline-icon"><i class="fas fa-plus-circle"></i></div><div class="timeline-content"><div class="timeline-header"><strong>Ticket créé</strong><span class="timeline-meta">par ' + esc(t.reporter_name || 'Inconnu') + '</span><span class="timeline-date">' + formatDateFull(t.created_at) + '</span></div></div></div>';
+        let timelineHtml = '<div class="timeline-item timeline-blue"><div class="timeline-icon"><i class="fas fa-plus-circle"></i></div><div class="timeline-content"><div class="timeline-header"><strong>' + window.t('maintenance.ticket_created') + '</strong><span class="timeline-meta">par ' + esc(t.reporter_name || 'Inconnu') + '</span><span class="timeline-date">' + formatDateFull(t.created_at) + '</span></div></div></div>';
         
         if (comments && comments.length > 0) {
             comments.forEach(function(c) {
                 let icon = 'fa-comment';
                 let color = 'gray';
-                let title = 'Commentaire';
-                
+                let title = window.t('maintenance.comment');
+
                 if (c.comment_type === 'assignment') {
                     icon = 'fa-hand-paper';
                     color = 'orange';
-                    title = 'Prise en charge';
+                    title = window.t('maintenance.take_charge');
                 } else if (c.comment_type === 'resolution') {
                     icon = 'fa-check-circle';
                     color = 'green';
-                    title = 'Résolution';
+                    title = window.t('maintenance.resolve');
                 }
                 
                 timelineHtml += '<div class="timeline-item timeline-' + color + '"><div class="timeline-icon"><i class="fas ' + icon + '"></i></div><div class="timeline-content"><div class="timeline-header"><strong>' + title + '</strong><span class="timeline-meta">par ' + esc(c.user_name || 'Inconnu') + '</span><span class="timeline-date">' + formatDateFull(c.created_at) + '</span></div>' + (c.comment ? '<div class="timeline-body">' + esc(c.comment) + '</div>' : '') + '</div></div>';
@@ -490,7 +490,7 @@ async function mtViewTicket(id) {
         // Construire le formulaire de commentaire
         let commentFormHtml = '';
         if (canComment && t.status !== 'resolved') {
-            commentFormHtml = '<form onsubmit="mtAddComment(event, ' + t.id + ')" class="comment-form"><textarea name="comment" rows="2" placeholder="Écrire un commentaire de suivi..." required></textarea><button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-paper-plane"></i> Envoyer</button></form>';
+            commentFormHtml = '<form onsubmit="mtAddComment(event, ' + t.id + ')" class="comment-form"><textarea name="comment" rows="2" placeholder="' + window.t('maintenance.comment') + '..." required></textarea><button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-paper-plane"></i> ' + window.t('common.save') + '</button></form>';
         } else if (t.status === 'resolved') {
             commentFormHtml = '<p class="text-muted" style="margin-top:10px; font-size:13px;">Ce ticket est résolu.</p>';
         } else if (!canComment) {
@@ -500,10 +500,10 @@ async function mtViewTicket(id) {
         // Boutons d'action
         let actionButtons = '';
         if (canManage && t.status === 'open') {
-            actionButtons = '<button class="btn btn-primary" onclick="mtAssignTicket(' + t.id + '); closeModal();">Prendre en charge</button>';
+            actionButtons = '<button class="btn btn-primary" onclick="mtAssignTicket(' + t.id + '); closeModal();">' + window.t('maintenance.take_charge') + '</button>';
         }
         if (canManage && t.status === 'in_progress') {
-            actionButtons = '<button class="btn btn-success" onclick="closeModal(); mtResolveModal(' + t.id + ');">Résoudre</button>';
+            actionButtons = '<button class="btn btn-success" onclick="closeModal(); mtResolveModal(' + t.id + ');">' + window.t('maintenance.resolve') + '</button>';
         }
 
         const modalContent = `
@@ -518,10 +518,10 @@ async function mtViewTicket(id) {
 
                 <div class="ticket-info-grid">
                     <div class="ticket-info-item"><i class="fas fa-hotel"></i><span>Hôtel:</span> ${esc(t.hotel_name || '-')}</div>
-                    <div class="ticket-info-item"><i class="fas fa-door-open"></i><span>Chambre:</span> ${t.room_number || 'Parties communes'}</div>
+                    <div class="ticket-info-item"><i class="fas fa-door-open"></i><span>${window.t('maintenance.room')}:</span> ${t.room_number || 'Parties communes'}</div>
                     <div class="ticket-info-item"><i class="fas fa-tag"></i><span>Catégorie:</span> ${LABELS.maintenance_cat[t.category] || t.category}</div>
-                    <div class="ticket-info-item"><i class="fas fa-user"></i><span>Créé par:</span> ${esc(t.reporter_name || '-')}</div>
-                    <div class="ticket-info-item"><i class="fas fa-calendar"></i><span>Date:</span> ${formatDateFull(t.created_at)}</div>
+                    <div class="ticket-info-item"><i class="fas fa-user"></i><span>${window.t('maintenance.created_by')}:</span> ${esc(t.reporter_name || '-')}</div>
+                    <div class="ticket-info-item"><i class="fas fa-calendar"></i><span>${window.t('maintenance.created_at')}:</span> ${formatDateFull(t.created_at)}</div>
                     ${t.assigned_to_name ? '<div class="ticket-info-item"><i class="fas fa-user-cog"></i><span>Assigné à:</span> ' + esc(t.assigned_to_name) + '</div>' : ''}
                 </div>
 
@@ -531,7 +531,7 @@ async function mtViewTicket(id) {
                 </div>
 
                 <div class="ticket-photos-section">
-                    <strong><i class="fas fa-camera"></i> Photos jointes:</strong>
+                    <strong><i class="fas fa-camera"></i> ${window.t('maintenance.photo')}:</strong>
                     ${t.photo_url ? `
                         <div class="ticket-photos-gallery">
                             <div class="ticket-photo-item" onclick="openPhotoModal('${t.photo_url}')">
@@ -547,20 +547,20 @@ async function mtViewTicket(id) {
                 ${t.resolution_notes ? '<div class="ticket-resolution"><strong><i class="fas fa-check-circle"></i> Résolution:</strong><p>' + esc(t.resolution_notes) + '</p></div>' : ''}
 
                 <div class="ticket-timeline">
-                    <strong><i class="fas fa-history"></i> Historique & Commentaires:</strong>
+                    <strong><i class="fas fa-history"></i> ${window.t('maintenance.history')}:</strong>
                     <div class="timeline-list">
                         ${timelineHtml}
                     </div>
                 </div>
                 
                 <div class="ticket-add-comment">
-                    <strong><i class="fas fa-comment"></i> Ajouter un commentaire:</strong>
+                    <strong><i class="fas fa-comment"></i> ${window.t('maintenance.add_comment')}:</strong>
                     ${commentFormHtml}
                 </div>
             </div>
 
             <div class="modal-footer">
-                <button class="btn btn-outline" onclick="closeModal()">Fermer</button>
+                <button class="btn btn-outline" onclick="closeModal()">${window.t('common.close')}</button>
                 ${actionButtons}
             </div>
         `;
@@ -580,7 +580,7 @@ function mtRenderTimeline(ticket, comments) {
         type: 'creation',
         icon: 'fa-plus-circle',
         color: 'blue',
-        title: 'Ticket créé',
+        title: t('maintenance.ticket_created'),
         user: ticket.reporter_name,
         date: ticket.created_at,
         content: null
@@ -593,22 +593,22 @@ function mtRenderTimeline(ticket, comments) {
             case 'assignment':
                 icon = 'fa-hand-paper';
                 color = 'orange';
-                title = 'Prise en charge';
+                title = t('maintenance.take_charge');
                 break;
             case 'resolution':
                 icon = 'fa-check-circle';
                 color = 'green';
-                title = 'Résolution';
+                title = t('maintenance.resolve');
                 break;
             case 'status_change':
                 icon = 'fa-exchange-alt';
                 color = 'purple';
-                title = 'Changement de statut';
+                title = t('maintenance.history');
                 break;
             default:
                 icon = 'fa-comment';
                 color = 'gray';
-                title = 'Commentaire';
+                title = t('maintenance.comment');
         }
         
         timeline.push({
@@ -654,7 +654,7 @@ async function mtAddComment(e, ticketId) {
     
     try {
         await API.addTicketComment(ticketId, comment);
-        toast('Commentaire ajouté', 'success');
+        toast(t('maintenance.add_comment'), 'success');
         
         // Recharger le ticket pour voir le nouveau commentaire
         mtViewTicket(ticketId);
@@ -670,21 +670,21 @@ async function mtAssignTicket(id) {
     }
     try {
         await API.assignTicket(id);
-        toast('Ticket pris en charge', 'success');
+        toast(t('maintenance.take_charge'), 'success');
         mtReloadTickets();
     } catch (e) { toast(e.message, 'error'); }
 }
 
 function mtResolveModal(id) {
-    openModal('Résoudre le ticket', `
+    openModal(t('maintenance.resolve'), `
         <form onsubmit="mtResolveTicket(event, ${id})">
             <div class="form-group">
                 <label>Notes de résolution *</label>
                 <textarea name="notes" rows="4" required placeholder="Décrivez la solution apportée..."></textarea>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-success">Marquer résolu</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-success">${t('maintenance.resolve')}</button>
             </div>
         </form>
     `);
@@ -695,7 +695,7 @@ async function mtResolveTicket(e, id) {
     const notes = new FormData(e.target).get('notes');
     try {
         await API.resolveTicket(id, notes);
-        toast('Ticket résolu', 'success');
+        toast(t('maintenance.resolve'), 'success');
         closeModal();
         loadMaintenance(document.getElementById('page-content'));
     } catch (e) { toast(e.message, 'error'); }
@@ -773,8 +773,8 @@ async function mtLoadBlockedRooms() {
             container.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-door-open"></i>
-                    <h3>Aucune chambre bloquée</h3>
-                    <p class="text-muted">Aucune chambre n'a été bloquée sur cette période</p>
+                    <h3>${t('maintenance.no_tickets')}</h3>
+                    <p class="text-muted">${t('maintenance.no_tickets_desc')}</p>
                 </div>
             `;
             return;
@@ -784,14 +784,14 @@ async function mtLoadBlockedRooms() {
             <table class="table blocked-rooms-table">
                 <thead>
                     <tr>
-                        <th>Hôtel</th>
-                        <th>Chambre</th>
+                        <th>${t('maintenance.hotel')}</th>
+                        <th>${t('maintenance.room')}</th>
                         <th>Ticket</th>
-                        <th>Catégorie</th>
-                        <th>Raison</th>
-                        <th>Bloquée le</th>
-                        <th>Durée</th>
-                        <th>Statut</th>
+                        <th>${t('maintenance.category')}</th>
+                        <th>${t('maintenance.description')}</th>
+                        <th>${t('maintenance.created_at')}</th>
+                        <th>${t('maintenance.impact')}</th>
+                        <th>${t('maintenance.filter_status')}</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -883,13 +883,13 @@ async function mtExportBlockedRoomsPDF() {
 
 // Supprimer un ticket de maintenance (admin et groupe_manager uniquement)
 async function mtDeleteTicket(id) {
-    if (!confirm(`Êtes-vous sûr de vouloir supprimer le ticket #${id} ?\n\nCette action est irréversible et supprimera également tous les commentaires et photos associés.`)) {
+    if (!confirm(t('maintenance.delete_confirm'))) {
         return;
     }
     
     try {
         await API.delete(`maintenance/${id}`);
-        toast('Ticket supprimé avec succès', 'success');
+        toast(t('maintenance.ticket_deleted'), 'success');
         mtReloadTickets();
     } catch (error) {
         toast(error.message, 'error');
@@ -906,7 +906,7 @@ function openPhotoModal(photoUrl) {
             <button class="photo-modal-close" onclick="this.parentElement.parentElement.remove()">
                 <i class="fas fa-times"></i>
             </button>
-            <img src="${photoUrl}" alt="Photo en grand">
+            <img src="${photoUrl}" alt="${t('maintenance.full_photo')}">
             <div class="photo-modal-actions">
                 <a href="${photoUrl}" download class="btn btn-outline">
                     <i class="fas fa-download"></i> Télécharger

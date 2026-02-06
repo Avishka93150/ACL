@@ -22,8 +22,8 @@ async function loadUsers(container) {
         container.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-users"></i> Gestion des utilisateurs</h3>
-                    ${canCreate ? '<button class="btn btn-primary" onclick="showNewUserModal()"><i class="fas fa-plus"></i> Nouvel utilisateur</button>' : ''}
+                    <h3 class="card-title"><i class="fas fa-users"></i> ${t('users.title')}</h3>
+                    ${canCreate ? `<button class="btn btn-primary" onclick="showNewUserModal()"><i class="fas fa-plus"></i> ${t('users.new_user')}</button>` : ''}
                 </div>
                 
                 <p class="text-muted mb-20">
@@ -34,7 +34,7 @@ async function loadUsers(container) {
                 <div class="filters-bar mb-20">
                     <div class="search-box">
                         <i class="fas fa-search"></i>
-                        <input type="text" id="user-search" placeholder="Rechercher par nom, email..." oninput="filterUsers()">
+                        <input type="text" id="user-search" placeholder="${t('users.search_placeholder')}" oninput="filterUsers()">
                     </div>
                     <select id="user-filter-role" onchange="filterUsers()">
                         <option value="">Tous les rôles</option>
@@ -91,24 +91,24 @@ async function loadUsers(container) {
             </div>
         `;
     } catch (error) {
-        container.innerHTML = `<div class="card"><p class="text-danger">Erreur: ${error.message}</p></div>`;
+        container.innerHTML = `<div class="card"><p class="text-danger">${t('common.error')}: ${error.message}</p></div>`;
     }
 }
 
 function renderUsersTable(users) {
     if (!users.length) {
-        return '<div class="empty-state"><i class="fas fa-users"></i><h3>Aucun utilisateur trouvé</h3><p>Aucun utilisateur ne correspond à vos critères de recherche.</p></div>';
+        return `<div class="empty-state"><i class="fas fa-users"></i><h3>${t('users.no_users')}</h3><p>Aucun utilisateur ne correspond à vos critères de recherche.</p></div>`;
     }
     
     return `
         <table>
             <thead>
                 <tr>
-                    <th>Nom</th>
-                    <th>Email</th>
-                    <th>Rôle</th>
-                    <th>Hôtels assignés</th>
-                    <th>Statut</th>
+                    <th>${t('users.name')}</th>
+                    <th>${t('users.email')}</th>
+                    <th>${t('users.role')}</th>
+                    <th>${t('users.hotels')}</th>
+                    <th>${t('users.status')}</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -122,7 +122,7 @@ function renderUsersTable(users) {
                         <td>${statusBadge(u.status)}</td>
                         <td>
                             <div class="table-actions">
-                                <button onclick="showEditUserModal(${u.id})" title="Modifier"><i class="fas fa-edit"></i></button>
+                                <button onclick="showEditUserModal(${u.id})" title="${t('common.edit')}"><i class="fas fa-edit"></i></button>
                                 <button onclick="showAssignHotelsModal(${parseInt(u.id)}, '${escAttr(u.first_name)} ${escAttr(u.last_name)}')" title="Affecter aux hôtels"><i class="fas fa-building"></i></button>
                                 ${u.id !== API.user.id ? `<button onclick="toggleUserStatus(${parseInt(u.id)}, '${escAttr(u.status)}')" title="${u.status === 'active' ? 'Désactiver' : 'Activer'}"><i class="fas fa-${u.status === 'active' ? 'ban' : 'check'}"></i></button>` : ''}
                             </div>
@@ -175,7 +175,7 @@ async function showNewUserModal() {
     const assignableRoles = managementInfo.assignable_roles || [];
     const manageableHotels = managementInfo.manageable_hotels || [];
     
-    openModal('Nouvel utilisateur', `
+    openModal(t('users.new_user'), `
         <form onsubmit="createUser(event)">
             <div class="form-row">
                 <div class="form-group">
@@ -183,12 +183,12 @@ async function showNewUserModal() {
                     <input type="text" name="first_name" required>
                 </div>
                 <div class="form-group">
-                    <label>Nom *</label>
+                    <label>${t('users.name')} *</label>
                     <input type="text" name="last_name" required>
                 </div>
             </div>
             <div class="form-group">
-                <label>Email *</label>
+                <label>${t('users.email')} *</label>
                 <input type="email" name="email" required>
             </div>
             <div class="form-group">
@@ -196,17 +196,17 @@ async function showNewUserModal() {
                 <input type="tel" name="phone" placeholder="06 12 34 56 78">
             </div>
             <div class="form-group">
-                <label>Mot de passe *</label>
+                <label>${t('users.password')} *</label>
                 <input type="password" name="password" required minlength="6">
             </div>
             <div class="form-group">
-                <label>Rôle *</label>
+                <label>${t('users.role')} *</label>
                 <select name="role" required>
                     ${assignableRoles.map(r => `<option value="${r}">${LABELS.role[r] || r}</option>`).join('')}
                 </select>
             </div>
             <div class="form-group">
-                <label><i class="fas fa-building"></i> Hôtel(s) assigné(s) *</label>
+                <label><i class="fas fa-building"></i> ${t('users.hotels')} *</label>
                 <div class="checkbox-list">
                     ${manageableHotels.map(h => `
                         <label class="checkbox-item">
@@ -218,8 +218,8 @@ async function showNewUserModal() {
                 <small class="text-muted">Sélectionnez au moins un hôtel</small>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Créer</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.create')}</button>
             </div>
         </form>
     `);
@@ -250,7 +250,7 @@ async function createUser(e) {
     
     try {
         await API.createUser(data);
-        toast('Utilisateur créé avec succès', 'success');
+        toast(t('users.created'), 'success');
         closeModal();
         loadUsers(document.getElementById('page-content'));
     } catch (error) {
@@ -264,7 +264,7 @@ async function showEditUserModal(id) {
         const user = res.user;
         const assignableRoles = managementInfo.assignable_roles || [];
         
-        openModal('Modifier l\'utilisateur', `
+        openModal(t('users.edit_user'), `
             <form onsubmit="updateUser(event, ${id})">
                 <div class="form-row">
                     <div class="form-group">
@@ -272,27 +272,27 @@ async function showEditUserModal(id) {
                         <input type="text" name="first_name" value="${esc(user.first_name)}" required>
                     </div>
                     <div class="form-group">
-                        <label>Nom *</label>
+                        <label>${t('users.name')} *</label>
                         <input type="text" name="last_name" value="${esc(user.last_name)}" required>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Email *</label>
+                    <label>${t('users.email')} *</label>
                     <input type="email" name="email" value="${esc(user.email)}" required>
                 </div>
                 <div class="form-group">
-                    <label>Nouveau mot de passe <small>(laisser vide pour ne pas changer)</small></label>
+                    <label>${t('users.password')} <small>(${t('users.password_help')})</small></label>
                     <input type="password" name="password" minlength="6">
                 </div>
                 <div class="form-group">
-                    <label>Rôle *</label>
+                    <label>${t('users.role')} *</label>
                     <select name="role" required>
                         ${assignableRoles.map(r => `<option value="${r}" ${user.role === r ? 'selected' : ''}>${LABELS.role[r] || r}</option>`).join('')}
                     </select>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                    <button type="submit" class="btn btn-primary">${t('common.save')}</button>
                 </div>
             </form>
         `);
@@ -311,7 +311,7 @@ async function updateUser(e, id) {
     
     try {
         await API.updateUser(id, data);
-        toast('Utilisateur mis à jour', 'success');
+        toast(t('users.updated'), 'success');
         closeModal();
         loadUsers(document.getElementById('page-content'));
     } catch (error) {
@@ -360,8 +360,8 @@ async function showAssignHotelsModal(userId, userName) {
                 </div>
                 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                    <button type="submit" class="btn btn-primary">${t('common.save')}</button>
                 </div>
             </form>
         `);

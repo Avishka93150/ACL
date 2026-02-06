@@ -25,9 +25,9 @@ async function loadEvaluations(container) {
 
         container.innerHTML = `
             <div class="tabs mb-20">
-                <button class="tab-btn active" onclick="showEvalTab('list')">Évaluations</button>
-                ${canManageGrids ? '<button class="tab-btn" onclick="showEvalTab(\'grids\')">Grilles</button>' : ''}
-                <button class="tab-btn" onclick="showEvalTab('mine')">Mes évaluations</button>
+                <button class="tab-btn active" onclick="showEvalTab('list')">${t('evaluations.title')}</button>
+                ${canManageGrids ? '<button class="tab-btn" onclick="showEvalTab(\'grids\')">' + t('evaluations.grids') + '</button>' : ''}
+                <button class="tab-btn" onclick="showEvalTab('mine')">${t('evaluations.my_evaluations')}</button>
                 <button class="tab-btn" onclick="showEvalTab('stats')">Statistiques</button>
             </div>
             <div id="eval-tab-content"></div>
@@ -35,7 +35,7 @@ async function loadEvaluations(container) {
         
         showEvalTab('list');
     } catch (error) {
-        container.innerHTML = '<div class="card"><p class="text-danger">Erreur: ' + error.message + '</p></div>';
+        container.innerHTML = '<div class="card"><p class="text-danger">' + t('common.error') + ': ' + error.message + '</p></div>';
     }
 }
 
@@ -111,12 +111,12 @@ async function renderEvalList(container) {
                 <div class="eval-header-card">
                     <div class="eval-header-top">
                         <div class="eval-header-title">
-                            <h2><i class="fas fa-clipboard-check"></i> Évaluations${canViewTeam ? ' de l\'équipe' : ''}</h2>
-                            <p class="eval-subtitle">Suivi des performances de vos collaborateurs</p>
+                            <h2><i class="fas fa-clipboard-check"></i> ${canViewTeam ? t('evaluations.team_evaluations') : t('evaluations.title')}</h2>
+                            <p class="eval-subtitle">${t('evaluations.subtitle')}</p>
                         </div>
                         ${canEvaluate ? `
                             <button class="btn btn-primary btn-lg" onclick="evalShowNewModal()">
-                                <i class="fas fa-plus"></i> Nouvelle évaluation
+                                <i class="fas fa-plus"></i> ${t('evaluations.new_evaluation')}
                             </button>
                         ` : ''}
                     </div>
@@ -363,15 +363,15 @@ async function renderEvalList(container) {
                     ` : `
                         <div class="eval-empty-state">
                             <div class="empty-icon"><i class="fas fa-clipboard-list"></i></div>
-                            <h3>Aucune évaluation</h3>
-                            <p>Aucune évaluation ne correspond aux critères sélectionnés</p>
+                            <h3>${t('evaluations.no_evaluations')}</h3>
+                            <p>${t('evaluations.no_evaluations')}</p>
                             ${activeFiltersCount > 0 ? `
                                 <button class="btn btn-outline" onclick="resetEvalFilters()">
                                     <i class="fas fa-times"></i> Réinitialiser les filtres
                                 </button>
                             ` : (canEvaluate ? `
                                 <button class="btn btn-primary" onclick="evalShowNewModal()">
-                                    <i class="fas fa-plus"></i> Créer une évaluation
+                                    <i class="fas fa-plus"></i> ${t('evaluations.new_evaluation')}
                                 </button>
                             ` : '')}
                         </div>
@@ -380,7 +380,7 @@ async function renderEvalList(container) {
             </div>
         `;
     } catch (error) {
-        container.innerHTML = '<div class="card"><p class="text-danger">Erreur: ' + error.message + '</p></div>';
+        container.innerHTML = '<div class="card"><p class="text-danger">' + t('common.error') + ': ' + error.message + '</p></div>';
     }
 }
 
@@ -502,8 +502,8 @@ async function renderGridsList(container) {
         container.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-th-list"></i> Grilles d'évaluation</h3>
-                    <button class="btn btn-primary" onclick="evalCreateGrid()"><i class="fas fa-plus"></i> Nouvelle grille</button>
+                    <h3 class="card-title"><i class="fas fa-th-list"></i> ${t('evaluations.grids')}</h3>
+                    <button class="btn btn-primary" onclick="evalCreateGrid()"><i class="fas fa-plus"></i> ${t('evaluations.new_grid')}</button>
                 </div>
                 ${grids.length ? `
                     <div class="audit-grids-list">
@@ -527,11 +527,11 @@ async function renderGridsList(container) {
                             </div>
                         `).join('')}
                     </div>
-                ` : '<div class="empty-state"><i class="fas fa-th-list"></i><h3>Aucune grille</h3><p>Créez votre première grille d\'évaluation</p></div>'}
+                ` : '<div class="empty-state"><i class="fas fa-th-list"></i><h3>' + t('evaluations.no_grids') + '</h3></div>'}
             </div>
         `;
     } catch (error) {
-        container.innerHTML = '<div class="card"><p class="text-danger">Erreur: ' + error.message + '</p></div>';
+        container.innerHTML = '<div class="card"><p class="text-danger">' + t('common.error') + ': ' + error.message + '</p></div>';
     }
 }
 
@@ -545,11 +545,11 @@ async function renderMyEvaluations(container) {
         container.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-user-check"></i> Mes évaluations</h3>
+                    <h3 class="card-title"><i class="fas fa-user-check"></i> ${t('evaluations.my_evaluations')}</h3>
                 </div>
                 ${evaluations.length ? `
                     <table>
-                        <thead><tr><th>Date</th><th>Grille</th><th>Évaluateur</th><th>Score</th><th>Actions</th></tr></thead>
+                        <thead><tr><th>${t('audit.date')}</th><th>${t('evaluations.grids')}</th><th>${t('evaluations.evaluated_by')}</th><th>${t('evaluations.score')}</th><th>Actions</th></tr></thead>
                         <tbody>
                             ${evaluations.map(e => `
                                 <tr>
@@ -562,11 +562,11 @@ async function renderMyEvaluations(container) {
                             `).join('')}
                         </tbody>
                     </table>
-                ` : '<div class="empty-state"><i class="fas fa-clipboard-list"></i><h3>Aucune évaluation</h3><p>Vous n\'avez pas encore été évalué</p></div>'}
+                ` : '<div class="empty-state"><i class="fas fa-clipboard-list"></i><h3>' + t('evaluations.no_evaluations') + '</h3></div>'}
             </div>
         `;
     } catch (error) {
-        container.innerHTML = '<div class="card"><p class="text-danger">Erreur: ' + error.message + '</p></div>';
+        container.innerHTML = '<div class="card"><p class="text-danger">' + t('common.error') + ': ' + error.message + '</p></div>';
     }
 }
 
@@ -613,7 +613,7 @@ async function renderEvalStats(container) {
             </div>
         `;
     } catch (error) {
-        container.innerHTML = '<div class="card"><p class="text-danger">Erreur: ' + error.message + '</p></div>';
+        container.innerHTML = '<div class="card"><p class="text-danger">' + t('common.error') + ': ' + error.message + '</p></div>';
     }
 }
 
@@ -658,13 +658,13 @@ async function evalShowGridEditor() {
     container.innerHTML = `
         <div class="card">
             <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-clipboard-list"></i> ${isEdit ? 'Modifier la grille' : 'Nouvelle grille d\'évaluation'}</h3>
+                <h3 class="card-title"><i class="fas fa-clipboard-list"></i> ${isEdit ? t('evaluations.edit_grid') : t('evaluations.new_grid')}</h3>
                 <div>
                     <button class="btn btn-outline" onclick="loadEvaluations(document.getElementById('page-content'))">
                         <i class="fas fa-arrow-left"></i> Retour
                     </button>
                     <button class="btn btn-primary" onclick="evalSaveGrid()">
-                        <i class="fas fa-save"></i> Enregistrer
+                        <i class="fas fa-save"></i> ${t('common.save')}
                     </button>
                 </div>
             </div>
@@ -675,7 +675,7 @@ async function evalShowGridEditor() {
                     <h4><i class="fas fa-info-circle"></i> Informations générales</h4>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Nom de la grille *</label>
+                            <label>${t('evaluations.grid_name')} *</label>
                             <input type="text" name="name" value="${esc(grid.name || '')}" required placeholder="Ex: Évaluation trimestrielle employés">
                         </div>
                         <div class="form-group">
@@ -697,7 +697,7 @@ async function evalShowGridEditor() {
                     <h4><i class="fas fa-cog"></i> Configuration</h4>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Rôle cible *</label>
+                            <label>${t('evaluations.target_role')} *</label>
                             <select name="target_role" required>
                                 <option value="employee" ${grid.target_role === 'employee' ? 'selected' : ''}>Employé</option>
                                 <option value="receptionniste" ${grid.target_role === 'receptionniste' ? 'selected' : ''}>Réceptionniste</option>
@@ -731,10 +731,10 @@ async function evalShowGridEditor() {
         <!-- Questions -->
         <div class="card">
             <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-question-circle"></i> Questions (${evalQuestions.length})</h3>
+                <h3 class="card-title"><i class="fas fa-question-circle"></i> ${t('evaluations.questions')} (${evalQuestions.length})</h3>
                 <div>
-                    <button class="btn btn-outline" onclick="evalAddSection()"><i class="fas fa-folder-plus"></i> Ajouter section</button>
-                    <button class="btn btn-primary" onclick="evalAddQuestion()"><i class="fas fa-plus"></i> Ajouter question</button>
+                    <button class="btn btn-outline" onclick="evalAddSection()"><i class="fas fa-folder-plus"></i> ${t('evaluations.new_section')}</button>
+                    <button class="btn btn-primary" onclick="evalAddQuestion()"><i class="fas fa-plus"></i> ${t('evaluations.new_question')}</button>
                 </div>
             </div>
             <div id="eval-questions-list" class="audit-questions-container">
@@ -746,7 +746,7 @@ async function evalShowGridEditor() {
 
 function evalRenderQuestions() {
     if (evalQuestions.length === 0) {
-        return '<div class="empty-state py-40"><i class="fas fa-question-circle"></i><h3>Aucune question</h3><p>Ajoutez des questions à votre grille d\'évaluation</p></div>';
+        return '<div class="empty-state py-40"><i class="fas fa-question-circle"></i><h3>' + t('evaluations.no_section') + '</h3></div>';
     }
 
     // Trier par section puis par ordre
@@ -810,15 +810,15 @@ function evalRenderQuestions() {
 }
 
 function evalAddSection() {
-    openModal('Nouvelle section', `
+    openModal(t('evaluations.new_section'), `
         <form onsubmit="evalSaveSection(event)">
             <div class="form-group">
-                <label>Nom de la section *</label>
+                <label>${t('evaluations.section_name')} *</label>
                 <input type="text" id="eval-section-name" required placeholder="Ex: Compétences techniques, Savoir-être, Communication...">
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Ajouter</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.save')}</button>
             </div>
         </form>
     `);
@@ -834,15 +834,15 @@ function evalSaveSection(e) {
 }
 
 function evalEditSection(oldName) {
-    openModal('Renommer la section', `
+    openModal(t('evaluations.section_name'), `
         <form onsubmit="evalRenameSection(event, '${esc(oldName)}')">
             <div class="form-group">
-                <label>Nouveau nom *</label>
+                <label>${t('evaluations.section_name')} *</label>
                 <input type="text" id="eval-section-new-name" value="${esc(oldName)}" required>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Renommer</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.save')}</button>
             </div>
         </form>
     `);
@@ -864,7 +864,7 @@ function evalRenameSection(e, oldName) {
 function evalAddQuestion(defaultSection = null) {
     const sections = [...new Set(evalQuestions.map(q => q.section).filter(s => s))];
     
-    openModal('Nouvelle question', `
+    openModal(t('evaluations.new_question'), `
         <form id="eval-question-form" onsubmit="evalSaveQuestion(event)">
             <div class="form-row">
                 <div class="form-group">
@@ -891,13 +891,13 @@ function evalAddQuestion(defaultSection = null) {
             </div>
             
             <div class="form-section">
-                <h5>Type de réponse</h5>
+                <h5>${t('evaluations.question_type')}</h5>
                 <div class="response-type-selector">
                     <label class="response-type-option">
                         <input type="radio" name="response_type" value="score" checked onchange="evalToggleResponseType(this.value)">
                         <div class="response-type-card">
                             <i class="fas fa-star"></i>
-                            <span>Note</span>
+                            <span>${t('evaluations.rating')}</span>
                             <small>Échelle de notation</small>
                         </div>
                     </label>
@@ -905,7 +905,7 @@ function evalAddQuestion(defaultSection = null) {
                         <input type="radio" name="response_type" value="yesno" onchange="evalToggleResponseType(this.value)">
                         <div class="response-type-card">
                             <i class="fas fa-check-circle"></i>
-                            <span>Oui / Non</span>
+                            <span>${t('evaluations.yes_no')}</span>
                             <small>+ Non applicable</small>
                         </div>
                     </label>
@@ -913,7 +913,7 @@ function evalAddQuestion(defaultSection = null) {
                         <input type="radio" name="response_type" value="choice" onchange="evalToggleResponseType(this.value)">
                         <div class="response-type-card">
                             <i class="fas fa-list-ul"></i>
-                            <span>Choix</span>
+                            <span>${t('evaluations.choice')}</span>
                             <small>Multiple ou unique</small>
                         </div>
                     </label>
@@ -973,10 +973,10 @@ function evalAddQuestion(defaultSection = null) {
             </div>
             
             <input type="hidden" name="edit_index" value="-1">
-            
+
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Ajouter</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.save')}</button>
             </div>
         </form>
         <script>
@@ -1005,7 +1005,7 @@ function evalEditQuestion(idx) {
     const isChoice = q.response_type === 'choice';
     const isScore = !isYesNo && !isChoice;
     
-    openModal('Modifier la question', `
+    openModal(t('evaluations.edit_question'), `
         <form id="eval-question-form" onsubmit="evalSaveQuestion(event)">
             <div class="form-row">
                 <div class="form-group">
@@ -1032,13 +1032,13 @@ function evalEditQuestion(idx) {
             </div>
             
             <div class="form-section">
-                <h5>Type de réponse</h5>
+                <h5>${t('evaluations.question_type')}</h5>
                 <div class="response-type-selector">
                     <label class="response-type-option">
                         <input type="radio" name="response_type" value="score" ${isScore ? 'checked' : ''} onchange="evalToggleResponseType(this.value)">
                         <div class="response-type-card">
                             <i class="fas fa-star"></i>
-                            <span>Note</span>
+                            <span>${t('evaluations.rating')}</span>
                             <small>Échelle de notation</small>
                         </div>
                     </label>
@@ -1046,7 +1046,7 @@ function evalEditQuestion(idx) {
                         <input type="radio" name="response_type" value="yesno" ${isYesNo ? 'checked' : ''} onchange="evalToggleResponseType(this.value)">
                         <div class="response-type-card">
                             <i class="fas fa-check-circle"></i>
-                            <span>Oui / Non</span>
+                            <span>${t('evaluations.yes_no')}</span>
                             <small>+ Non applicable</small>
                         </div>
                     </label>
@@ -1054,7 +1054,7 @@ function evalEditQuestion(idx) {
                         <input type="radio" name="response_type" value="choice" ${isChoice ? 'checked' : ''} onchange="evalToggleResponseType(this.value)">
                         <div class="response-type-card">
                             <i class="fas fa-list-ul"></i>
-                            <span>Choix</span>
+                            <span>${t('evaluations.choice')}</span>
                             <small>Multiple ou unique</small>
                         </div>
                     </label>
@@ -1114,10 +1114,10 @@ function evalEditQuestion(idx) {
             </div>
             
             <input type="hidden" name="edit_index" value="${idx}">
-            
+
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">Enregistrer</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.save')}</button>
             </div>
         </form>
         <script>
@@ -1165,7 +1165,7 @@ function evalSaveQuestion(e) {
 }
 
 function evalDeleteQuestion(idx) {
-    if (!confirm('Supprimer cette question ?')) return;
+    if (!confirm(t('evaluations.delete_question_confirm'))) return;
     evalQuestions.splice(idx, 1);
     document.getElementById('eval-questions-list').innerHTML = evalRenderQuestions();
 }
@@ -1208,10 +1208,10 @@ async function evalSaveGrid() {
     try {
         if (evalCurrentGrid?.id) {
             await API.updateEvaluationGridFull(evalCurrentGrid.id, gridData);
-            toast('Grille mise à jour', 'success');
+            toast(t('evaluations.grid_updated'), 'success');
         } else {
             await API.createEvaluationGridFull(gridData);
-            toast('Grille créée', 'success');
+            toast(t('evaluations.grid_created'), 'success');
         }
         loadEvaluations(document.getElementById('page-content'));
     } catch (e) {
@@ -1220,10 +1220,10 @@ async function evalSaveGrid() {
 }
 
 async function evalDuplicateGrid(gridId) {
-    if (!confirm('Dupliquer cette grille ?')) return;
+    if (!confirm(t('evaluations.duplicate') + ' ?')) return;
     try {
         await API.duplicateEvaluationGrid(gridId);
-        toast('Grille dupliquée', 'success');
+        toast(t('evaluations.grid_duplicated'), 'success');
         showEvalTab('grids');
     } catch (e) {
         toast(e.message, 'error');
@@ -1231,10 +1231,10 @@ async function evalDuplicateGrid(gridId) {
 }
 
 async function evalDeleteGrid(gridId) {
-    if (!confirm('Supprimer cette grille ?')) return;
+    if (!confirm(t('evaluations.delete_grid_confirm'))) return;
     try {
         await API.deleteEvaluationGrid(gridId);
-        toast('Grille supprimée', 'success');
+        toast(t('evaluations.grid_deleted'), 'success');
         showEvalTab('grids');
     } catch (e) {
         toast(e.message, 'error');
@@ -1249,11 +1249,11 @@ async function evalShowNewModal() {
         const grids = (gridsRes.grids || []).filter(g => g.is_active == 1);
         
         if (grids.length === 0) {
-            toast('Aucune grille d\'évaluation active', 'warning');
+            toast(t('evaluations.no_grids'), 'warning');
             return;
         }
         
-        openModal('Nouvelle évaluation', `
+        openModal(t('evaluations.new_evaluation'), `
             <form id="eval-new-form" onsubmit="evalCreate(event)">
                 <div class="form-group">
                     <label>Grille d'évaluation *</label>
@@ -1308,12 +1308,12 @@ async function evalShowNewModal() {
                 </div>
                 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                    <button type="submit" class="btn btn-primary">Créer</button>
+                    <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                    <button type="submit" class="btn btn-primary">${t('common.save')}</button>
                 </div>
             </form>
         `);
-        
+
         // Stocker les données pour usage ultérieur
         window.evalEligibleUsers = [];
         window.evalUserHotels = {};
@@ -1619,7 +1619,7 @@ async function evalOpen(evalId) {
             </div>
         `).join('');
         
-        openModal(`Évaluation: ${esc(evaluation.evaluated_name)}`, `
+        openModal(`${t('evaluations.evaluate')}: ${esc(evaluation.evaluated_name)}`, `
             <form id="eval-form" onsubmit="evalSave(event, ${evalId})">
                 <div class="audit-info-bar">
                     <span><i class="fas fa-clipboard-list"></i> ${esc(evaluation.grid_name)}</span>
@@ -1634,7 +1634,7 @@ async function evalOpen(evalId) {
                 
                 <div class="audit-notes mt-20">
                     <div class="form-group">
-                        <label>Commentaire global</label>
+                        <label>${t('evaluations.general_comment')}</label>
                         <textarea name="global_comment" rows="3" ${isReadOnly ? 'disabled' : ''}>${evaluation.global_comment || ''}</textarea>
                     </div>
                     <div class="form-group">
@@ -1651,8 +1651,8 @@ async function evalOpen(evalId) {
                             <option value="archived" ${evaluation.status === 'archived' ? 'selected' : ''}>Archivée</option>
                         </select>
                         <div>
-                            <button type="button" class="btn btn-outline" onclick="closeModal()">Fermer</button>
-                            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
+                            <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
+                            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> ${t('common.save')}</button>
                         </div>
                     </div>
                 ` : `
@@ -1746,7 +1746,7 @@ async function evalSave(e, evalId) {
     
     try {
         await API.saveEvaluationWithFiles(evalId, formData);
-        toast('Évaluation enregistrée', 'success');
+        toast(t('evaluations.grid_updated'), 'success');
         closeModal();
         showEvalTab('list');
     } catch (error) { toast(error.message, 'error'); }
