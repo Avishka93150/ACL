@@ -96,6 +96,14 @@ function initLandingPage() {
     });
 }
 
+// Nav scroll effect
+window.addEventListener('scroll', function() {
+    const nav = document.querySelector('.landing-nav');
+    if (nav) {
+        nav.classList.toggle('scrolled', window.scrollY > 20);
+    }
+});
+
 // Generate math captcha
 function generateCaptcha() {
     const num1 = Math.floor(Math.random() * 10) + 1;
@@ -132,24 +140,22 @@ function scrollToContact() {
 // Toggle mobile menu on landing page
 function toggleLandingMenu() {
     const navMenu = document.getElementById('nav-menu');
-    const navToggle = document.querySelector('.nav-toggle');
-    
+    const navToggle = document.querySelector('.landing-nav-toggle');
+
     if (navMenu) {
         const isOpen = navMenu.classList.contains('open');
         navMenu.classList.toggle('open');
-        
-        // Change icon
+
         if (navToggle) {
             navToggle.innerHTML = isOpen ? '<i class="fas fa-bars"></i>' : '<i class="fas fa-times"></i>';
         }
     }
 }
 
-// Close landing menu when clicking a link
 function closeLandingMenu() {
     const navMenu = document.getElementById('nav-menu');
-    const navToggle = document.querySelector('.nav-toggle');
-    
+    const navToggle = document.querySelector('.landing-nav-toggle');
+
     if (navMenu) {
         navMenu.classList.remove('open');
         if (navToggle) {
