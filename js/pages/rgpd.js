@@ -863,7 +863,7 @@ async function rgpdViewRequest(requestId) {
                     </div>
                 `}
             </div>
-        `);
+        `, 'modal-lg');
     } catch (e) {
         toast(e.message, 'error');
     }
