@@ -14,8 +14,10 @@
             --primary-dark: #1D4ED8;
             --primary-light: #DBEAFE;
             --success: #059669;
+            --success-light: #ECFDF5;
             --danger: #DC2626;
             --warning: #D97706;
+            --warning-light: #FFFBEB;
             --gray-50: #F9FAFB;
             --gray-100: #F3F4F6;
             --gray-200: #E5E7EB;
@@ -39,15 +41,16 @@
         .hotel-brand img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; }
         .hotel-brand h1 { font-size: 20px; font-weight: 600; }
         .hotel-brand .stars { color: #F59E0B; font-size: 14px; }
-        .hotel-info-header { font-size: 13px; color: var(--gray-500); }
+        .hotel-info-header { font-size: 13px; color: var(--gray-500); display: flex; align-items: center; gap: 12px; }
+        .lang-select { padding: 4px 8px; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 13px; background: white; cursor: pointer; }
 
         .container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
 
         .booking-main { padding: 32px 0; }
 
         .booking-steps { display: flex; justify-content: center; gap: 0; margin-bottom: 32px; }
-        .step { display: flex; align-items: center; gap: 8px; padding: 10px 20px; font-size: 14px; font-weight: 500; color: var(--gray-400); position: relative; }
-        .step .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--gray-200); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; }
+        .step { display: flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 14px; font-weight: 500; color: var(--gray-400); position: relative; }
+        .step .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--gray-200); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; flex-shrink: 0; }
         .step.active { color: var(--primary); }
         .step.active .step-num { background: var(--primary); color: white; }
         .step.done { color: var(--success); }
@@ -55,48 +58,69 @@
         .step-arrow { color: var(--gray-300); margin: 0 4px; }
 
         .card { background: white; border-radius: var(--radius); border: 1px solid var(--gray-200); box-shadow: var(--shadow); }
+        .card + .card { margin-top: 20px; }
         .card-body { padding: 24px; }
         .card-header { padding: 20px 24px; border-bottom: 1px solid var(--gray-100); }
         .card-header h2 { font-size: 18px; font-weight: 600; }
+        .card-header p { font-size: 13px; color: var(--gray-500); margin-top: 4px; }
 
         .form-group { margin-bottom: 16px; }
         .form-group label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 500; color: var(--gray-700); }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 14px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 14px; font-family: inherit; transition: border-color 0.2s; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 14px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 14px; font-family: inherit; transition: border-color 0.2s; background: white; }
         .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
         .form-help { font-size: 12px; color: var(--gray-400); margin-top: 4px; }
 
-        .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; text-decoration: none; }
         .btn-primary { background: var(--primary); color: white; }
         .btn-primary:hover { background: var(--primary-dark); }
         .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-outline { background: white; color: var(--gray-700); border: 1px solid var(--gray-300); }
         .btn-outline:hover { background: var(--gray-50); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-success:hover { background: #047857; }
         .btn-lg { padding: 14px 32px; font-size: 16px; }
+        .btn-sm { padding: 8px 16px; font-size: 13px; }
         .btn-block { width: 100%; justify-content: center; }
 
         .room-cards { display: flex; flex-direction: column; gap: 12px; }
-        .room-card { border: 2px solid var(--gray-200); border-radius: var(--radius); padding: 20px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        .room-card { border: 2px solid var(--gray-200); border-radius: var(--radius); padding: 20px; cursor: pointer; transition: all 0.2s; display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; }
         .room-card:hover { border-color: var(--primary); background: var(--primary-light); }
         .room-card.selected { border-color: var(--primary); background: var(--primary-light); }
         .room-card .room-info h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
-        .room-card .room-info p { font-size: 13px; color: var(--gray-500); }
-        .room-card .room-price { text-align: right; }
+        .room-card .room-info .room-desc { font-size: 13px; color: var(--gray-500); margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .room-card .room-info .room-meta { display: flex; gap: 12px; font-size: 12px; color: var(--gray-400); }
+        .room-card .room-info .room-meta span { display: flex; align-items: center; gap: 4px; }
+        .room-card .room-price { text-align: right; white-space: nowrap; }
         .room-card .room-price .price-night { font-size: 20px; font-weight: 700; color: var(--primary); }
         .room-card .room-price .price-total { font-size: 13px; color: var(--gray-500); }
         .room-card .room-price .available { font-size: 12px; color: var(--success); margin-top: 2px; }
         .room-card.unavailable { opacity: 0.4; cursor: not-allowed; }
 
+        .extras-list { display: flex; flex-direction: column; gap: 12px; }
+        .extra-card { border: 1px solid var(--gray-200); border-radius: 10px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; transition: all 0.2s; }
+        .extra-card.selected { border-color: var(--primary); background: var(--primary-light); }
+        .extra-card .extra-info h4 { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+        .extra-card .extra-info p { font-size: 13px; color: var(--gray-500); }
+        .extra-card .extra-action { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+        .extra-card .extra-price { font-size: 16px; font-weight: 700; color: var(--primary); white-space: nowrap; }
+        .extra-qty { display: flex; align-items: center; gap: 6px; }
+        .extra-qty button { width: 30px; height: 30px; border: 1px solid var(--gray-300); border-radius: 6px; background: white; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+        .extra-qty button:hover { background: var(--gray-100); }
+        .extra-qty span { width: 24px; text-align: center; font-weight: 600; font-size: 14px; }
+
         .booking-summary { background: var(--gray-50); border-radius: var(--radius); padding: 20px; margin-top: 20px; }
         .booking-summary h4 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
         .summary-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
-        .summary-row.total { border-top: 2px solid var(--gray-200); margin-top: 8px; padding-top: 12px; font-weight: 700; font-size: 16px; }
+        .summary-row.total { border-top: 2px solid var(--gray-200); margin-top: 8px; padding-top: 12px; font-weight: 700; font-size: 16px; color: var(--primary); }
+        .summary-row .extras-label { color: var(--gray-500); }
 
         #stripe-card-element { padding: 12px 14px; border: 1px solid var(--gray-300); border-radius: 8px; background: white; }
         .stripe-errors { color: var(--danger); font-size: 13px; margin-top: 8px; }
 
         .success-page { text-align: center; padding: 60px 20px; }
-        .success-icon { width: 80px; height: 80px; background: #ECFDF5; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+        .success-icon { width: 80px; height: 80px; background: var(--success-light); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 20px; }
         .success-icon i { font-size: 36px; color: var(--success); }
         .success-page h2 { font-size: 24px; margin-bottom: 12px; }
         .success-page p { color: var(--gray-500); margin-bottom: 8px; }
@@ -107,13 +131,34 @@
 
         .alert { padding: 14px 18px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
         .alert-danger { background: #FEF2F2; color: var(--danger); border: 1px solid #FECACA; }
+        .alert-warning { background: var(--warning-light); color: var(--warning); border: 1px solid #FDE68A; }
+        .alert-info { background: var(--primary-light); color: var(--primary); border: 1px solid #93C5FD; }
+
+        .lookup-section { margin-top: 20px; }
+        .lookup-toggle { display: flex; align-items: center; gap: 8px; color: var(--primary); font-size: 14px; font-weight: 500; cursor: pointer; padding: 12px 0; border: none; background: none; }
+        .lookup-toggle:hover { text-decoration: underline; }
+        .lookup-form { background: var(--gray-50); border-radius: var(--radius); padding: 20px; margin-top: 8px; }
+        .lookup-form h4 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+        .lookup-result { margin-top: 16px; }
+        .lookup-result .resa-card { border: 1px solid var(--gray-200); border-radius: 10px; padding: 16px; background: white; }
+        .lookup-result .resa-card h4 { font-size: 15px; margin-bottom: 8px; }
+        .lookup-result .resa-row { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
+        .lookup-result .resa-row .label { color: var(--gray-500); }
+
+        .section-divider { text-align: center; padding: 8px 0; color: var(--gray-400); font-size: 13px; }
+        .section-divider span { background: var(--gray-50); padding: 0 12px; position: relative; }
+
+        .footer-booking { text-align: center; padding: 24px 0; font-size: 12px; color: var(--gray-400); border-top: 1px solid var(--gray-200); margin-top: 40px; }
 
         @media (max-width: 640px) {
-            .form-row { grid-template-columns: 1fr; }
+            .form-row, .form-row-3 { grid-template-columns: 1fr; }
             .booking-steps { flex-wrap: wrap; justify-content: center; }
-            .step { padding: 8px 12px; font-size: 13px; }
-            .room-card { flex-direction: column; gap: 12px; text-align: center; }
+            .step { padding: 8px 10px; font-size: 12px; }
+            .step .step-label { display: none; }
+            .room-card { grid-template-columns: 1fr; text-align: center; }
             .room-card .room-price { text-align: center; }
+            .extra-card { flex-direction: column; text-align: center; }
+            .hotel-brand h1 { font-size: 16px; }
         }
     </style>
 </head>
@@ -134,14 +179,21 @@ let stripe = null;
 let stripeElements = null;
 let cardElement = null;
 let selectedRoom = null;
+let selectedExtras = [];
 let bookingState = {
     checkin: '',
     checkout: '',
-    guests: 2,
+    nb_adult: 1,
+    nb_child: 0,
+    civilite: 'M.',
     guest_first_name: '',
     guest_last_name: '',
     guest_email: '',
     guest_phone: '',
+    address1: '',
+    address2: '',
+    city: '',
+    postal_code: '',
     special_requests: ''
 };
 
@@ -150,7 +202,7 @@ let bookingState = {
     const params = new URLSearchParams(window.location.search);
     hotelSlug = params.get('hotel');
     if (!hotelSlug) {
-        document.getElementById('booking-app').innerHTML = '<div class="container" style="padding:80px 20px;text-align:center"><h2>Lien invalide</h2><p style="color:#6B7280">Aucun hotel specifi&eacute; dans l\'URL.</p></div>';
+        document.getElementById('booking-app').innerHTML = '<div class="container" style="padding:80px 20px;text-align:center"><h2>Lien invalide</h2><p style="color:#6B7280">Aucun h&ocirc;tel sp&eacute;cifi&eacute; dans l\'URL.</p></div>';
         return;
     }
     loadHotel();
@@ -185,7 +237,7 @@ async function loadHotel() {
 
         renderStep1();
     } catch (err) {
-        document.getElementById('booking-app').innerHTML = `<div class="container" style="padding:80px 20px;text-align:center"><h2>Hotel non disponible</h2><p style="color:#6B7280">${esc(err.message)}</p></div>`;
+        document.getElementById('booking-app').innerHTML = `<div class="container" style="padding:80px 20px;text-align:center"><h2>H&ocirc;tel non disponible</h2><p style="color:#6B7280">${esc(err.message)}</p></div>`;
     }
 }
 
@@ -194,14 +246,14 @@ function renderHeader() {
         <div class="booking-header">
             <div class="container">
                 <div class="hotel-brand">
-                    ${hotelData.logo_url ? `<img src="${hotelData.logo_url}" alt="">` : '<i class="fas fa-hotel" style="font-size:28px;color:var(--primary)"></i>'}
+                    ${hotelData.logo_url ? `<img src="${esc(hotelData.logo_url)}" alt="">` : '<i class="fas fa-hotel" style="font-size:28px;color:var(--primary)"></i>'}
                     <div>
                         <h1>${esc(hotelData.name)}</h1>
                         <div class="stars">${'&#9733;'.repeat(hotelData.stars || 0)}</div>
                     </div>
                 </div>
                 <div class="hotel-info-header">
-                    <i class="fas fa-map-marker-alt"></i> ${esc(hotelData.city || '')}
+                    <span><i class="fas fa-map-marker-alt"></i> ${esc(hotelData.city || '')}</span>
                 </div>
             </div>
         </div>
@@ -210,18 +262,83 @@ function renderHeader() {
 
 function renderSteps(current) {
     const steps = [
-        { num: 1, label: 'Dates & Chambre' },
-        { num: 2, label: 'Vos informations' },
-        { num: 3, label: 'Paiement' }
+        { num: 1, label: 'Dates & Chambre', icon: 'fa-calendar-alt' },
+        { num: 2, label: 'Vos informations', icon: 'fa-user' },
+        { num: 3, label: 'Options', icon: 'fa-concierge-bell' },
+        { num: 4, label: 'Paiement', icon: 'fa-credit-card' }
     ];
     return `
         <div class="booking-steps">
             ${steps.map((s, i) => {
                 const cls = s.num === current ? 'active' : s.num < current ? 'done' : '';
-                return `${i > 0 ? '<span class="step-arrow"><i class="fas fa-chevron-right"></i></span>' : ''}<div class="step ${cls}"><span class="step-num">${s.num < current ? '<i class="fas fa-check"></i>' : s.num}</span><span>${s.label}</span></div>`;
+                return `${i > 0 ? '<span class="step-arrow"><i class="fas fa-chevron-right"></i></span>' : ''}<div class="step ${cls}"><span class="step-num">${s.num < current ? '<i class="fas fa-check"></i>' : s.num}</span><span class="step-label">${s.label}</span></div>`;
             }).join('')}
         </div>
     `;
+}
+
+function getNights() {
+    return Math.max(1, Math.ceil((new Date(bookingState.checkout) - new Date(bookingState.checkin)) / 86400000));
+}
+
+function getExtrasTotal() {
+    if (!selectedExtras.length) return 0;
+    const nights = getNights();
+    const nbPersons = bookingState.nb_adult + bookingState.nb_child;
+    let total = 0;
+    selectedExtras.forEach(e => {
+        let price = e.UnitPrice * e.qty;
+        // CalcRule: F = forfait, P = par personne
+        if (e.CalcRule === 'P') price *= nbPersons;
+        // PostingType: D = par nuit, N = par séjour
+        if (e.PostingType === 'D') price *= nights;
+        total += price;
+    });
+    return total;
+}
+
+function getGrandTotal() {
+    return (selectedRoom ? selectedRoom.total : 0) + getExtrasTotal();
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function renderSummary(showExtras) {
+    const nights = getNights();
+    const extrasTotal = getExtrasTotal();
+    const grandTotal = getGrandTotal();
+
+    let html = `
+        <div class="booking-summary">
+            <h4><i class="fas fa-receipt"></i> R&eacute;capitulatif</h4>
+            <div class="summary-row"><span>${esc(selectedRoom.label)}</span><span>${selectedRoom.ratePerNight.toFixed(0)} &euro; / nuit</span></div>
+            <div class="summary-row"><span>${nights} nuit${nights > 1 ? 's' : ''}</span><span>${formatDate(bookingState.checkin)} &rarr; ${formatDate(bookingState.checkout)}</span></div>
+            <div class="summary-row"><span>${bookingState.nb_adult} adulte${bookingState.nb_adult > 1 ? 's' : ''}${bookingState.nb_child > 0 ? `, ${bookingState.nb_child} enfant${bookingState.nb_child > 1 ? 's' : ''}` : ''}</span><span>${selectedRoom.total.toFixed(2)} &euro;</span></div>
+    `;
+
+    if (showExtras && selectedExtras.length > 0) {
+        selectedExtras.forEach(e => {
+            const eTotal = computeExtraLineTotal(e);
+            html += `<div class="summary-row extras-label"><span>${esc(e.Name)} x${e.qty}</span><span>${eTotal.toFixed(2)} &euro;</span></div>`;
+        });
+    }
+
+    html += `<div class="summary-row total"><span>Total</span><span>${grandTotal.toFixed(2)} &euro;</span></div>`;
+    html += `</div>`;
+    return html;
+}
+
+function computeExtraLineTotal(e) {
+    const nights = getNights();
+    const nbPersons = bookingState.nb_adult + bookingState.nb_child;
+    let price = e.UnitPrice * e.qty;
+    if (e.CalcRule === 'P') price *= nbPersons;
+    if (e.PostingType === 'D') price *= nights;
+    return price;
 }
 
 // ============ STEP 1: Dates & Room ============
@@ -235,7 +352,7 @@ function renderStep1() {
                 ${renderSteps(1)}
                 <div class="card">
                     <div class="card-header">
-                        <h2><i class="fas fa-calendar-alt"></i> Choisissez vos dates</h2>
+                        <h2><i class="fas fa-calendar-alt"></i> Choisissez vos dates et voyageurs</h2>
                     </div>
                     <div class="card-body">
                         <div class="form-row">
@@ -248,21 +365,128 @@ function renderStep1() {
                                 <input type="date" id="checkout" value="${bookingState.checkout}" min="${bookingState.checkin || today}" onchange="onDateChange()">
                             </div>
                         </div>
-                        <div class="form-group" style="max-width:200px">
-                            <label>Voyageurs</label>
-                            <select id="guests" onchange="bookingState.guests = parseInt(this.value)">
-                                ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${bookingState.guests === n ? 'selected' : ''}>${n} personne${n > 1 ? 's' : ''}</option>`).join('')}
-                            </select>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Adultes</label>
+                                <select id="nb_adult" onchange="bookingState.nb_adult = parseInt(this.value)">
+                                    ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${bookingState.nb_adult === n ? 'selected' : ''}>${n}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Enfants</label>
+                                <select id="nb_child" onchange="bookingState.nb_child = parseInt(this.value)">
+                                    ${[0,1,2,3,4].map(n => `<option value="${n}" ${bookingState.nb_child === n ? 'selected' : ''}>${n}</option>`).join('')}
+                                </select>
+                            </div>
                         </div>
                         <button class="btn btn-primary btn-lg" onclick="searchAvailability()">
-                            <i class="fas fa-search"></i> Rechercher la disponibilit&eacute;
+                            <i class="fas fa-search"></i> Rechercher les disponibilit&eacute;s
                         </button>
                     </div>
                 </div>
                 <div id="rooms-container"></div>
+
+                <div class="lookup-section">
+                    <button class="lookup-toggle" onclick="toggleLookup()">
+                        <i class="fas fa-search"></i> Vous avez d&eacute;j&agrave; une r&eacute;servation ?
+                    </button>
+                    <div id="lookup-panel" style="display:none">
+                        <div class="lookup-form">
+                            <h4><i class="fas fa-search"></i> Rechercher votre r&eacute;servation</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>R&eacute;f&eacute;rence</label>
+                                    <input type="text" id="lookup_ref" placeholder="ACL-XXXX-XXXXXX-XXXXX">
+                                </div>
+                                <div class="form-group">
+                                    <label>ou Email</label>
+                                    <input type="email" id="lookup_email" placeholder="votre@email.com">
+                                </div>
+                            </div>
+                            <button class="btn btn-outline btn-sm" onclick="doLookup()">
+                                <i class="fas fa-search"></i> Rechercher
+                            </button>
+                            <div id="lookup-result"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="footer-booking">
+            <div class="container">
+                <i class="fas fa-lock"></i> R&eacute;servation s&eacute;curis&eacute;e &middot; Paiement chiffr&eacute; par Stripe
             </div>
         </div>
     `;
+}
+
+function toggleLookup() {
+    const panel = document.getElementById('lookup-panel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+async function doLookup() {
+    const ref = document.getElementById('lookup_ref').value.trim();
+    const email = document.getElementById('lookup_email').value.trim();
+    const resultDiv = document.getElementById('lookup-result');
+
+    if (!ref && !email) {
+        resultDiv.innerHTML = '<div class="alert alert-danger" style="margin-top:12px">Saisissez une r&eacute;f&eacute;rence ou un email.</div>';
+        return;
+    }
+
+    resultDiv.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Recherche...</div>';
+
+    try {
+        const res = await apiPost(`/booking/${hotelSlug}/lookup`, {
+            booking_ref: ref,
+            email: email
+        });
+
+        const local = res.local_booking;
+        const pms = res.pms_result;
+
+        if (!local && (!pms || !pms.success || !pms.reservations || pms.reservations.length === 0)) {
+            resultDiv.innerHTML = '<div class="alert alert-warning" style="margin-top:12px">Aucune r&eacute;servation trouv&eacute;e.</div>';
+            return;
+        }
+
+        let html = '<div class="lookup-result" style="margin-top:12px">';
+
+        if (local) {
+            html += `
+                <div class="resa-card">
+                    <h4><i class="fas fa-bookmark"></i> R&eacute;servation ${esc(local.booking_ref)}</h4>
+                    <div class="resa-row"><span class="label">Statut</span><span><strong>${esc(local.status)}</strong></span></div>
+                    <div class="resa-row"><span class="label">Arriv&eacute;e</span><span>${formatDate(local.checkin_date)}</span></div>
+                    <div class="resa-row"><span class="label">D&eacute;part</span><span>${formatDate(local.checkout_date)}</span></div>
+                    <div class="resa-row"><span class="label">Chambre</span><span>${esc(local.room_type)}</span></div>
+                    <div class="resa-row"><span class="label">Paiement</span><span>${esc(local.payment_status)}</span></div>
+                    <div class="resa-row"><span class="label">Total</span><span><strong>${parseFloat(local.total_amount).toFixed(2)} &euro;</strong></span></div>
+                </div>
+            `;
+        }
+
+        if (pms && pms.success && pms.reservations && pms.reservations.length > 0) {
+            pms.reservations.forEach(r => {
+                html += `
+                    <div class="resa-card" style="margin-top:8px">
+                        <h4><i class="fas fa-hotel"></i> PMS : ${esc(r.NoResa)}</h4>
+                        <div class="resa-row"><span class="label">Client</span><span>${esc(r.ClientInfo?.LastName || '')}</span></div>
+                        <div class="resa-row"><span class="label">S&eacute;jour</span><span>${formatDate(r.StartDate)} &rarr; ${formatDate(r.EndDate)}</span></div>
+                        <div class="resa-row"><span class="label">Chambre</span><span>${esc(r.RoomInfo?.Name || '')} (n&deg;${esc(r.RoomInfo?.RoomNumber || '')})</span></div>
+                        <div class="resa-row"><span class="label">Total TTC</span><span><strong>${(r.TotalAmountIT || 0).toFixed(2)} &euro;</strong></span></div>
+                        <div class="resa-row"><span class="label">Solde</span><span>${(r.TotalBalanceIT || 0).toFixed(2)} &euro;</span></div>
+                    </div>
+                `;
+            });
+        }
+
+        html += '</div>';
+        resultDiv.innerHTML = html;
+    } catch (err) {
+        resultDiv.innerHTML = `<div class="alert alert-danger" style="margin-top:12px">${esc(err.message)}</div>`;
+    }
 }
 
 function onDateChange() {
@@ -284,40 +508,51 @@ function onDateChange() {
 async function searchAvailability() {
     const container = document.getElementById('rooms-container');
     if (!bookingState.checkin || !bookingState.checkout) {
-        container.innerHTML = '<div class="alert alert-danger">Veuillez s&eacute;lectionner vos dates</div>';
+        container.innerHTML = '<div class="alert alert-danger" style="margin-top:16px">Veuillez s&eacute;lectionner vos dates.</div>';
         return;
     }
 
-    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top:10px">Recherche en cours...</p></div>';
+    container.innerHTML = '<div class="loading-spinner" style="margin-top:20px"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top:10px">Recherche en cours...</p></div>';
 
     try {
-        const res = await apiGet(`/booking/${hotelSlug}/availability?checkin=${bookingState.checkin}&checkout=${bookingState.checkout}&guests=${bookingState.guests}`);
+        const res = await apiGet(`/booking/${hotelSlug}/availability?checkin=${bookingState.checkin}&checkout=${bookingState.checkout}&nb_adult=${bookingState.nb_adult}&nb_child=${bookingState.nb_child}`);
         const rooms = res.rooms || [];
-        const nights = Math.ceil((new Date(bookingState.checkout) - new Date(bookingState.checkin)) / 86400000);
+        const nights = getNights();
 
         if (rooms.length === 0) {
-            container.innerHTML = '<div class="card" style="margin-top:20px"><div class="card-body" style="text-align:center;padding:40px"><i class="fas fa-bed" style="font-size:32px;color:var(--gray-300);margin-bottom:12px"></i><h3>Aucune chambre disponible</h3><p style="color:var(--gray-500)">Essayez d\'autres dates</p></div></div>';
+            container.innerHTML = `
+                <div class="card" style="margin-top:20px">
+                    <div class="card-body" style="text-align:center;padding:40px">
+                        <i class="fas fa-bed" style="font-size:32px;color:var(--gray-300);margin-bottom:12px"></i>
+                        <h3>Aucune chambre disponible</h3>
+                        <p style="color:var(--gray-500)">Essayez d'autres dates ou un nombre de voyageurs diff&eacute;rent.</p>
+                    </div>
+                </div>`;
             return;
         }
-
-        const roomTypeIcons = { standard: 'fa-bed', superieure: 'fa-star', suite: 'fa-crown', familiale: 'fa-users', pmr: 'fa-wheelchair' };
 
         container.innerHTML = `
             <div class="card" style="margin-top:20px">
                 <div class="card-header">
-                    <h2><i class="fas fa-door-open"></i> Chambres disponibles <span style="font-weight:400;color:var(--gray-500)">(${nights} nuit${nights > 1 ? 's' : ''})</span></h2>
+                    <h2><i class="fas fa-door-open"></i> Chambres disponibles</h2>
+                    <p>${nights} nuit${nights > 1 ? 's' : ''} &middot; ${bookingState.nb_adult} adulte${bookingState.nb_adult > 1 ? 's' : ''}${bookingState.nb_child > 0 ? ` &middot; ${bookingState.nb_child} enfant${bookingState.nb_child > 1 ? 's' : ''}` : ''}</p>
                 </div>
                 <div class="card-body">
                     <div class="room-cards">
                         ${rooms.map(r => {
                             const total = r.total || (r.rate_per_night * nights);
-                            const icon = roomTypeIcons[r.room_type] || 'fa-bed';
                             const avail = r.available > 0;
+                            const cap = r.max_capacity ? `<span><i class="fas fa-user-friends"></i> Max ${r.max_capacity}</span>` : '';
+                            const desc = r.description ? `<div class="room-desc">${esc(r.description)}</div>` : '';
                             return `
-                                <div class="room-card ${avail ? '' : 'unavailable'}" onclick="${avail ? `selectRoom('${r.room_type}', '${esc(r.room_type_label)}', ${r.rate_per_night}, ${total}, ${nights})` : ''}">
+                                <div class="room-card ${avail ? '' : 'unavailable'}" onclick="${avail ? `selectRoom(this, '${esc(r.room_type)}', '${esc(r.room_type_label || r.room_type)}', ${r.rate_per_night}, ${total}, ${nights}, '${esc(r.description || '')}')` : ''}">
                                     <div class="room-info">
-                                        <h3><i class="fas ${icon}"></i> ${esc(r.room_type_label || r.room_type)}</h3>
-                                        <p>${avail ? `${r.available} chambre${r.available > 1 ? 's' : ''} disponible${r.available > 1 ? 's' : ''}` : 'Non disponible'}</p>
+                                        <h3><i class="fas fa-bed"></i> ${esc(r.room_type_label || r.room_type)}</h3>
+                                        ${desc}
+                                        <div class="room-meta">
+                                            ${cap}
+                                            <span><i class="fas fa-check-circle"></i> ${avail ? `${r.available} disponible${r.available > 1 ? 's' : ''}` : 'Complet'}</span>
+                                        </div>
                                     </div>
                                     <div class="room-price">
                                         ${avail ? `
@@ -337,20 +572,19 @@ async function searchAvailability() {
     }
 }
 
-function selectRoom(type, label, ratePerNight, total, nights) {
-    selectedRoom = { type, label, ratePerNight, total, nights };
+function selectRoom(el, type, label, ratePerNight, total, nights, description) {
+    selectedRoom = { type, label, ratePerNight, total, nights, description };
+    selectedExtras = [];
 
-    // Highlight selected
+    // Highlight
     document.querySelectorAll('.room-card').forEach(c => c.classList.remove('selected'));
-    event.currentTarget.classList.add('selected');
+    el.classList.add('selected');
 
     renderStep2();
 }
 
 // ============ STEP 2: Guest Info ============
 function renderStep2() {
-    const nights = selectedRoom.nights;
-
     document.getElementById('booking-app').innerHTML = `
         ${renderHeader()}
         <div class="booking-main">
@@ -359,44 +593,70 @@ function renderStep2() {
                 <div class="card">
                     <div class="card-header">
                         <h2><i class="fas fa-user"></i> Vos informations</h2>
+                        <p>Renseignez vos coordonn&eacute;es pour la r&eacute;servation</p>
                     </div>
                     <div class="card-body">
-                        <div class="form-row">
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label>Civilit&eacute; *</label>
+                                <select id="civilite">
+                                    <option value="M." ${bookingState.civilite === 'M.' ? 'selected' : ''}>M.</option>
+                                    <option value="Mme" ${bookingState.civilite === 'Mme' ? 'selected' : ''}>Mme</option>
+                                    <option value="Mlle" ${bookingState.civilite === 'Mlle' ? 'selected' : ''}>Mlle</option>
+                                </select>
+                            </div>
                             <div class="form-group">
                                 <label>Pr&eacute;nom *</label>
-                                <input type="text" id="guest_first_name" value="${esc(bookingState.guest_first_name)}" required>
+                                <input type="text" id="guest_first_name" value="${esc(bookingState.guest_first_name)}" placeholder="Jean" required>
                             </div>
                             <div class="form-group">
                                 <label>Nom *</label>
-                                <input type="text" id="guest_last_name" value="${esc(bookingState.guest_last_name)}" required>
+                                <input type="text" id="guest_last_name" value="${esc(bookingState.guest_last_name)}" placeholder="Dupont" required>
                             </div>
                         </div>
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Email *</label>
-                                <input type="email" id="guest_email" value="${esc(bookingState.guest_email)}" required>
+                                <input type="email" id="guest_email" value="${esc(bookingState.guest_email)}" placeholder="jean.dupont@email.com" required>
                             </div>
                             <div class="form-group">
                                 <label>T&eacute;l&eacute;phone</label>
-                                <input type="tel" id="guest_phone" value="${esc(bookingState.guest_phone)}">
+                                <input type="tel" id="guest_phone" value="${esc(bookingState.guest_phone)}" placeholder="06 12 34 56 78">
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label>Demandes sp&eacute;ciales</label>
-                            <textarea id="special_requests" rows="3" placeholder="Lit b&eacute;b&eacute;, &eacute;tage haut, etc.">${esc(bookingState.special_requests)}</textarea>
+
+                        <div style="border-top:1px solid var(--gray-100);margin:20px 0;padding-top:20px">
+                            <p style="font-size:14px;font-weight:500;color:var(--gray-700);margin-bottom:12px">Adresse <span style="font-weight:400;color:var(--gray-400)">(facultatif)</span></p>
+                            <div class="form-group">
+                                <label>Adresse</label>
+                                <input type="text" id="address1" value="${esc(bookingState.address1)}" placeholder="18 avenue des moulins">
+                            </div>
+                            <div class="form-group">
+                                <label>Compl&eacute;ment</label>
+                                <input type="text" id="address2" value="${esc(bookingState.address2)}" placeholder="R&eacute;s. des pommiers, B&acirc;t. A">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Code postal</label>
+                                    <input type="text" id="postal_code" value="${esc(bookingState.postal_code)}" placeholder="34000">
+                                </div>
+                                <div class="form-group">
+                                    <label>Ville</label>
+                                    <input type="text" id="city" value="${esc(bookingState.city)}" placeholder="Montpellier">
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="booking-summary">
-                            <h4><i class="fas fa-receipt"></i> R&eacute;capitulatif</h4>
-                            <div class="summary-row"><span>${esc(selectedRoom.label)}</span><span>${selectedRoom.ratePerNight.toFixed(0)} &euro; / nuit</span></div>
-                            <div class="summary-row"><span>${nights} nuit${nights > 1 ? 's' : ''}</span><span>${bookingState.checkin} &rarr; ${bookingState.checkout}</span></div>
-                            <div class="summary-row"><span>${bookingState.guests} voyageur${bookingState.guests > 1 ? 's' : ''}</span><span></span></div>
-                            <div class="summary-row total"><span>Total</span><span>${selectedRoom.total.toFixed(2)} &euro;</span></div>
+                        <div class="form-group">
+                            <label>Demandes sp&eacute;ciales</label>
+                            <textarea id="special_requests" rows="3" placeholder="Lit b&eacute;b&eacute;, &eacute;tage &eacute;lev&eacute;, chambre calme...">${esc(bookingState.special_requests)}</textarea>
                         </div>
+
+                        ${renderSummary(false)}
 
                         <div style="display:flex;gap:12px;margin-top:24px">
                             <button class="btn btn-outline" onclick="renderStep1()"><i class="fas fa-arrow-left"></i> Retour</button>
-                            <button class="btn btn-primary btn-lg" style="flex:1" onclick="goToPayment()"><i class="fas fa-lock"></i> Proc&eacute;der au paiement</button>
+                            <button class="btn btn-primary btn-lg" style="flex:1" onclick="goToExtras()"><i class="fas fa-concierge-bell"></i> Options & Extras</button>
                         </div>
                     </div>
                 </div>
@@ -405,35 +665,223 @@ function renderStep2() {
     `;
 }
 
-function goToPayment() {
+function saveGuestInfo() {
+    bookingState.civilite = document.getElementById('civilite').value;
     bookingState.guest_first_name = document.getElementById('guest_first_name').value.trim();
     bookingState.guest_last_name = document.getElementById('guest_last_name').value.trim();
     bookingState.guest_email = document.getElementById('guest_email').value.trim();
     bookingState.guest_phone = document.getElementById('guest_phone').value.trim();
+    bookingState.address1 = document.getElementById('address1').value.trim();
+    bookingState.address2 = document.getElementById('address2').value.trim();
+    bookingState.postal_code = document.getElementById('postal_code').value.trim();
+    bookingState.city = document.getElementById('city').value.trim();
     bookingState.special_requests = document.getElementById('special_requests').value.trim();
+}
 
-    if (!bookingState.guest_first_name || !bookingState.guest_last_name || !bookingState.guest_email) {
-        alert('Veuillez remplir les champs obligatoires (Prenom, Nom, Email)');
+function goToExtras() {
+    saveGuestInfo();
+
+    if (!bookingState.guest_last_name || !bookingState.guest_email) {
+        alert('Veuillez remplir les champs obligatoires (Nom, Email).');
         return;
     }
-
     if (!bookingState.guest_email.includes('@')) {
-        alert('Veuillez saisir un email valide');
+        alert('Veuillez saisir un email valide.');
         return;
     }
 
     renderStep3();
 }
 
-// ============ STEP 3: Payment ============
-function renderStep3() {
-    const nights = selectedRoom.nights;
-
+// ============ STEP 3: Extras / Products ============
+async function renderStep3() {
     document.getElementById('booking-app').innerHTML = `
         ${renderHeader()}
         <div class="booking-main">
             <div class="container">
                 ${renderSteps(3)}
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-concierge-bell"></i> Options & Prestations</h2>
+                        <p>Ajoutez des extras &agrave; votre s&eacute;jour (facultatif)</p>
+                    </div>
+                    <div class="card-body">
+                        <div id="extras-container">
+                            <div class="loading-spinner"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top:10px">Chargement des options...</p></div>
+                        </div>
+
+                        <div id="extras-summary-area">${renderSummary(true)}</div>
+
+                        <div style="display:flex;gap:12px;margin-top:24px">
+                            <button class="btn btn-outline" onclick="renderStep2()"><i class="fas fa-arrow-left"></i> Retour</button>
+                            <button class="btn btn-primary btn-lg" style="flex:1" onclick="goToPayment()"><i class="fas fa-lock"></i> Proc&eacute;der au paiement</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Tenter de charger les produits depuis le PMS
+    await loadExtras();
+}
+
+async function loadExtras() {
+    const container = document.getElementById('extras-container');
+
+    try {
+        // On n'a pas encore de NoResa PMS ici, on essaie une recherche de produits générique
+        // Le backend peut renvoyer des produits même sans NoResa (produits par défaut de l'hôtel)
+        const res = await apiPost(`/booking/${hotelSlug}/products`, { noresa: '' });
+
+        if (!res.success || !res.products || res.products.length === 0) {
+            container.innerHTML = `
+                <div style="text-align:center;padding:24px;color:var(--gray-400)">
+                    <i class="fas fa-gift" style="font-size:28px;margin-bottom:8px"></i>
+                    <p>Aucune option suppl&eacute;mentaire disponible pour le moment.</p>
+                </div>
+            `;
+            return;
+        }
+
+        renderExtrasCards(res.products);
+    } catch (err) {
+        container.innerHTML = `
+            <div style="text-align:center;padding:24px;color:var(--gray-400)">
+                <i class="fas fa-gift" style="font-size:28px;margin-bottom:8px"></i>
+                <p>Les options seront disponibles apr&egrave;s cr&eacute;ation de la r&eacute;servation.</p>
+                <p style="font-size:12px;margin-top:4px">Vous pourrez ajouter des extras lors de votre arriv&eacute;e.</p>
+            </div>
+        `;
+    }
+}
+
+function renderExtrasCards(products) {
+    const container = document.getElementById('extras-container');
+    const nights = getNights();
+    const nbPersons = bookingState.nb_adult + bookingState.nb_child;
+
+    container.innerHTML = `
+        <div class="extras-list">
+            ${products.map(p => {
+                const existing = selectedExtras.find(e => e.ProductCode === p.ProductCode);
+                const qty = existing ? existing.qty : 0;
+                const isYesNo = p.QuantityType === 'YesNo';
+                const pricingLabel = getPricingLabel(p);
+
+                return `
+                    <div class="extra-card ${qty > 0 ? 'selected' : ''}" id="extra-${esc(p.ProductCode)}">
+                        <div class="extra-info">
+                            <h4>${esc(p.Name)}</h4>
+                            <p>${pricingLabel}</p>
+                        </div>
+                        <div class="extra-action">
+                            <div class="extra-price">${p.UnitPrice.toFixed(2)} &euro;</div>
+                            ${isYesNo ? `
+                                <button class="btn btn-sm ${qty > 0 ? 'btn-primary' : 'btn-outline'}" onclick="toggleExtra('${esc(p.ProductCode)}', '${esc(p.Name)}', ${p.UnitPrice}, '${p.CalcRule}', '${p.PostingType}', '${p.QuantityType}')">
+                                    ${qty > 0 ? '<i class="fas fa-check"></i> Ajout&eacute;' : '<i class="fas fa-plus"></i> Ajouter'}
+                                </button>
+                            ` : `
+                                <div class="extra-qty">
+                                    <button onclick="changeExtraQty('${esc(p.ProductCode)}', '${esc(p.Name)}', ${p.UnitPrice}, '${p.CalcRule}', '${p.PostingType}', '${p.QuantityType}', -1)">-</button>
+                                    <span>${qty}</span>
+                                    <button onclick="changeExtraQty('${esc(p.ProductCode)}', '${esc(p.Name)}', ${p.UnitPrice}, '${p.CalcRule}', '${p.PostingType}', '${p.QuantityType}', 1)">+</button>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+function getPricingLabel(p) {
+    const parts = [];
+    if (p.CalcRule === 'P') parts.push('par personne');
+    if (p.PostingType === 'D') parts.push('par nuit');
+    if (p.PostingType === 'N') parts.push('par s\u00e9jour');
+    return parts.length > 0 ? parts.join(' &middot; ') : 'forfait';
+}
+
+function toggleExtra(code, name, price, calcRule, postingType, qtyType) {
+    const idx = selectedExtras.findIndex(e => e.ProductCode === code);
+    if (idx >= 0) {
+        selectedExtras.splice(idx, 1);
+    } else {
+        selectedExtras.push({ ProductCode: code, Name: name, UnitPrice: price, CalcRule: calcRule, PostingType: postingType, QuantityType: qtyType, qty: 1 });
+    }
+    refreshExtrasUI();
+}
+
+function changeExtraQty(code, name, price, calcRule, postingType, qtyType, delta) {
+    const idx = selectedExtras.findIndex(e => e.ProductCode === code);
+    if (idx >= 0) {
+        selectedExtras[idx].qty = Math.max(0, selectedExtras[idx].qty + delta);
+        if (selectedExtras[idx].qty === 0) selectedExtras.splice(idx, 1);
+    } else if (delta > 0) {
+        selectedExtras.push({ ProductCode: code, Name: name, UnitPrice: price, CalcRule: calcRule, PostingType: postingType, QuantityType: qtyType, qty: 1 });
+    }
+    refreshExtrasUI();
+}
+
+function refreshExtrasUI() {
+    // Refresh summary
+    const summaryArea = document.getElementById('extras-summary-area');
+    if (summaryArea) summaryArea.innerHTML = renderSummary(true);
+
+    // Refresh card states
+    selectedExtras.forEach(e => {
+        const card = document.getElementById('extra-' + e.ProductCode);
+        if (card) card.classList.add('selected');
+    });
+    document.querySelectorAll('.extra-card').forEach(card => {
+        const code = card.id.replace('extra-', '');
+        if (!selectedExtras.find(e => e.ProductCode === code)) {
+            card.classList.remove('selected');
+        }
+    });
+
+    // Refresh qty displays
+    document.querySelectorAll('.extra-qty span').forEach(span => {
+        const btn = span.closest('.extra-card');
+        if (btn) {
+            const code = btn.id.replace('extra-', '');
+            const extra = selectedExtras.find(e => e.ProductCode === code);
+            span.textContent = extra ? extra.qty : 0;
+        }
+    });
+
+    // Refresh YesNo buttons
+    document.querySelectorAll('.extra-card').forEach(card => {
+        const code = card.id.replace('extra-', '');
+        const extra = selectedExtras.find(e => e.ProductCode === code);
+        const yesNoBtn = card.querySelector('.extra-action .btn');
+        if (yesNoBtn && !card.querySelector('.extra-qty')) {
+            if (extra && extra.qty > 0) {
+                yesNoBtn.className = 'btn btn-sm btn-primary';
+                yesNoBtn.innerHTML = '<i class="fas fa-check"></i> Ajout\u00e9';
+            } else {
+                yesNoBtn.className = 'btn btn-sm btn-outline';
+                yesNoBtn.innerHTML = '<i class="fas fa-plus"></i> Ajouter';
+            }
+        }
+    });
+}
+
+function goToPayment() {
+    renderStep4();
+}
+
+// ============ STEP 4: Payment ============
+function renderStep4() {
+    const grandTotal = getGrandTotal();
+
+    document.getElementById('booking-app').innerHTML = `
+        ${renderHeader()}
+        <div class="booking-main">
+            <div class="container">
+                ${renderSteps(4)}
                 <div class="card">
                     <div class="card-header">
                         <h2><i class="fas fa-credit-card"></i> Paiement s&eacute;curis&eacute;</h2>
@@ -442,10 +890,14 @@ function renderStep3() {
                         <div class="booking-summary" style="margin-bottom:24px">
                             <h4><i class="fas fa-receipt"></i> Votre r&eacute;servation</h4>
                             <div class="summary-row"><span>${esc(hotelData.name)}</span><span></span></div>
-                            <div class="summary-row"><span>${esc(selectedRoom.label)} - ${nights} nuit${nights > 1 ? 's' : ''}</span><span></span></div>
-                            <div class="summary-row"><span>${bookingState.checkin} &rarr; ${bookingState.checkout}</span><span></span></div>
-                            <div class="summary-row"><span>${esc(bookingState.guest_first_name)} ${esc(bookingState.guest_last_name)}</span><span>${esc(bookingState.guest_email)}</span></div>
-                            <div class="summary-row total"><span>Total &agrave; payer</span><span>${selectedRoom.total.toFixed(2)} &euro;</span></div>
+                            <div class="summary-row"><span>${esc(selectedRoom.label)} - ${getNights()} nuit${getNights() > 1 ? 's' : ''}</span><span>${selectedRoom.total.toFixed(2)} &euro;</span></div>
+                            <div class="summary-row"><span>${formatDate(bookingState.checkin)} &rarr; ${formatDate(bookingState.checkout)}</span><span></span></div>
+                            <div class="summary-row"><span>${esc(bookingState.civilite)} ${esc(bookingState.guest_first_name)} ${esc(bookingState.guest_last_name)}</span><span>${esc(bookingState.guest_email)}</span></div>
+                            ${selectedExtras.map(e => {
+                                const eTotal = computeExtraLineTotal(e);
+                                return `<div class="summary-row extras-label"><span>${esc(e.Name)} x${e.qty}</span><span>${eTotal.toFixed(2)} &euro;</span></div>`;
+                            }).join('')}
+                            <div class="summary-row total"><span>Total &agrave; payer</span><span>${grandTotal.toFixed(2)} &euro;</span></div>
                         </div>
 
                         <div class="form-group">
@@ -457,9 +909,9 @@ function renderStep3() {
                         <div id="payment-error" style="display:none" class="alert alert-danger"></div>
 
                         <div style="display:flex;gap:12px;margin-top:24px">
-                            <button class="btn btn-outline" onclick="renderStep2()"><i class="fas fa-arrow-left"></i> Retour</button>
+                            <button class="btn btn-outline" onclick="renderStep3()"><i class="fas fa-arrow-left"></i> Retour</button>
                             <button class="btn btn-primary btn-lg" style="flex:1" id="pay-btn" onclick="processPayment()">
-                                <i class="fas fa-lock"></i> Payer ${selectedRoom.total.toFixed(2)} &euro;
+                                <i class="fas fa-lock"></i> Payer ${grandTotal.toFixed(2)} &euro;
                             </button>
                         </div>
 
@@ -491,6 +943,7 @@ function renderStep3() {
 async function processPayment() {
     const payBtn = document.getElementById('pay-btn');
     const errorDiv = document.getElementById('payment-error');
+    const grandTotal = getGrandTotal();
     errorDiv.style.display = 'none';
     payBtn.disabled = true;
     payBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Traitement en cours...';
@@ -501,13 +954,20 @@ async function processPayment() {
             checkin_date: bookingState.checkin,
             checkout_date: bookingState.checkout,
             room_type: selectedRoom.type,
-            guests_count: bookingState.guests,
+            nb_adult: bookingState.nb_adult,
+            nb_child: bookingState.nb_child,
+            civilite: bookingState.civilite,
             guest_first_name: bookingState.guest_first_name,
             guest_last_name: bookingState.guest_last_name,
             guest_email: bookingState.guest_email,
             guest_phone: bookingState.guest_phone,
+            address1: bookingState.address1,
+            address2: bookingState.address2,
+            city: bookingState.city,
+            postal_code: bookingState.postal_code,
             special_requests: bookingState.special_requests,
-            total_amount: selectedRoom.total
+            total_amount: grandTotal,
+            extras_amount: getExtrasTotal()
         });
 
         const clientSecret = reserveRes.client_secret;
@@ -520,7 +980,15 @@ async function processPayment() {
                 card: cardElement,
                 billing_details: {
                     name: `${bookingState.guest_first_name} ${bookingState.guest_last_name}`,
-                    email: bookingState.guest_email
+                    email: bookingState.guest_email,
+                    phone: bookingState.guest_phone || undefined,
+                    address: bookingState.address1 ? {
+                        line1: bookingState.address1,
+                        line2: bookingState.address2 || undefined,
+                        city: bookingState.city || undefined,
+                        postal_code: bookingState.postal_code || undefined,
+                        country: 'FR'
+                    } : undefined
                 }
             }
         });
@@ -530,27 +998,33 @@ async function processPayment() {
         }
 
         if (paymentIntent.status === 'succeeded') {
-            // 3. Confirm booking on our backend
-            await apiPost(`/booking/${hotelSlug}/confirm`, {
+            // 3. Confirm booking on our backend + sync to PMS
+            const confirmRes = await apiPost(`/booking/${hotelSlug}/confirm`, {
                 booking_ref: bookingRef,
-                payment_intent_id: paymentIntentId
+                payment_intent_id: paymentIntentId,
+                extras: selectedExtras.map(e => ({
+                    ProductCode: e.ProductCode,
+                    Quantity: e.qty
+                }))
             });
 
-            renderSuccess(bookingRef);
+            renderSuccess(bookingRef, confirmRes.pms_synced);
         } else {
-            throw new Error('Paiement non finalis&eacute;. Statut: ' + paymentIntent.status);
+            throw new Error('Paiement non finalis\u00e9. Statut: ' + paymentIntent.status);
         }
 
     } catch (err) {
         errorDiv.textContent = err.message;
         errorDiv.style.display = 'block';
         payBtn.disabled = false;
-        payBtn.innerHTML = `<i class="fas fa-lock"></i> Payer ${selectedRoom.total.toFixed(2)} &euro;`;
+        payBtn.innerHTML = `<i class="fas fa-lock"></i> Payer ${grandTotal.toFixed(2)} \u20ac`;
     }
 }
 
 // ============ SUCCESS ============
-function renderSuccess(bookingRef) {
+function renderSuccess(bookingRef, pmsSynced) {
+    const grandTotal = getGrandTotal();
+
     document.getElementById('booking-app').innerHTML = `
         ${renderHeader()}
         <div class="booking-main">
@@ -563,14 +1037,32 @@ function renderSuccess(bookingRef) {
                         <div class="booking-ref">${esc(bookingRef)}</div>
                         <p>Un email de confirmation a &eacute;t&eacute; envoy&eacute; &agrave; <strong>${esc(bookingState.guest_email)}</strong></p>
 
-                        <div class="booking-summary" style="max-width:400px;margin:24px auto;text-align:left">
-                            <div class="summary-row"><span>Arriv&eacute;e</span><span>${bookingState.checkin} &agrave; ${hotelData.checkin_time ? hotelData.checkin_time.substring(0,5) : '15:00'}</span></div>
-                            <div class="summary-row"><span>D&eacute;part</span><span>${bookingState.checkout} &agrave; ${hotelData.checkout_time ? hotelData.checkout_time.substring(0,5) : '11:00'}</span></div>
+                        <div class="booking-summary" style="max-width:450px;margin:24px auto;text-align:left">
+                            <div class="summary-row"><span>Client</span><span>${esc(bookingState.civilite)} ${esc(bookingState.guest_first_name)} ${esc(bookingState.guest_last_name)}</span></div>
+                            <div class="summary-row"><span>Arriv&eacute;e</span><span>${formatDate(bookingState.checkin)} &agrave; ${hotelData.checkin_time ? hotelData.checkin_time.substring(0,5) : '15:00'}</span></div>
+                            <div class="summary-row"><span>D&eacute;part</span><span>${formatDate(bookingState.checkout)} &agrave; ${hotelData.checkout_time ? hotelData.checkout_time.substring(0,5) : '11:00'}</span></div>
                             <div class="summary-row"><span>Chambre</span><span>${esc(selectedRoom.label)}</span></div>
-                            <div class="summary-row total"><span>Pay&eacute;</span><span>${selectedRoom.total.toFixed(2)} &euro;</span></div>
+                            <div class="summary-row"><span>Voyageurs</span><span>${bookingState.nb_adult} adulte${bookingState.nb_adult > 1 ? 's' : ''}${bookingState.nb_child > 0 ? `, ${bookingState.nb_child} enfant${bookingState.nb_child > 1 ? 's' : ''}` : ''}</span></div>
+                            ${selectedExtras.length > 0 ? selectedExtras.map(e => `<div class="summary-row extras-label"><span>${esc(e.Name)}</span><span>x${e.qty}</span></div>`).join('') : ''}
+                            <div class="summary-row total"><span>Pay&eacute;</span><span>${grandTotal.toFixed(2)} &euro;</span></div>
+                        </div>
+
+                        ${!pmsSynced ? `
+                            <div class="alert alert-warning" style="max-width:450px;margin:16px auto;text-align:left">
+                                <i class="fas fa-info-circle"></i> Votre r&eacute;servation est enregistr&eacute;e. La synchronisation avec le syst&egrave;me de l'h&ocirc;tel sera effectu&eacute;e sous peu.
+                            </div>
+                        ` : ''}
+
+                        <div style="margin-top:24px">
+                            <button class="btn btn-outline" onclick="window.print()"><i class="fas fa-print"></i> Imprimer</button>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+        <div class="footer-booking">
+            <div class="container">
+                <i class="fas fa-lock"></i> R&eacute;servation s&eacute;curis&eacute;e &middot; Paiement chiffr&eacute; par Stripe
             </div>
         </div>
     `;
@@ -578,7 +1070,7 @@ function renderSuccess(bookingRef) {
 
 function esc(str) {
     if (!str) return '';
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 </script>
 </body>

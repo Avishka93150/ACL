@@ -8255,7 +8255,7 @@ try {
                 ]);
             }
 
-            // GET /booking/{slug}/availability?checkin=YYYY-MM-DD&checkout=YYYY-MM-DD&guests=2
+            // GET /booking/{slug}/availability?checkin=YYYY-MM-DD&checkout=YYYY-MM-DD&nb_adult=2&nb_child=0
             if ($method === 'GET' && $id && $action === 'availability') {
                 $hotel = db()->queryOne(
                     "SELECT * FROM hotels WHERE booking_slug = ? AND booking_enabled = 1 AND status = 'active'",
@@ -8265,14 +8265,15 @@ try {
 
                 $checkin = $_GET['checkin'] ?? '';
                 $checkout = $_GET['checkout'] ?? '';
-                $guests = (int)($_GET['guests'] ?? 2);
+                $nbAdult = (int)($_GET['nb_adult'] ?? $_GET['guests'] ?? 1);
+                $nbChild = (int)($_GET['nb_child'] ?? 0);
 
                 if (!$checkin || !$checkout) json_error('Dates requises');
                 if ($checkin >= $checkout) json_error('Date de départ doit être après la date d\'arrivée');
                 if (strtotime($checkin) < strtotime('today')) json_error('Date d\'arrivée ne peut pas être dans le passé');
 
-                // Appeler le PMS pour la disponibilité
-                $availability = pms_get_availability($hotel, $checkin, $checkout, $guests);
+                // Appeler le PMS pour la disponibilité (API GeHo: POST /AvailRooms/)
+                $availability = pms_get_availability($hotel, $checkin, $checkout, $nbAdult, $nbChild);
                 json_out(['rooms' => $availability]);
             }
 
@@ -8288,7 +8289,7 @@ try {
                 $data = get_input();
 
                 // Validation
-                $required = ['checkin_date', 'checkout_date', 'room_type', 'guest_first_name', 'guest_last_name', 'guest_email', 'total_amount'];
+                $required = ['checkin_date', 'checkout_date', 'room_type', 'guest_last_name', 'guest_email', 'total_amount'];
                 foreach ($required as $field) {
                     if (empty($data[$field])) json_error("Champ $field requis");
                 }
@@ -8325,22 +8326,30 @@ try {
                     json_error('Erreur paiement: ' . ($stripeResponse['error']['message'] ?? 'Erreur Stripe'), 500);
                 }
 
-                // Insérer la réservation en BDD
+                // Insérer la réservation en BDD avec champs étendus
                 $bookingId = db()->insert(
-                    "INSERT INTO pms_bookings (hotel_id, booking_ref, guest_first_name, guest_last_name, guest_email, guest_phone, checkin_date, checkout_date, room_type, guests_count, special_requests, total_amount, currency, stripe_payment_intent_id, payment_status, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EUR', ?, 'pending', 'pending', NOW())",
+                    "INSERT INTO pms_bookings (hotel_id, booking_ref, guest_first_name, guest_last_name, guest_email, guest_phone, civilite, address1, address2, city, postal_code, nb_adult, nb_child, checkin_date, checkout_date, room_type, guests_count, special_requests, total_amount, extras_amount, currency, stripe_payment_intent_id, payment_status, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EUR', ?, 'pending', 'pending', NOW())",
                     [
                         $hotel['id'],
                         $ref,
-                        $data['guest_first_name'],
+                        $data['guest_first_name'] ?? '',
                         $data['guest_last_name'],
                         $data['guest_email'],
                         $data['guest_phone'] ?? '',
+                        $data['civilite'] ?? 'M.',
+                        $data['address1'] ?? '',
+                        $data['address2'] ?? '',
+                        $data['city'] ?? '',
+                        $data['postal_code'] ?? '',
+                        (int)($data['nb_adult'] ?? 1),
+                        (int)($data['nb_child'] ?? 0),
                         $data['checkin_date'],
                         $data['checkout_date'],
                         $data['room_type'],
-                        $data['guests_count'] ?? 1,
+                        (int)($data['nb_adult'] ?? 1) + (int)($data['nb_child'] ?? 0),
                         $data['special_requests'] ?? '',
-                        $data['total_amount']
+                        $data['total_amount'],
+                        $data['extras_amount'] ?? 0
                     ]
                 );
 
@@ -8381,13 +8390,29 @@ try {
                     [$chargeId, $data['booking_ref']]
                 );
 
-                // Synchroniser avec le PMS (Geho)
+                // Synchroniser avec le PMS GeHo (POST /CreateBooking/)
                 $syncResult = pms_create_reservation($booking);
+                $pmsNoResa = null;
                 if ($syncResult['success']) {
+                    $pmsNoResa = $syncResult['pms_id'];
                     db()->execute(
                         "UPDATE pms_bookings SET pms_synced = 1, pms_booking_id = ?, updated_at = NOW() WHERE booking_ref = ?",
-                        [$syncResult['pms_id'] ?? '', $data['booking_ref']]
+                        [$pmsNoResa ?? '', $data['booking_ref']]
                     );
+
+                    // Si des extras ont été sélectionnés, les ajouter via POST /AddProduct/
+                    if (!empty($data['extras']) && $pmsNoResa) {
+                        $prodList = [];
+                        foreach ($data['extras'] as $extra) {
+                            $prodList[] = [
+                                'ProdCode' => $extra['ProductCode'],
+                                'Quantity' => (int)($extra['Quantity'] ?? 1),
+                                'StartDate' => $booking['checkin_date'],
+                                'NbNight' => (int)((strtotime($booking['checkout_date']) - strtotime($booking['checkin_date'])) / 86400)
+                            ];
+                        }
+                        pms_add_products($hotel, $pmsNoResa, $prodList);
+                    }
                 } else {
                     db()->execute(
                         "UPDATE pms_bookings SET pms_sync_error = ?, updated_at = NOW() WHERE booking_ref = ?",
@@ -8399,7 +8424,62 @@ try {
                     'success' => true,
                     'booking_ref' => $data['booking_ref'],
                     'status' => 'confirmed',
-                    'pms_synced' => $syncResult['success']
+                    'pms_synced' => $syncResult['success'],
+                    'pms_noresa' => $pmsNoResa
+                ]);
+            }
+
+            // POST /booking/{slug}/products - Récupérer les extras disponibles (via PMS)
+            if ($method === 'POST' && $id && $action === 'products') {
+                $hotel = db()->queryOne(
+                    "SELECT * FROM hotels WHERE booking_slug = ? AND booking_enabled = 1 AND status = 'active'",
+                    [$id]
+                );
+                if (!$hotel) json_error('Hôtel non trouvé', 404);
+
+                $data = get_input();
+                if (empty($data['noresa'])) json_error('noresa requis');
+
+                $result = pms_get_products($hotel, $data['noresa']);
+                json_out($result);
+            }
+
+            // POST /booking/{slug}/lookup - Rechercher une réservation existante
+            if ($method === 'POST' && $id && $action === 'lookup') {
+                $hotel = db()->queryOne(
+                    "SELECT * FROM hotels WHERE booking_slug = ? AND booking_enabled = 1 AND status = 'active'",
+                    [$id]
+                );
+                if (!$hotel) json_error('Hôtel non trouvé', 404);
+
+                $data = get_input();
+
+                // Chercher d'abord dans notre BDD locale
+                $localBooking = null;
+                if (!empty($data['booking_ref'])) {
+                    $localBooking = db()->queryOne(
+                        "SELECT * FROM pms_bookings WHERE booking_ref = ? AND hotel_id = ?",
+                        [$data['booking_ref'], $hotel['id']]
+                    );
+                } elseif (!empty($data['email'])) {
+                    $localBooking = db()->queryOne(
+                        "SELECT * FROM pms_bookings WHERE guest_email = ? AND hotel_id = ? AND status IN ('confirmed', 'pending') ORDER BY created_at DESC",
+                        [$data['email'], $hotel['id']]
+                    );
+                }
+
+                // Chercher aussi dans le PMS GeHo via POST /GetBooking/
+                $pmsResult = pms_get_booking($hotel, [
+                    'noresa' => $data['noresa'] ?? ($localBooking['pms_booking_id'] ?? ''),
+                    'last_name' => $data['last_name'] ?? '',
+                    'email' => $data['email'] ?? '',
+                    'phone' => $data['phone'] ?? '',
+                    'exact' => '1'
+                ]);
+
+                json_out([
+                    'local_booking' => $localBooking,
+                    'pms_result' => $pmsResult
                 ]);
             }
             break;
@@ -8513,11 +8593,13 @@ function geho_request($hotel, $endpoint, $method = 'GET', $body = null) {
  */
 function pms_test_connection($hotel) {
     if ($hotel['pms_type'] === 'geho') {
-        $result = geho_request($hotel, '/api/status');
+        // GetParams retourne la date de travail - sert de health check
+        $result = geho_request($hotel, '/GetParams/');
+        $connected = $result['success'] && isset($result['data']['DateJour']);
         return [
-            'connected' => $result['success'],
+            'connected' => $connected,
             'pms_type' => 'geho',
-            'message' => $result['success'] ? 'Connexion réussie' : ($result['error'] ?? 'Connexion échouée'),
+            'message' => $connected ? 'Connexion réussie (date PMS: ' . $result['data']['DateJour'] . ')' : ($result['error'] ?? 'Connexion échouée'),
             'details' => $result['data'] ?? null
         ];
     }
@@ -8528,16 +8610,36 @@ function pms_test_connection($hotel) {
 /**
  * Récupérer la disponibilité depuis le PMS
  */
-function pms_get_availability($hotel, $checkin, $checkout, $guests) {
+function pms_get_availability($hotel, $checkin, $checkout, $nbAdult, $nbChild = 0) {
     if ($hotel['pms_type'] === 'geho') {
-        $result = geho_request($hotel, "/api/availability?checkin={$checkin}&checkout={$checkout}&guests={$guests}");
+        // POST /AvailRooms/ - API GeHo officielle
+        $result = geho_request($hotel, '/AvailRooms/', 'POST', [
+            'CheckIn' => $checkin,
+            'CheckOut' => $checkout,
+            'LangCode' => 'fr',
+            'NbAdult' => (int)$nbAdult,
+            'NbChild' => (int)$nbChild
+        ]);
 
-        if ($result['success'] && !empty($result['data']['rooms'])) {
-            return $result['data']['rooms'];
+        if ($result['success'] && isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] === 0 && !empty($result['data']['Availabilities'])) {
+            $nights = (strtotime($checkout) - strtotime($checkin)) / 86400;
+            return array_map(function($room) use ($nights) {
+                return [
+                    'room_type' => $room['TypeCode'],
+                    'room_type_label' => $room['Name'],
+                    'description' => $room['Description'] ?? '',
+                    'max_capacity' => $room['MaxCapacity'] ?? 0,
+                    'available' => (int)$room['Quantity'],
+                    'rate_per_night' => (float)$room['NightPrice'],
+                    'total' => (float)$room['StayPrice'],
+                    'currency' => 'EUR',
+                    'source' => 'geho'
+                ];
+            }, $result['data']['Availabilities']);
         }
 
         // Fallback: retourner les types de chambres depuis notre BDD avec un tarif par défaut
-        if (!$result['success']) {
+        if (!$result['success'] || (isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] !== 0)) {
             $rooms = db()->query(
                 "SELECT room_type, COUNT(*) as available_count FROM rooms WHERE hotel_id = ? AND status = 'active' GROUP BY room_type",
                 [$hotel['id']]
@@ -8566,14 +8668,14 @@ function pms_get_availability($hotel, $checkin, $checkout, $guests) {
             }, $rooms);
         }
 
-        return $result['data']['rooms'] ?? [];
+        return [];
     }
 
     return [];
 }
 
 /**
- * Créer une réservation dans le PMS
+ * Créer une réservation dans le PMS via POST /CreateBooking/
  */
 function pms_create_reservation($booking) {
     $hotel = db()->queryOne("SELECT * FROM hotels WHERE id = ?", [$booking['hotel_id']]);
@@ -8582,38 +8684,145 @@ function pms_create_reservation($booking) {
     }
 
     if ($hotel['pms_type'] === 'geho') {
+        $nbNights = (strtotime($booking['checkout_date']) - strtotime($booking['checkin_date'])) / 86400;
+        $nbAdult = (int)($booking['nb_adult'] ?? $booking['guests_count'] ?? 1);
+        $nbChild = (int)($booking['nb_child'] ?? 0);
+
         $payload = [
-            'guest' => [
-                'first_name' => $booking['guest_first_name'],
-                'last_name' => $booking['guest_last_name'],
-                'email' => $booking['guest_email'],
-                'phone' => $booking['guest_phone'] ?? ''
-            ],
-            'reservation' => [
-                'checkin' => $booking['checkin_date'],
-                'checkout' => $booking['checkout_date'],
-                'room_type' => $booking['room_type'],
-                'guests' => (int)($booking['guests_count'] ?? 1),
-                'total_amount' => (float)$booking['total_amount'],
-                'currency' => $booking['currency'] ?? 'EUR',
-                'external_ref' => $booking['booking_ref'],
-                'special_requests' => $booking['special_requests'] ?? '',
-                'payment_status' => 'paid',
-                'source' => 'ACL-Online'
-            ]
+            'CheckIn' => $booking['checkin_date'],
+            'NbNights' => (int)$nbNights,
+            'TypeCode' => $booking['room_type'],
+            'LastName' => trim(($booking['guest_first_name'] ?? '') . ' ' . ($booking['guest_last_name'] ?? '')),
+            'NbAdult' => $nbAdult,
+            'NbChild' => $nbChild,
+            'Civilite' => $booking['civilite'] ?? 'M.',
+            'Adresse1' => $booking['address1'] ?? '',
+            'Adresse2' => $booking['address2'] ?? '',
+            'Ville' => $booking['city'] ?? '',
+            'CDP' => $booking['postal_code'] ?? '',
+            'Email' => $booking['guest_email'] ?? '',
+            'Phone' => $booking['guest_phone'] ?? ''
         ];
 
-        $result = geho_request($hotel, '/api/reservations', 'POST', $payload);
+        $result = geho_request($hotel, '/CreateBooking/', 'POST', $payload);
 
-        if ($result['success']) {
+        if ($result['success'] && isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] === 0) {
             return [
                 'success' => true,
-                'pms_id' => $result['data']['reservation_id'] ?? $result['data']['id'] ?? null
+                'pms_id' => $result['data']['NoResa'] ?? null
             ];
         }
 
-        return ['success' => false, 'error' => $result['error'] ?? 'Erreur PMS Geho: ' . ($result['raw'] ?? '')];
+        $errorMsg = $result['data']['ErrorMessage'] ?? $result['error'] ?? 'Erreur PMS Geho';
+        return ['success' => false, 'error' => $errorMsg];
     }
 
     return ['success' => false, 'error' => 'Type PMS non supporté: ' . $hotel['pms_type']];
+}
+
+/**
+ * Récupérer les produits/extras disponibles via POST /Products/
+ */
+function pms_get_products($hotel, $noResa) {
+    if ($hotel['pms_type'] === 'geho') {
+        $result = geho_request($hotel, '/Products/', 'POST', [
+            'NoResa' => $noResa,
+            'CodeLang' => 'fr'
+        ]);
+
+        if ($result['success'] && isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] === 0) {
+            return ['success' => true, 'products' => $result['data']['Products'] ?? []];
+        }
+
+        return ['success' => false, 'error' => $result['data']['ErrorMessage'] ?? 'Erreur récupération produits', 'products' => []];
+    }
+
+    return ['success' => false, 'error' => 'PMS non supporté', 'products' => []];
+}
+
+/**
+ * Ajouter des produits/extras à une réservation via POST /AddProduct/
+ */
+function pms_add_products($hotel, $noResa, $prodList) {
+    if ($hotel['pms_type'] === 'geho') {
+        $result = geho_request($hotel, '/AddProduct/', 'POST', [
+            'NoResa' => $noResa,
+            'ProdList' => $prodList
+        ]);
+
+        if ($result['success'] && isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] === 0) {
+            return ['success' => true];
+        }
+
+        return ['success' => false, 'error' => $result['data']['ErrorMessage'] ?? 'Erreur ajout produits'];
+    }
+
+    return ['success' => false, 'error' => 'PMS non supporté'];
+}
+
+/**
+ * Rechercher une réservation via POST /GetBooking/
+ */
+function pms_get_booking($hotel, $params) {
+    if ($hotel['pms_type'] === 'geho') {
+        $payload = [
+            'NoResa' => $params['noresa'] ?? '',
+            'TypeRequest' => $params['type_request'] ?? '',
+            'LastName' => $params['last_name'] ?? '',
+            'CodeLang' => 'fr',
+            'Email' => $params['email'] ?? '',
+            'Phone' => $params['phone'] ?? '',
+            'SearchExactName' => $params['exact'] ?? '1'
+        ];
+
+        $result = geho_request($hotel, '/GetBooking/', 'POST', $payload);
+
+        if ($result['success'] && isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] === 0) {
+            return ['success' => true, 'reservations' => $result['data']['ResaInfo'] ?? []];
+        }
+
+        return ['success' => false, 'error' => $result['data']['ErrorMessage'] ?? 'Réservation non trouvée', 'reservations' => []];
+    }
+
+    return ['success' => false, 'error' => 'PMS non supporté', 'reservations' => []];
+}
+
+/**
+ * Annuler une réservation via POST /CancelBooking/
+ */
+function pms_cancel_booking($hotel, $noResa, $reason) {
+    if ($hotel['pms_type'] === 'geho') {
+        $result = geho_request($hotel, '/CancelBooking/', 'POST', [
+            'NoResa' => $noResa,
+            'Reason' => $reason
+        ]);
+
+        if ($result['success'] && isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] === 0) {
+            return ['success' => true];
+        }
+
+        return ['success' => false, 'error' => $result['data']['ErrorMessage'] ?? 'Erreur annulation'];
+    }
+
+    return ['success' => false, 'error' => 'PMS non supporté'];
+}
+
+/**
+ * Mettre à jour les coordonnées client via POST /UpdateCustomer/
+ */
+function pms_update_customer($hotel, $noResa, $clientInfo) {
+    if ($hotel['pms_type'] === 'geho') {
+        $result = geho_request($hotel, '/UpdateCustomer/', 'POST', [
+            'NoResa' => $noResa,
+            'ClientInfo' => $clientInfo
+        ]);
+
+        if ($result['success'] && isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] === 0) {
+            return ['success' => true];
+        }
+
+        return ['success' => false, 'error' => $result['data']['ErrorMessage'] ?? 'Erreur mise à jour client'];
+    }
+
+    return ['success' => false, 'error' => 'PMS non supporté'];
 }
