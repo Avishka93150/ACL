@@ -279,7 +279,30 @@ async function showEditHotelModal(id) {
                         <option value="inactive" ${h.status === 'inactive' ? 'selected' : ''}>Inactif</option>
                     </select>
                 </div>
-                
+
+                <div class="form-section mt-20" style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:16px 20px">
+                    <h5><i class="fas fa-globe"></i> Réservation en ligne</h5>
+                    <div class="form-group" style="margin-top:10px;margin-bottom:10px">
+                        <label>
+                            <input type="checkbox" name="booking_enabled" value="1" ${h.booking_enabled == 1 ? 'checked' : ''}> Activer la réservation en ligne
+                        </label>
+                    </div>
+                    <div class="form-group" style="margin-bottom:10px">
+                        <label>Slug de réservation</label>
+                        <input type="text" name="booking_slug" value="${esc(h.booking_slug || '')}" placeholder="mon-hotel" id="booking-slug-input" oninput="updateBookingUrlPreview()">
+                        <small class="form-help">Identifiant unique dans l'URL (lettres minuscules, chiffres, tirets)</small>
+                    </div>
+                    <div class="form-group" id="booking-url-group" style="${h.booking_slug ? '' : 'display:none'}; margin-bottom:0">
+                        <label><i class="fas fa-link"></i> Lien de réservation</label>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <input type="text" readonly value="${h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : ''}" style="flex:1;padding:8px 12px;border:1px solid #93C5FD;border-radius:6px;font-size:13px;background:white;color:#1E40AF" id="booking-url-field">
+                            <button type="button" class="btn btn-sm btn-outline" onclick="copyBookingUrl()" title="Copier"><i class="fas fa-copy"></i></button>
+                            <a href="${h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : '#'}" target="_blank" class="btn btn-sm btn-primary" id="booking-url-open" title="Ouvrir la page"><i class="fas fa-external-link-alt"></i></a>
+                        </div>
+                        <small class="form-help">Partagez ce lien avec vos clients</small>
+                    </div>
+                </div>
+
                 <div class="form-section mt-20">
                     <h5><i class="fas fa-server"></i> PMS (Property Management System)</h5>
                     <p class="text-muted mb-10">Connectez votre logiciel de gestion hôtelière</p>
@@ -328,25 +351,6 @@ async function showEditHotelModal(id) {
                     <div class="form-group">
                         <label>Clé secrète (sk_live_... ou sk_test_...)</label>
                         <input type="password" name="stripe_secret_key" value="${esc(h.stripe_secret_key || '')}" placeholder="sk_live_xxxxx">
-                    </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" name="booking_enabled" value="1" ${h.booking_enabled == 1 ? 'checked' : ''}> Activer la réservation en ligne
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label>Slug de réservation</label>
-                        <input type="text" name="booking_slug" value="${esc(h.booking_slug || '')}" placeholder="mon-hotel" id="booking-slug-input" oninput="updateBookingUrlPreview()">
-                        <small class="form-help">Identifiant unique dans l'URL (lettres minuscules, chiffres, tirets). Laissez vide pour générer automatiquement.</small>
-                    </div>
-                    <div class="form-group" id="booking-url-group" style="${h.booking_slug ? '' : 'display:none'}">
-                        <label><i class="fas fa-link"></i> Lien de réservation en ligne</label>
-                        <div style="display:flex;gap:8px;align-items:center">
-                            <input type="text" readonly value="${h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : ''}" style="flex:1;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#f9fafb;color:#374151" id="booking-url-field">
-                            <button type="button" class="btn btn-sm btn-outline" onclick="copyBookingUrl()" title="Copier"><i class="fas fa-copy"></i></button>
-                            <a href="${h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : '#'}" target="_blank" class="btn btn-sm btn-outline" id="booking-url-open" title="Ouvrir"><i class="fas fa-external-link-alt"></i></a>
-                        </div>
-                        <small class="form-help">Partagez ce lien avec vos clients pour la réservation en ligne</small>
                     </div>
                 </div>
 
