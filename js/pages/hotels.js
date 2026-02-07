@@ -290,8 +290,12 @@ async function showEditHotelModal(id) {
                     </div>
                     <div class="form-group" style="margin-bottom:10px">
                         <label>Slug de réservation</label>
-                        <input type="text" name="booking_slug" value="${esc(h.booking_slug || '')}" placeholder="mon-hotel" id="booking-slug-input" oninput="updateBookingUrlPreview()">
+                        <div style="position:relative">
+                            <input type="text" name="booking_slug" value="${esc(h.booking_slug || '')}" placeholder="mon-hotel" id="booking-slug-input" data-hotel-id="${h.id}" data-original-slug="${esc(h.booking_slug || '')}" oninput="onSlugInput()" style="padding-right:36px">
+                            <span id="slug-check-icon" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:16px"></span>
+                        </div>
                         <small class="form-help">Identifiant unique dans l'URL (lettres minuscules, chiffres, tirets)</small>
+                        <small id="slug-check-msg" style="display:none;margin-top:4px"></small>
                     </div>
                     <div class="form-group" id="booking-url-group" style="${h.booking_slug ? '' : 'display:none'}; margin-bottom:0">
                         <label><i class="fas fa-link"></i> Lien de réservation</label>
@@ -386,6 +390,15 @@ async function showEditHotelModal(id) {
 
 async function updateHotel(e, id) {
     e.preventDefault();
+
+    // Block if slug is taken
+    if (!_slugAvailable) {
+        toast('Ce slug de réservation est déjà utilisé par un autre hôtel', 'error');
+        const slugInput = document.getElementById('booking-slug-input');
+        if (slugInput) slugInput.focus();
+        return;
+    }
+
     const data = Object.fromEntries(new FormData(e.target));
 
     try {
@@ -1047,6 +1060,55 @@ function copyBookingUrl() {
     }
 }
 
+
+let _slugCheckTimer = null;
+let _slugAvailable = true;
+
+function onSlugInput() {
+    updateBookingUrlPreview();
+    // Debounce slug uniqueness check (500ms)
+    clearTimeout(_slugCheckTimer);
+    const input = document.getElementById('booking-slug-input');
+    if (!input) return;
+    const slug = input.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (slug !== input.value) input.value = slug; // auto-clean
+    const icon = document.getElementById('slug-check-icon');
+    const msg = document.getElementById('slug-check-msg');
+    if (!slug) {
+        _slugAvailable = true;
+        if (icon) icon.innerHTML = '';
+        if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
+        return;
+    }
+    // If unchanged from original, no need to check
+    if (slug === input.dataset.originalSlug) {
+        _slugAvailable = true;
+        if (icon) icon.innerHTML = '<i class="fas fa-check-circle" style="color:#16A34A"></i>';
+        if (msg) { msg.style.display = 'none'; }
+        return;
+    }
+    if (icon) icon.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:#9CA3AF"></i>';
+    if (msg) { msg.style.display = 'none'; }
+    _slugCheckTimer = setTimeout(async () => {
+        try {
+            const hotelId = input.dataset.hotelId || 0;
+            const res = await API.get(`/hotels/check-slug?slug=${encodeURIComponent(slug)}&exclude_id=${hotelId}`);
+            if (res.available) {
+                _slugAvailable = true;
+                if (icon) icon.innerHTML = '<i class="fas fa-check-circle" style="color:#16A34A"></i>';
+                if (msg) { msg.style.display = 'block'; msg.innerHTML = '<span style="color:#16A34A">✓ Slug disponible</span>'; }
+            } else {
+                _slugAvailable = false;
+                if (icon) icon.innerHTML = '<i class="fas fa-times-circle" style="color:#DC2626"></i>';
+                if (msg) { msg.style.display = 'block'; msg.innerHTML = '<span style="color:#DC2626">✗ Ce slug est déjà utilisé par un autre hôtel</span>'; }
+            }
+        } catch (err) {
+            _slugAvailable = true; // don't block on network error, backend will catch
+            if (icon) icon.innerHTML = '';
+            if (msg) { msg.style.display = 'none'; }
+        }
+    }, 500);
+}
 
 function updateBookingUrlPreview() {
     const slugInput = document.getElementById('booking-slug-input');

@@ -1848,6 +1848,21 @@ try {
                 json_out(['success' => true]);
             }
             
+            // GET /hotels/check-slug?slug=xxx&exclude_id=Y - Vérifier unicité du slug
+            if ($method === 'GET' && $id === 'check-slug') {
+                require_auth();
+                $slug = trim($_GET['slug'] ?? '');
+                $exclude_id = intval($_GET['exclude_id'] ?? 0);
+                if ($slug === '') {
+                    json_out(['available' => true]);
+                }
+                $existing = db()->queryOne(
+                    "SELECT id FROM hotels WHERE booking_slug = ?" . ($exclude_id ? " AND id != ?" : ""),
+                    $exclude_id ? [$slug, $exclude_id] : [$slug]
+                );
+                json_out(['available' => !$existing, 'slug' => $slug]);
+            }
+
             // GET /hotels/{id}/competitors - Liste des concurrents
             if ($method === 'GET' && $id && is_numeric($id) && $action === 'competitors') {
                 $user = require_auth();
