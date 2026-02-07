@@ -66,3 +66,16 @@ CREATE TABLE IF NOT EXISTS pms_bookings (
 
 -- Index unique pour le slug de réservation
 ALTER TABLE hotels ADD UNIQUE INDEX idx_booking_slug (booking_slug);
+
+-- =============================================
+-- Migration: Colonnes supplémentaires pms_bookings (GeHo)
+-- =============================================
+ALTER TABLE pms_bookings ADD COLUMN civilite VARCHAR(10) DEFAULT 'M.' COMMENT 'Civilité: M., Mme, etc.';
+ALTER TABLE pms_bookings ADD COLUMN address1 VARCHAR(255) DEFAULT NULL COMMENT 'Adresse ligne 1';
+ALTER TABLE pms_bookings ADD COLUMN address2 VARCHAR(255) DEFAULT NULL COMMENT 'Adresse ligne 2';
+ALTER TABLE pms_bookings ADD COLUMN city VARCHAR(100) DEFAULT NULL COMMENT 'Ville';
+ALTER TABLE pms_bookings ADD COLUMN postal_code VARCHAR(20) DEFAULT NULL COMMENT 'Code postal';
+ALTER TABLE pms_bookings ADD COLUMN nb_adult TINYINT UNSIGNED DEFAULT 1 COMMENT 'Nombre adultes';
+ALTER TABLE pms_bookings ADD COLUMN nb_child TINYINT UNSIGNED DEFAULT 0 COMMENT 'Nombre enfants';
+ALTER TABLE pms_bookings ADD COLUMN extras_amount DECIMAL(10,2) DEFAULT 0 COMMENT 'Montant extras/produits';
+ALTER TABLE pms_bookings ADD COLUMN extras_json TEXT DEFAULT NULL COMMENT 'Détail extras sélectionnés (JSON)';

@@ -331,19 +331,25 @@ async function showEditHotelModal(id) {
                     </div>
                     <div class="form-group">
                         <label>
-                            <input type="checkbox" name="booking_enabled" value="1" ${h.booking_enabled == 1 ? 'checked' : ''}> Activer la réservation en ligne
+                            <input type="checkbox" name="booking_enabled" value="1" ${h.booking_enabled == 1 ? 'checked' : ''} onchange="toggleBookingFields()"> Activer la réservation en ligne
                         </label>
                     </div>
-                    ${h.booking_slug ? `
+                    <div id="booking-fields-section" style="${h.booking_enabled == 1 ? '' : 'display:none'}">
                         <div class="form-group">
-                            <label>URL de réservation</label>
+                            <label>Slug de réservation</label>
+                            <input type="text" name="booking_slug" value="${esc(h.booking_slug || '')}" placeholder="mon-hotel" id="booking-slug-input" oninput="updateBookingUrlPreview()">
+                            <small class="form-help">Identifiant unique dans l'URL (lettres minuscules, chiffres, tirets). Laissez vide pour générer automatiquement.</small>
+                        </div>
+                        <div class="form-group" id="booking-url-group" style="${h.booking_slug ? '' : 'display:none'}">
+                            <label>Lien de réservation en ligne</label>
                             <div class="input-group">
-                                <input type="text" readonly value="${window.location.origin}/booking.html?hotel=${esc(h.booking_slug)}" class="form-control" id="booking-url-field">
-                                <button type="button" class="btn btn-outline" onclick="copyBookingUrl()"><i class="fas fa-copy"></i></button>
+                                <input type="text" readonly value="${h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : ''}" class="form-control" id="booking-url-field">
+                                <button type="button" class="btn btn-outline" onclick="copyBookingUrl()" title="Copier le lien"><i class="fas fa-copy"></i></button>
+                                <a href="${h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : '#'}" target="_blank" class="btn btn-outline" id="booking-url-open" title="Ouvrir la page"><i class="fas fa-external-link-alt"></i></a>
                             </div>
                             <small class="form-help">Partagez ce lien avec vos clients pour la réservation en ligne</small>
                         </div>
-                    ` : ''}
+                    </div>
                 </div>
 
                 <div class="form-section mt-20">
@@ -1032,9 +1038,36 @@ async function testPmsConnection(hotelId) {
 
 function copyBookingUrl() {
     const field = document.getElementById('booking-url-field');
-    if (field) {
+    if (field && field.value) {
         navigator.clipboard.writeText(field.value);
-        toast('URL copiée', 'success');
+        toast('URL copiée dans le presse-papier', 'success');
+    }
+}
+
+function toggleBookingFields() {
+    const checkbox = document.querySelector('input[name="booking_enabled"]');
+    const section = document.getElementById('booking-fields-section');
+    if (section) {
+        section.style.display = checkbox && checkbox.checked ? '' : 'none';
+    }
+}
+
+function updateBookingUrlPreview() {
+    const slugInput = document.getElementById('booking-slug-input');
+    const urlField = document.getElementById('booking-url-field');
+    const urlGroup = document.getElementById('booking-url-group');
+    const openBtn = document.getElementById('booking-url-open');
+    if (!slugInput || !urlField || !urlGroup) return;
+
+    const slug = slugInput.value.trim();
+    if (slug) {
+        const url = window.location.origin + '/booking.html?hotel=' + encodeURIComponent(slug);
+        urlField.value = url;
+        urlGroup.style.display = '';
+        if (openBtn) openBtn.href = url;
+    } else {
+        urlGroup.style.display = 'none';
+        urlField.value = '';
     }
 }
 
