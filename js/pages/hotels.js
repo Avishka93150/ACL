@@ -64,6 +64,7 @@ async function loadHotels(container) {
                                     <td>${statusBadge(h.status)}</td>
                                     <td>
                                         <div class="table-actions">
+                                            ${h.booking_slug && h.booking_enabled == 1 ? `<a href="${window.location.origin}/booking.html?hotel=${encodeURIComponent(h.booking_slug)}" target="_blank" title="Page de réservation" style="color:var(--primary)"><i class="fas fa-globe"></i></a>` : ''}
                                             <button onclick="viewHotelRooms(${h.id})" title="Gérer les chambres"><i class="fas fa-door-open"></i></button>
                                             ${canEdit ? `<button onclick="showEditHotelModal(${h.id})" title="${t('hotels.edit')}"><i class="fas fa-edit"></i></button>` : ''}
                                             ${canDelete ? `<button onclick="deleteHotel(${h.id})" title="${t('common.delete')}" style="color:var(--danger)"><i class="fas fa-trash"></i></button>` : ''}
