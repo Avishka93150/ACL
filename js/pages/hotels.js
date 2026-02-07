@@ -331,24 +331,22 @@ async function showEditHotelModal(id) {
                     </div>
                     <div class="form-group">
                         <label>
-                            <input type="checkbox" name="booking_enabled" value="1" ${h.booking_enabled == 1 ? 'checked' : ''} onchange="toggleBookingFields()"> Activer la réservation en ligne
+                            <input type="checkbox" name="booking_enabled" value="1" ${h.booking_enabled == 1 ? 'checked' : ''}> Activer la réservation en ligne
                         </label>
                     </div>
-                    <div id="booking-fields-section" style="${h.booking_enabled == 1 ? '' : 'display:none'}">
-                        <div class="form-group">
-                            <label>Slug de réservation</label>
-                            <input type="text" name="booking_slug" value="${esc(h.booking_slug || '')}" placeholder="mon-hotel" id="booking-slug-input" oninput="updateBookingUrlPreview()">
-                            <small class="form-help">Identifiant unique dans l'URL (lettres minuscules, chiffres, tirets). Laissez vide pour générer automatiquement.</small>
+                    <div class="form-group">
+                        <label>Slug de réservation</label>
+                        <input type="text" name="booking_slug" value="${esc(h.booking_slug || '')}" placeholder="mon-hotel" id="booking-slug-input" oninput="updateBookingUrlPreview()">
+                        <small class="form-help">Identifiant unique dans l'URL (lettres minuscules, chiffres, tirets). Laissez vide pour générer automatiquement.</small>
+                    </div>
+                    <div class="form-group" id="booking-url-group" style="${h.booking_slug ? '' : 'display:none'}">
+                        <label><i class="fas fa-link"></i> Lien de réservation en ligne</label>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <input type="text" readonly value="${h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : ''}" style="flex:1;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#f9fafb;color:#374151" id="booking-url-field">
+                            <button type="button" class="btn btn-sm btn-outline" onclick="copyBookingUrl()" title="Copier"><i class="fas fa-copy"></i></button>
+                            <a href="${h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : '#'}" target="_blank" class="btn btn-sm btn-outline" id="booking-url-open" title="Ouvrir"><i class="fas fa-external-link-alt"></i></a>
                         </div>
-                        <div class="form-group" id="booking-url-group" style="${h.booking_slug ? '' : 'display:none'}">
-                            <label>Lien de réservation en ligne</label>
-                            <div class="input-group">
-                                <input type="text" readonly value="${h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : ''}" class="form-control" id="booking-url-field">
-                                <button type="button" class="btn btn-outline" onclick="copyBookingUrl()" title="Copier le lien"><i class="fas fa-copy"></i></button>
-                                <a href="${h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : '#'}" target="_blank" class="btn btn-outline" id="booking-url-open" title="Ouvrir la page"><i class="fas fa-external-link-alt"></i></a>
-                            </div>
-                            <small class="form-help">Partagez ce lien avec vos clients pour la réservation en ligne</small>
-                        </div>
+                        <small class="form-help">Partagez ce lien avec vos clients pour la réservation en ligne</small>
                     </div>
                 </div>
 
@@ -1044,13 +1042,6 @@ function copyBookingUrl() {
     }
 }
 
-function toggleBookingFields() {
-    const checkbox = document.querySelector('input[name="booking_enabled"]');
-    const section = document.getElementById('booking-fields-section');
-    if (section) {
-        section.style.display = checkbox && checkbox.checked ? '' : 'none';
-    }
-}
 
 function updateBookingUrlPreview() {
     const slugInput = document.getElementById('booking-slug-input');
