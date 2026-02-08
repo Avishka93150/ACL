@@ -21,7 +21,7 @@ function toast(message, type = 'info') {
 // Modal
 function openModal(title, content, size = '') {
     const modal = document.getElementById('modal');
-    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-title').innerHTML = title;
     document.getElementById('modal-body').innerHTML = content;
     const modalBox = document.querySelector('#modal .modal-box');
     // Reset all size classes
