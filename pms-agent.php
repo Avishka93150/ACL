@@ -24,7 +24,8 @@
 // ===================== CONFIGURATION =====================
 
 // URL de votre serveur ACL (sans slash final)
-define('ACL_URL', 'https://acl-gestion.com/api');
+// IMPORTANT : inclure index.php dans le chemin
+define('ACL_URL', 'https://acl-gestion.com/api/index.php');
 
 // Token de relais (généré dans Administration > Hôtel > PMS > Mode Relais)
 define('RELAY_TOKEN', 'VOTRE_TOKEN_ICI');
