@@ -329,6 +329,10 @@ async function showApp() {
     document.getElementById('user-name').textContent = `${API.user.first_name} ${API.user.last_name}`;
     document.getElementById('user-role').textContent = LABELS.role[API.user.role] || API.user.role;
 
+    // Suppress 401 redirects during initialization to prevent being kicked
+    // back to landing page if Authorization header is not forwarded correctly
+    _suppressAuthRedirect = true;
+
     try {
         // Load user permissions first
         await loadUserPermissions();
@@ -352,6 +356,16 @@ async function showApp() {
         await loadModulesConfig();
     } catch (e) {
         console.error('Erreur chargement modules:', e);
+    }
+
+    // Re-enable 401 redirect after initialization
+    _suppressAuthRedirect = false;
+
+    // If auth was cleared during init (token rejected by server), redirect to login
+    if (!API.token) {
+        showLogin();
+        toast('Session expirée, veuillez vous reconnecter', 'error');
+        return;
     }
 
     // Inject theme toggle + language selector in header

@@ -3,6 +3,9 @@
  */
 const API_BASE = CONFIG.API_URL;
 
+// Flag to suppress automatic redirect to login on 401 during app initialization
+let _suppressAuthRedirect = false;
+
 const API = {
     token: localStorage.getItem(CONFIG.TOKEN_KEY),
     user: JSON.parse(localStorage.getItem(CONFIG.USER_KEY) || 'null'),
@@ -44,7 +47,9 @@ const API = {
             if (!response.ok) {
                 if (response.status === 401 && !endpoint.includes('login')) {
                     this.clearAuth();
-                    showLogin();
+                    if (!_suppressAuthRedirect) {
+                        showLogin();
+                    }
                 }
                 throw new Error(data.message || 'Erreur serveur');
             }
