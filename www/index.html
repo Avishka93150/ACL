@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>ACL GESTION</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+            background: linear-gradient(135deg, #1E3A5F, #2C5282);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+        }
+        .splash {
+            text-align: center;
+            animation: fadeIn 0.5s ease;
+        }
+        .splash-icon {
+            width: 80px;
+            height: 80px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 36px;
+        }
+        .splash h1 {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+        .splash p {
+            font-size: 14px;
+            opacity: 0.7;
+            margin-bottom: 30px;
+        }
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255,255,255,0.2);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto;
+        }
+        .offline-msg {
+            display: none;
+            margin-top: 20px;
+            padding: 12px 20px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="splash">
+        <div class="splash-icon">&#127976;</div>
+        <h1>ACL GESTION</h1>
+        <p>Chargement de la plateforme...</p>
+        <div class="spinner"></div>
+        <div class="offline-msg" id="offline-msg">
+            Connexion impossible. Verifiez votre connexion internet.
+            <br><br>
+            <button onclick="location.reload()" style="padding: 8px 16px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: white; border-radius: 6px; cursor: pointer;">
+                Reessayer
+            </button>
+        </div>
+    </div>
+    <script>
+        // Si le chargement du serveur distant echoue apres 10s, afficher le message offline
+        setTimeout(() => {
+            const offlineMsg = document.getElementById('offline-msg');
+            if (offlineMsg) offlineMsg.style.display = 'block';
+        }, 10000);
+    </script>
+</body>
+</html>
