@@ -47,6 +47,14 @@ class Database {
     }
     
     public function insert($sql, $params = []) {
+        // Support du format insert('table_name', ['col' => 'val', ...])
+        if (stripos(trim($sql), 'INSERT') !== 0 && !empty($params) && array_keys($params) !== range(0, count($params) - 1)) {
+            $table = $sql;
+            $columns = array_keys($params);
+            $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+            $sql = "INSERT INTO `$table` (`" . implode('`, `', $columns) . "`) VALUES ($placeholders)";
+            $params = array_values($params);
+        }
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
         return $this->pdo->lastInsertId();
