@@ -102,3 +102,16 @@ CREATE TABLE IF NOT EXISTS hotel_leave_config (
     UNIQUE KEY unique_hotel (hotel_id),
     FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =============================================
+-- Migration: Permission evaluations.view_team manquante
+-- =============================================
+INSERT INTO role_permissions (role, permission, allowed, updated_at) VALUES
+('admin', 'evaluations.view_team', 1, NOW()),
+('groupe_manager', 'evaluations.view_team', 1, NOW()),
+('hotel_manager', 'evaluations.view_team', 1, NOW()),
+('rh', 'evaluations.view_team', 1, NOW()),
+('comptabilite', 'evaluations.view_team', 0, NOW()),
+('receptionniste', 'evaluations.view_team', 0, NOW()),
+('employee', 'evaluations.view_team', 0, NOW())
+ON DUPLICATE KEY UPDATE allowed = VALUES(allowed);

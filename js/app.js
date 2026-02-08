@@ -386,7 +386,10 @@ function updateMenuByPermissions() {
         'audit': 'audit.view',
         'closures': 'closures.view',
         'users': 'users.view',
-        'hotels': 'hotels.view'
+        'hotels': 'hotels.view',
+        'revenue': 'revenue.view',
+        'settings': 'permissions.manage',
+        'reports': 'reports.access'
     };
     
     document.querySelectorAll('.nav-item[data-page]').forEach(item => {
@@ -437,7 +440,9 @@ function navigateTo(page) {
         'closures': 'closures.view',
         'users': 'users.view',
         'hotels': 'hotels.view',
-        'settings': 'permissions.manage'
+        'revenue': 'revenue.view',
+        'settings': 'permissions.manage',
+        'reports': 'reports.access'
     };
     
     const requiredPerm = pagePermissions[page];
