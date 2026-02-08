@@ -381,7 +381,7 @@ function getDefaultPermissions(role) {
             'audit.view': true, 'audit.grids': true, 'audit.execute': true, 'audit.view_results': true,
             'revenue.view': true, 'revenue.settings': true, 'revenue.fetch_rates': true,
             'closures.view': true, 'closures.create': true, 'closures.validate': true, 'closures.edit_all': true, 'closures.add_remise': true, 'closures.add_comment': true,
-            'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true,
+            'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': true,
             'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
             'permissions.manage': false
         },
@@ -397,7 +397,7 @@ function getDefaultPermissions(role) {
             'audit.view': true, 'audit.grids': false, 'audit.execute': true, 'audit.view_results': true,
             'revenue.view': true, 'revenue.settings': false, 'revenue.fetch_rates': true,
             'closures.view': true, 'closures.create': true, 'closures.validate': true, 'closures.edit_all': false, 'closures.add_remise': true, 'closures.add_comment': true,
-            'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true,
+            'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': true,
             'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
             'permissions.manage': false
         },
@@ -413,7 +413,7 @@ function getDefaultPermissions(role) {
             'audit.view': false, 'audit.grids': false, 'audit.execute': false, 'audit.view_results': false,
             'revenue.view': false, 'revenue.settings': false, 'revenue.fetch_rates': false,
             'closures.view': true, 'closures.create': false, 'closures.validate': true, 'closures.edit_all': true, 'closures.add_remise': false, 'closures.add_comment': true,
-            'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true,
+            'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
             'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
             'permissions.manage': false
         },
@@ -429,7 +429,7 @@ function getDefaultPermissions(role) {
             'audit.view': false, 'audit.grids': false, 'audit.execute': false, 'audit.view_results': false,
             'revenue.view': false, 'revenue.settings': false, 'revenue.fetch_rates': false,
             'closures.view': false, 'closures.create': false, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': false, 'closures.add_comment': false,
-            'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true,
+            'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': false,
             'dashboard.view': true, 'dashboard.global': false, 'reports.access': true, 'reports.export': true,
             'permissions.manage': false
         },
@@ -445,7 +445,7 @@ function getDefaultPermissions(role) {
             'audit.view': true, 'audit.grids': false, 'audit.execute': true, 'audit.view_results': true,
             'revenue.view': false, 'revenue.settings': false, 'revenue.fetch_rates': false,
             'closures.view': true, 'closures.create': true, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': true, 'closures.add_comment': true,
-            'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true,
+            'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
             'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
             'permissions.manage': false
         },
@@ -461,7 +461,7 @@ function getDefaultPermissions(role) {
             'audit.view': false, 'audit.grids': false, 'audit.execute': false, 'audit.view_results': false,
             'revenue.view': false, 'revenue.settings': false, 'revenue.fetch_rates': false,
             'closures.view': true, 'closures.create': false, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': false, 'closures.add_comment': false,
-            'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true,
+            'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
             'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
             'permissions.manage': false
         }

@@ -115,3 +115,36 @@ INSERT INTO role_permissions (role, permission, allowed, updated_at) VALUES
 ('receptionniste', 'evaluations.view_team', 0, NOW()),
 ('employee', 'evaluations.view_team', 0, NOW())
 ON DUPLICATE KEY UPDATE allowed = VALUES(allowed);
+
+-- =============================================
+-- Migration: Table campagnes de notifications
+-- =============================================
+CREATE TABLE IF NOT EXISTS notification_campaigns (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL COMMENT 'Titre de la notification',
+    message TEXT NOT NULL COMMENT 'Corps du message',
+    type ENUM('info', 'success', 'warning', 'error') DEFAULT 'info',
+    target_type ENUM('all', 'hotel', 'role', 'users') NOT NULL COMMENT 'Type de ciblage',
+    target_value TEXT DEFAULT NULL COMMENT 'Valeur du ciblage (IDs hotels, rôles, IDs users - JSON)',
+    link VARCHAR(255) DEFAULT NULL COMMENT 'Lien optionnel',
+    recipients_count INT UNSIGNED DEFAULT 0 COMMENT 'Nombre de destinataires',
+    sent_by INT UNSIGNED NOT NULL COMMENT 'ID utilisateur expéditeur',
+    created_at DATETIME,
+    INDEX idx_sent_by (sent_by),
+    INDEX idx_type (type),
+    INDEX idx_created (created_at),
+    FOREIGN KEY (sent_by) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =============================================
+-- Migration: Permission notifications.manage
+-- =============================================
+INSERT INTO role_permissions (role, permission, allowed, updated_at) VALUES
+('admin', 'notifications.manage', 1, NOW()),
+('groupe_manager', 'notifications.manage', 1, NOW()),
+('hotel_manager', 'notifications.manage', 1, NOW()),
+('rh', 'notifications.manage', 0, NOW()),
+('comptabilite', 'notifications.manage', 0, NOW()),
+('receptionniste', 'notifications.manage', 0, NOW()),
+('employee', 'notifications.manage', 0, NOW())
+ON DUPLICATE KEY UPDATE allowed = VALUES(allowed);

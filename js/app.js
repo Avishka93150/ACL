@@ -391,7 +391,7 @@ function updateMenuByPermissions() {
         'settings': 'permissions.manage',
         'reports': 'reports.access'
     };
-    
+
     document.querySelectorAll('.nav-item[data-page]').forEach(item => {
         const page = item.dataset.page;
         const requiredPermission = pagePermissions[page];
@@ -444,7 +444,7 @@ function navigateTo(page) {
         'settings': 'permissions.manage',
         'reports': 'reports.access'
     };
-    
+
     const requiredPerm = pagePermissions[page];
     if (requiredPerm && !hasPermission(requiredPerm)) {
         toast('Vous n\'avez pas accès à ce module', 'error');
