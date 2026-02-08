@@ -41,8 +41,7 @@ async function loadMaintenance(container) {
         container.innerHTML = `
             <!-- KPI Principaux -->
             <div class="kpi-grid">
-                <div class="kpi-card"><div class="kpi-icon orange"><i class="fas fa-exclamation-circle"></i></div><div><div class="kpi-value">${stats.open || 0}</div><div class="kpi-label">${t('maintenance.open')}</div></div></div>
-                <div class="kpi-card"><div class="kpi-icon blue"><i class="fas fa-wrench"></i></div><div><div class="kpi-value">${stats.in_progress || 0}</div><div class="kpi-label">${t('maintenance.in_progress')}</div></div></div>
+                <div class="kpi-card"><div class="kpi-icon orange"><i class="fas fa-wrench"></i></div><div><div class="kpi-value">${stats.open || 0}</div><div class="kpi-label">${t('maintenance.in_progress')}</div></div></div>
                 <div class="kpi-card"><div class="kpi-icon green"><i class="fas fa-check-circle"></i></div><div><div class="kpi-value">${stats.resolved || 0}</div><div class="kpi-label">${t('maintenance.resolved')}</div></div></div>
                 <div class="kpi-card"><div class="kpi-icon red"><i class="fas fa-fire"></i></div><div><div class="kpi-value">${stats.critical || 0}</div><div class="kpi-label">${t('maintenance.critical')}</div></div></div>
             </div>
@@ -107,8 +106,7 @@ async function loadMaintenance(container) {
                 <div class="form-row mb-20">
                     <select id="mt-filter-status" onchange="mtReloadTickets()">
                         <option value="">${t('maintenance.all_statuses')}</option>
-                        <option value="open">${t('maintenance.open')}</option>
-                        <option value="in_progress">${t('maintenance.in_progress')}</option>
+                        <option value="open">${t('maintenance.in_progress')}</option>
                         <option value="resolved">${t('maintenance.resolved')}</option>
                     </select>
                     <select id="mt-filter-priority" onchange="mtReloadTickets()">
@@ -190,7 +188,7 @@ function mtRenderTickets(tickets) {
             <tbody>
                 ${tickets.map(t => {
                     // Ticket en retard = en cours depuis plus de 7 jours
-                    const isOverdue = t.is_overdue || (t.status === 'in_progress' && t.days_in_progress >= 7);
+                    const isOverdue = t.is_overdue || (['open', 'in_progress'].includes(t.status) && t.days_in_progress >= 7);
                     const rowClass = isOverdue ? 'row-overdue' : (t.priority === 'critical' ? 'row-critical' : '');
                     
                     return `
@@ -202,16 +200,16 @@ function mtRenderTickets(tickets) {
                         <td class="text-truncate" style="max-width:200px">${esc(t.description)}</td>
                         <td><span class="badge badge-${t.priority === 'critical' ? 'danger' : t.priority === 'high' ? 'warning' : 'primary'}">${LABELS.priority[t.priority] || t.priority}</span></td>
                         <td>
-                            ${statusBadge(t.status)}
+                            ${t.status === 'resolved' ? statusBadge('resolved') : '<span class="badge badge-warning">En cours</span>'}
                             ${isOverdue ? '<span class="badge badge-overdue" title="En cours depuis plus de 7 jours">⚠️ Retard</span>' : ''}
-                            ${t.status === 'in_progress' && t.days_in_progress ? `<small class="days-info">${t.days_in_progress}j</small>` : ''}
+                            ${['open', 'in_progress'].includes(t.status) && t.days_in_progress ? `<small class="days-info">${t.days_in_progress}j</small>` : ''}
                         </td>
                         <td>${formatDateShort(t.created_at)}</td>
                         <td>
                             <div class="table-actions">
                                 <button onclick="mtViewTicket(${t.id})" title="Voir détails"><i class="fas fa-eye"></i></button>
                                 ${canManage && t.status === 'open' ? `<button onclick="mtAssignTicket(${t.id})" title="Prendre en charge"><i class="fas fa-hand-paper"></i></button>` : ''}
-                                ${canManage && t.status === 'in_progress' ? `<button onclick="mtResolveModal(${t.id})" title="Résoudre"><i class="fas fa-check"></i></button>` : ''}
+                                ${canManage && ['open', 'in_progress'].includes(t.status) ? `<button onclick="mtResolveModal(${t.id})" title="Résoudre"><i class="fas fa-check"></i></button>` : ''}
                                 ${canDelete ? `<button onclick="mtDeleteTicket(${t.id})" title="Supprimer" class="btn-delete"><i class="fas fa-trash"></i></button>` : ''}
                             </div>
                         </td>
@@ -492,7 +490,7 @@ async function mtViewTicket(id) {
         if (canComment && t.status !== 'resolved') {
             commentFormHtml = '<form onsubmit="mtAddComment(event, ' + t.id + ')" class="comment-form"><textarea name="comment" rows="2" placeholder="' + window.t('maintenance.comment') + '..." required></textarea><button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-paper-plane"></i> ' + window.t('common.save') + '</button></form>';
         } else if (t.status === 'resolved') {
-            commentFormHtml = '<p class="text-muted" style="margin-top:10px; font-size:13px;">Ce ticket est résolu.</p>';
+            commentFormHtml = '<p class="text-muted" style="margin-top:10px; font-size:13px;">Ce ticket est r\u00e9solu.</p>';
         } else if (!canComment) {
             commentFormHtml = '<p class="text-muted" style="margin-top:10px; font-size:13px;">Vous n\'avez pas la permission d\'ajouter des commentaires.</p>';
         }
@@ -502,15 +500,15 @@ async function mtViewTicket(id) {
         if (canManage && t.status === 'open') {
             actionButtons = '<button class="btn btn-primary" onclick="mtAssignTicket(' + t.id + '); closeModal();">' + window.t('maintenance.take_charge') + '</button>';
         }
-        if (canManage && t.status === 'in_progress') {
-            actionButtons = '<button class="btn btn-success" onclick="closeModal(); mtResolveModal(' + t.id + ');">' + window.t('maintenance.resolve') + '</button>';
+        if (canManage && (t.status === 'open' || t.status === 'in_progress')) {
+            actionButtons += '<button class="btn btn-success" onclick="closeModal(); mtResolveModal(' + t.id + ');">' + window.t('maintenance.resolve') + '</button>';
         }
 
         const modalContent = `
             <div class="ticket-detail">
                 <div class="ticket-header">
                     <span class="badge badge-${t.priority === 'critical' ? 'danger' : 'primary'}">${LABELS.priority[t.priority] || t.priority}</span>
-                    ${statusBadge(t.status)}
+                    ${t.status === 'resolved' ? statusBadge('resolved') : '<span class="badge badge-warning">En cours</span>'}
                     ${isOverdue ? '<span class="badge badge-overdue">⚠️ En retard</span>' : ''}
                 </div>
                 

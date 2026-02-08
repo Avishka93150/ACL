@@ -745,6 +745,135 @@ function notifyMaintenanceTicket($ticketId, $ticketData, $creator, $type = 'crea
     }
 }
 
+/**
+ * Notifier les personnes liées à un ticket maintenance lors d'une activité
+ * (commentaire, prise en charge, résolution)
+ *
+ * Destinataires : commentateurs du ticket + hotel_manager + groupe_manager + admin
+ * Configurable par hôtel via hotel_maintenance_config
+ */
+function notifyMaintenanceActivity($ticketId, $actor, $eventType, $extraMessage = '') {
+    // Récupérer le ticket complet
+    $ticket = db()->queryOne(
+        "SELECT m.*, h.name as hotel_name
+         FROM maintenance_tickets m
+         LEFT JOIN hotels h ON m.hotel_id = h.id
+         WHERE m.id = ?",
+        [$ticketId]
+    );
+    if (!$ticket) return;
+
+    $hotelId = $ticket['hotel_id'];
+    $hotelName = $ticket['hotel_name'] ?: 'Hôtel #' . $hotelId;
+    $actorName = $actor['first_name'] . ' ' . $actor['last_name'];
+
+    // Charger la configuration des alertes pour cet hôtel
+    $config = null;
+    try {
+        $config = db()->queryOne("SELECT * FROM hotel_maintenance_config WHERE hotel_id = ?", [$hotelId]);
+    } catch (Exception $e) {}
+
+    // Valeurs par défaut si pas de config
+    $notifyOnComment = $config ? (int)$config['notify_on_comment'] : 1;
+    $notifyOnStatusChange = $config ? (int)$config['notify_on_status_change'] : 1;
+    $notifyOnResolution = $config ? (int)$config['notify_on_resolution'] : 1;
+    $notifyCommenters = $config ? (int)$config['notify_commenters'] : 1;
+    $notifyHotelManager = $config ? (int)$config['notify_hotel_manager'] : 1;
+    $notifyGroupeManager = $config ? (int)$config['notify_groupe_manager'] : 1;
+    $notifyAdmin = $config ? (int)$config['notify_admin'] : 1;
+
+    // Vérifier si ce type d'événement doit déclencher une notification
+    if ($eventType === 'comment' && !$notifyOnComment) return;
+    if ($eventType === 'assignment' && !$notifyOnStatusChange) return;
+    if ($eventType === 'resolution' && !$notifyOnResolution) return;
+
+    // Collecter les destinataires (IDs uniques, excluant l'acteur)
+    $recipientIds = [];
+
+    // 1. Utilisateurs ayant commenté ce ticket
+    if ($notifyCommenters) {
+        $commenters = db()->query(
+            "SELECT DISTINCT tc.user_id FROM ticket_comments tc WHERE tc.ticket_id = ? AND tc.user_id != ?",
+            [$ticketId, $actor['id']]
+        );
+        foreach ($commenters as $c) {
+            $recipientIds[$c['user_id']] = true;
+        }
+    }
+
+    // 2. Le créateur du ticket
+    if ($ticket['reported_by'] && $ticket['reported_by'] != $actor['id']) {
+        $recipientIds[$ticket['reported_by']] = true;
+    }
+
+    // 3. La personne assignée au ticket
+    if ($ticket['assigned_to'] && $ticket['assigned_to'] != $actor['id']) {
+        $recipientIds[$ticket['assigned_to']] = true;
+    }
+
+    // 4. Responsables de l'hôtel selon la config
+    $roleFilter = [];
+    if ($notifyHotelManager) $roleFilter[] = "'hotel_manager'";
+    if ($notifyGroupeManager) $roleFilter[] = "'groupe_manager'";
+    if ($notifyAdmin) $roleFilter[] = "'admin'";
+
+    if (!empty($roleFilter)) {
+        $rolesIn = implode(',', $roleFilter);
+        $managers = db()->query(
+            "SELECT DISTINCT u.id FROM users u
+             JOIN user_hotels uh ON u.id = uh.user_id
+             WHERE uh.hotel_id = ? AND u.role IN ($rolesIn) AND u.status = 'active' AND u.id != ?",
+            [$hotelId, $actor['id']]
+        );
+        foreach ($managers as $m) {
+            $recipientIds[$m['id']] = true;
+        }
+    }
+
+    // Admins globaux (pas forcément liés à l'hôtel)
+    if ($notifyAdmin) {
+        $admins = db()->query(
+            "SELECT id FROM users WHERE role = 'admin' AND status = 'active' AND id != ?",
+            [$actor['id']]
+        );
+        foreach ($admins as $a) {
+            $recipientIds[$a['id']] = true;
+        }
+    }
+
+    if (empty($recipientIds)) return;
+
+    // Préparer le contenu de la notification selon le type
+    $roomInfo = $ticket['room_number'] ?: 'Parties communes';
+    switch ($eventType) {
+        case 'comment':
+            $notifTitle = "Commentaire - Ticket #{$ticketId}";
+            $notifMessage = "{$actorName} a commenté le ticket #{$ticketId} ({$hotelName} - {$roomInfo})";
+            if ($extraMessage) $notifMessage .= "\n\"{$extraMessage}\"";
+            break;
+        case 'assignment':
+            $notifTitle = "Prise en charge - Ticket #{$ticketId}";
+            $notifMessage = "{$actorName} a pris en charge le ticket #{$ticketId} ({$hotelName} - {$roomInfo})";
+            break;
+        case 'resolution':
+            $notifTitle = "Résolu - Ticket #{$ticketId}";
+            $notifMessage = "{$actorName} a résolu le ticket #{$ticketId} ({$hotelName} - {$roomInfo})";
+            if ($extraMessage) $notifMessage .= "\nRésolution: {$extraMessage}";
+            break;
+        default:
+            $notifTitle = "Mise à jour - Ticket #{$ticketId}";
+            $notifMessage = "{$actorName} a mis à jour le ticket #{$ticketId} ({$hotelName} - {$roomInfo})";
+    }
+
+    // Envoyer les notifications en base à chaque destinataire
+    foreach (array_keys($recipientIds) as $userId) {
+        db()->insert(
+            "INSERT INTO notifications (user_id, type, title, message, link, created_at) VALUES (?, 'info', ?, ?, 'maintenance', NOW())",
+            [$userId, $notifTitle, substr($notifMessage, 0, 500)]
+        );
+    }
+}
+
 // Générer le contenu PDF pour les chambres bloquées
 function generateBlockedRoomsPDFContent($rooms, $stats, $startDate, $endDate) {
     $categoryLabels = [
@@ -2067,6 +2196,61 @@ try {
                 json_out(['success' => true]);
             }
 
+            // GET /hotels/{id}/maintenance-config - Configuration alertes maintenance
+            if ($method === 'GET' && $id && is_numeric($id) && $action === 'maintenance-config') {
+                require_auth();
+                $config = null;
+                try {
+                    $config = db()->queryOne("SELECT * FROM hotel_maintenance_config WHERE hotel_id = ?", [$id]);
+                } catch (Exception $e) {}
+                json_out(['success' => true, 'config' => $config ?: new stdClass()]);
+            }
+
+            // PUT /hotels/{id}/maintenance-config - Sauvegarder configuration alertes maintenance
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'maintenance-config') {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin', 'groupe_manager', 'hotel_manager'])) json_error('Permission refusée', 403);
+
+                $data = get_input();
+                $existing = null;
+                try {
+                    $existing = db()->queryOne("SELECT id FROM hotel_maintenance_config WHERE hotel_id = ?", [$id]);
+                } catch (Exception $e) {}
+
+                $fields = [
+                    'notify_on_comment' => (int)($data['notify_on_comment'] ?? 1),
+                    'notify_on_status_change' => (int)($data['notify_on_status_change'] ?? 1),
+                    'notify_on_resolution' => (int)($data['notify_on_resolution'] ?? 1),
+                    'notify_commenters' => (int)($data['notify_commenters'] ?? 1),
+                    'notify_hotel_manager' => (int)($data['notify_hotel_manager'] ?? 1),
+                    'notify_groupe_manager' => (int)($data['notify_groupe_manager'] ?? 1),
+                    'notify_admin' => (int)($data['notify_admin'] ?? 1)
+                ];
+
+                if ($existing) {
+                    $setParts = [];
+                    $params = [];
+                    foreach ($fields as $col => $val) {
+                        $setParts[] = "$col = ?";
+                        $params[] = $val;
+                    }
+                    $params[] = $id;
+                    db()->execute(
+                        "UPDATE hotel_maintenance_config SET " . implode(', ', $setParts) . ", updated_at = NOW() WHERE hotel_id = ?",
+                        $params
+                    );
+                } else {
+                    $cols = array_keys($fields);
+                    $vals = array_values($fields);
+                    $placeholders = implode(',', array_fill(0, count($cols), '?'));
+                    db()->insert(
+                        "INSERT INTO hotel_maintenance_config (hotel_id, " . implode(',', $cols) . ", created_at, updated_at) VALUES (?, $placeholders, NOW(), NOW())",
+                        array_merge([$id], $vals)
+                    );
+                }
+                json_out(['success' => true]);
+            }
+
             // GET /hotels/check-slug?slug=xxx&exclude_id=Y - Vérifier unicité du slug
             if ($method === 'GET' && $id === 'check-slug') {
                 require_auth();
@@ -2298,7 +2482,7 @@ try {
                     $hotelIds = array_column($userHotels, 'hotel_id');
                     
                     if (empty($hotelIds)) {
-                        json_out(['success' => true, 'stats' => ['open' => 0, 'in_progress' => 0, 'resolved' => 0, 'critical' => 0]]);
+                        json_out(['success' => true, 'stats' => ['open' => 0, 'resolved' => 0, 'critical' => 0]]);
                     }
                     
                     $placeholders = implode(',', array_fill(0, count($hotelIds), '?'));
@@ -2306,8 +2490,7 @@ try {
                 }
                 
                 json_out(['success' => true, 'stats' => [
-                    'open' => db()->count("SELECT COUNT(*) FROM maintenance_tickets WHERE status = 'open'" . $hotelFilter, $hotelIds),
-                    'in_progress' => db()->count("SELECT COUNT(*) FROM maintenance_tickets WHERE status = 'in_progress'" . $hotelFilter, $hotelIds),
+                    'open' => db()->count("SELECT COUNT(*) FROM maintenance_tickets WHERE status IN ('open', 'in_progress')" . $hotelFilter, $hotelIds),
                     'resolved' => db()->count("SELECT COUNT(*) FROM maintenance_tickets WHERE status = 'resolved'" . $hotelFilter, $hotelIds),
                     'critical' => db()->count("SELECT COUNT(*) FROM maintenance_tickets WHERE priority = 'critical' AND status != 'resolved'" . $hotelFilter, $hotelIds)
                 ]]);
@@ -2520,7 +2703,13 @@ try {
                 }
                 
                 if (!empty($_GET['hotel_id'])) { $where .= " AND m.hotel_id = ?"; $params[] = $_GET['hotel_id']; }
-                if (!empty($_GET['status'])) { $where .= " AND m.status = ?"; $params[] = $_GET['status']; }
+                if (!empty($_GET['status'])) {
+                    if ($_GET['status'] === 'open') {
+                        $where .= " AND m.status IN ('open', 'in_progress')";
+                    } else {
+                        $where .= " AND m.status = ?"; $params[] = $_GET['status'];
+                    }
+                }
                 if (!empty($_GET['priority'])) { $where .= " AND m.priority = ?"; $params[] = $_GET['priority']; }
                 
                 $query = "SELECT m.*, h.name as hotel_name,
@@ -2537,7 +2726,7 @@ try {
 
                 // Calculer is_overdue pour chaque ticket
                 foreach ($result['data'] as &$ticket) {
-                    $ticket['is_overdue'] = ($ticket['status'] === 'in_progress' && $ticket['days_in_progress'] >= 7);
+                    $ticket['is_overdue'] = (in_array($ticket['status'], ['open', 'in_progress']) && $ticket['days_in_progress'] >= 7);
                 }
 
                 json_out(['success' => true, 'tickets' => $result['data'], 'pagination' => $result['pagination']]);
@@ -2577,7 +2766,7 @@ try {
                 
                 // Calculer si le ticket est en retard (plus d'une semaine en cours)
                 $ticket['is_overdue'] = false;
-                if ($ticket['status'] === 'in_progress' && $ticket['assigned_at']) {
+                if (in_array($ticket['status'], ['open', 'in_progress']) && $ticket['assigned_at']) {
                     $assignedDate = new DateTime($ticket['assigned_at']);
                     $now = new DateTime();
                     $diff = $now->diff($assignedDate);
@@ -2631,7 +2820,10 @@ try {
                 
                 // Mettre à jour updated_at du ticket
                 db()->execute("UPDATE maintenance_tickets SET updated_at = NOW() WHERE id = ?", [$id]);
-                
+
+                // Notifier les personnes liées au ticket
+                notifyMaintenanceActivity($id, $user, 'comment', $data['comment']);
+
                 json_out(['success' => true, 'id' => $commentId], 201);
             }
             
@@ -2707,10 +2899,13 @@ try {
                     "INSERT INTO ticket_comments (ticket_id, user_id, comment, comment_type, old_status, new_status, created_at) VALUES (?, ?, ?, 'assignment', ?, 'in_progress', NOW())",
                     [$id, $user['id'], 'Ticket pris en charge', $ticket['status']]
                 );
-                
+
+                // Notifier les personnes liées au ticket
+                notifyMaintenanceActivity($id, $user, 'assignment');
+
                 json_out(['success' => true]);
             }
-            
+
             // Résoudre un ticket (managers uniquement)
             if ($method === 'PUT' && $id && $action === 'resolve') {
                 $user = require_auth();
@@ -2737,10 +2932,13 @@ try {
                     "INSERT INTO ticket_comments (ticket_id, user_id, comment, comment_type, old_status, new_status, created_at) VALUES (?, ?, ?, 'resolution', ?, 'resolved', NOW())",
                     [$id, $user['id'], $comment, $ticket['status']]
                 );
-                
+
+                // Notifier les personnes liées au ticket
+                notifyMaintenanceActivity($id, $user, 'resolution', $notes);
+
                 json_out(['success' => true]);
             }
-            
+
             // Récupérer les commentaires d'un ticket
             if ($method === 'GET' && $id && $action === 'comments') {
                 $user = require_auth();
