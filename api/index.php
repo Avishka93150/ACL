@@ -1001,6 +1001,7 @@ $id = $segments[1] ?? null;
 $action = $segments[2] ?? null;
 $subId = $segments[3] ?? null;  // Pour les routes comme /tasks/1/columns/2
 $subaction = $segments[4] ?? null;  // Pour les routes comme /tasks/1/tasks/2/checklist
+$subSubId = $segments[5] ?? null;   // Pour les routes comme /tasks/1/tasks/2/assignees/3
 $method = $_SERVER['REQUEST_METHOD'];
 
 // === PROTECTION CSRF ===
@@ -3576,12 +3577,31 @@ try {
                     }
                 }
                 
+                // Gérer les assignés multiples si fournis
+                if (isset($data['assignee_ids'])) {
+                    $assigneeIds = is_string($data['assignee_ids']) ? json_decode($data['assignee_ids'], true) : $data['assignee_ids'];
+                    if (is_array($assigneeIds)) {
+                        db()->execute("DELETE FROM task_assignees WHERE task_id = ?", [$subId]);
+                        foreach ($assigneeIds as $aId) {
+                            if ($aId) {
+                                db()->insert(
+                                    "INSERT IGNORE INTO task_assignees (task_id, user_id, assigned_at, assigned_by) VALUES (?, ?, NOW(), ?)",
+                                    [$subId, $aId, $user['id']]
+                                );
+                            }
+                        }
+                        // Mettre à jour le champ legacy assigned_to
+                        $updates[] = "assigned_to = ?";
+                        $params[] = !empty($assigneeIds) ? $assigneeIds[0] : null;
+                    }
+                }
+
                 if (!empty($updates)) {
                     $updates[] = "updated_at = NOW()";
                     $params[] = $subId;
                     db()->execute("UPDATE tasks SET " . implode(', ', $updates) . " WHERE id = ?", $params);
                 }
-                
+
                 // Notification si assignation changée
                 if (isset($data['assigned_to']) && $data['assigned_to'] != $currentTask['assigned_to'] && $data['assigned_to'] != $user['id'] && !empty($data['assigned_to'])) {
                     $board = db()->queryOne("SELECT name FROM task_boards WHERE id = ?", [$id]);
@@ -3615,15 +3635,57 @@ try {
                 json_out(['success' => true]);
             }
             
-            // Supprimer une tâche
-            if ($method === 'DELETE' && $id && $action === 'tasks' && $subId) {
+            // Ajouter un assigné - POST /tasks/{boardId}/tasks/{taskId}/assignees
+            if ($method === 'POST' && $id && $action === 'tasks' && $subId && $subaction === 'assignees') {
                 $user = require_auth();
-                
+                $data = get_input();
+                $userId = $data['user_id'] ?? null;
+                if (!$userId) json_error('user_id requis');
+
+                // Vérifier que la tâche existe
+                $task = db()->queryOne("SELECT id FROM tasks WHERE id = ? AND board_id = ?", [$subId, $id]);
+                if (!$task) json_error('Tâche non trouvée', 404);
+
+                db()->insert(
+                    "INSERT IGNORE INTO task_assignees (task_id, user_id, assigned_at, assigned_by) VALUES (?, ?, NOW(), ?)",
+                    [$subId, $userId, $user['id']]
+                );
+
+                // Mettre à jour le champ legacy assigned_to
+                db()->execute("UPDATE tasks SET assigned_to = ?, updated_at = NOW() WHERE id = ?", [$userId, $subId]);
+
+                json_out(['success' => true], 201);
+            }
+
+            // Retirer un assigné - DELETE /tasks/{boardId}/tasks/{taskId}/assignees/{userId}
+            if ($method === 'DELETE' && $id && $action === 'tasks' && $subId && $subaction === 'assignees') {
+                $user = require_auth();
+                $removeUserId = $subSubId ?? ($_GET['user_id'] ?? null);
+                if (!$removeUserId) json_error('user_id requis');
+
+                db()->execute(
+                    "DELETE FROM task_assignees WHERE task_id = ? AND user_id = ?",
+                    [$subId, $removeUserId]
+                );
+
+                // Mettre à jour le champ legacy assigned_to
+                $remaining = db()->queryOne("SELECT user_id FROM task_assignees WHERE task_id = ? LIMIT 1", [$subId]);
+                db()->execute("UPDATE tasks SET assigned_to = ?, updated_at = NOW() WHERE id = ?",
+                    [$remaining ? $remaining['user_id'] : null, $subId]);
+
+                json_out(['success' => true]);
+            }
+
+            // Supprimer une tâche (seulement si pas de subaction, pour ne pas confondre avec assignees)
+            if ($method === 'DELETE' && $id && $action === 'tasks' && $subId && !$subaction) {
+                $user = require_auth();
+
+                db()->execute("DELETE FROM task_assignees WHERE task_id = ?", [$subId]);
                 db()->execute("DELETE FROM task_checklists WHERE task_id = ?", [$subId]);
                 db()->execute("DELETE FROM task_comments WHERE task_id = ?", [$subId]);
                 db()->execute("DELETE FROM task_label_assignments WHERE task_id = ?", [$subId]);
                 db()->execute("DELETE FROM tasks WHERE id = ?", [$subId]);
-                
+
                 json_out(['success' => true]);
             }
             
