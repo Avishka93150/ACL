@@ -9009,6 +9009,140 @@ try {
             }
             break;
 
+        // ==================== PMS RELAY (agent distant) ====================
+        case 'pms-relay':
+
+            // GET /pms-relay/poll - L'agent local récupère les requêtes en attente (long-polling)
+            if ($method === 'GET' && $id === 'poll') {
+                $token = $_GET['token'] ?? ($_SERVER['HTTP_X_RELAY_TOKEN'] ?? '');
+                if (empty($token)) json_error('Token requis', 401);
+
+                $hotel = db()->queryOne(
+                    "SELECT * FROM hotels WHERE pms_relay_token = ? AND pms_connection_mode = 'relay' AND pms_type IS NOT NULL",
+                    [$token]
+                );
+                if (!$hotel) json_error('Token invalide ou relais non configuré', 403);
+
+                // Long-polling: attendre jusqu'à 25 secondes qu'une requête arrive
+                $timeout = 25;
+                $start = time();
+                $request = null;
+
+                while (time() - $start < $timeout) {
+                    $request = db()->queryOne(
+                        "SELECT * FROM pms_relay_queue WHERE hotel_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1",
+                        [$hotel['id']]
+                    );
+
+                    if ($request) {
+                        // Marquer comme "processing"
+                        db()->execute(
+                            "UPDATE pms_relay_queue SET status = 'processing', picked_at = ? WHERE id = ? AND status = 'pending'",
+                            [date('Y-m-d H:i:s'), $request['id']]
+                        );
+                        break;
+                    }
+
+                    usleep(500000); // 500ms
+                }
+
+                if (!$request) {
+                    json_out(['request' => null]);
+                } else {
+                    json_out(['request' => [
+                        'request_id' => $request['request_id'],
+                        'endpoint' => $request['endpoint'],
+                        'method' => $request['method'],
+                        'body' => $request['request_body'] ? json_decode($request['request_body'], true) : null
+                    ]]);
+                }
+            }
+
+            // POST /pms-relay/response - L'agent poste la réponse du PMS
+            if ($method === 'POST' && $id === 'response') {
+                $token = $_SERVER['HTTP_X_RELAY_TOKEN'] ?? '';
+                if (empty($token)) json_error('Token requis', 401);
+
+                $hotel = db()->queryOne(
+                    "SELECT id FROM hotels WHERE pms_relay_token = ? AND pms_connection_mode = 'relay'",
+                    [$token]
+                );
+                if (!$hotel) json_error('Token invalide', 403);
+
+                $data = get_input();
+                if (empty($data['request_id'])) json_error('request_id requis');
+
+                $queue = db()->queryOne(
+                    "SELECT id FROM pms_relay_queue WHERE request_id = ? AND hotel_id = ? AND status = 'processing'",
+                    [$data['request_id'], $hotel['id']]
+                );
+                if (!$queue) json_error('Requête non trouvée ou déjà traitée', 404);
+
+                $status = !empty($data['error']) ? 'error' : 'completed';
+                db()->execute(
+                    "UPDATE pms_relay_queue SET status = ?, response_body = ?, response_status = ?, error_message = ?, completed_at = ? WHERE id = ?",
+                    [$status, json_encode($data['response'] ?? null), $data['http_status'] ?? 200, $data['error'] ?? null, date('Y-m-d H:i:s'), $queue['id']]
+                );
+
+                json_out(['ok' => true]);
+            }
+
+            // POST /pms-relay/generate-token - Générer un token pour l'agent (admin only)
+            if ($method === 'POST' && $id === 'generate-token') {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin', 'groupe_manager'])) json_error('Permission refusée', 403);
+
+                $data = get_input();
+                if (empty($data['hotel_id'])) json_error('hotel_id requis');
+
+                $newToken = bin2hex(random_bytes(32));
+                db()->execute(
+                    "UPDATE hotels SET pms_relay_token = ? WHERE id = ?",
+                    [$newToken, $data['hotel_id']]
+                );
+
+                json_out(['token' => $newToken]);
+            }
+
+            // GET /pms-relay/status - Statut de l'agent pour un hôtel (admin)
+            if ($method === 'GET' && $id === 'status') {
+                $user = require_auth();
+                $hotelId = $_GET['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+
+                // Vérifier s'il y a eu une activité récente de l'agent (requête traitée dans les 2 dernières minutes)
+                $recent = db()->queryOne(
+                    "SELECT MAX(completed_at) as last_activity FROM pms_relay_queue WHERE hotel_id = ? AND status IN ('completed', 'error')",
+                    [$hotelId]
+                );
+                $pending = db()->count("SELECT COUNT(*) FROM pms_relay_queue WHERE hotel_id = ? AND status = 'pending'", [$hotelId]);
+                $lastActivity = $recent['last_activity'] ?? null;
+                $agentOnline = $lastActivity && (strtotime($lastActivity) > strtotime('-2 minutes'));
+
+                json_out([
+                    'agent_online' => $agentOnline,
+                    'last_activity' => $lastActivity,
+                    'pending_requests' => $pending
+                ]);
+            }
+
+            // Nettoyage des vieilles requêtes (appelé périodiquement)
+            if ($method === 'POST' && $id === 'cleanup') {
+                $user = require_auth();
+                if ($user['role'] !== 'admin') json_error('Permission refusée', 403);
+
+                // Timeout les requêtes pending/processing depuis plus de 60 secondes
+                db()->execute(
+                    "UPDATE pms_relay_queue SET status = 'timeout', error_message = 'Timeout: agent non connecté' WHERE status IN ('pending', 'processing') AND created_at < DATE_SUB(NOW(), INTERVAL 60 SECOND)"
+                );
+                // Supprimer les requêtes de plus d'1 heure
+                db()->execute(
+                    "DELETE FROM pms_relay_queue WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 HOUR)"
+                );
+                json_out(['ok' => true]);
+            }
+            break;
+
         default:
             json_error('Endpoint non trouvé', 404);
     }
@@ -9025,6 +9159,12 @@ try {
  * Appel HTTP générique vers le PMS Geho
  */
 function geho_request($hotel, $endpoint, $method = 'GET', $body = null) {
+    // Mode relay : passer par la file d'attente au lieu d'un appel curl direct
+    if (($hotel['pms_connection_mode'] ?? 'direct') === 'relay') {
+        return geho_request_relay($hotel, $endpoint, $method, $body);
+    }
+
+    // Mode direct : appel curl classique
     $ip = $hotel['pms_ip'];
     $port = $hotel['pms_port'] ?: 80;
     $baseUrl = "http://{$ip}:{$port}";
@@ -9075,6 +9215,63 @@ function geho_request($hotel, $endpoint, $method = 'GET', $body = null) {
         'data' => $decoded,
         'raw' => $response
     ];
+}
+
+/**
+ * Appel PMS via le relay : insère dans la file, attend la réponse de l'agent
+ */
+function geho_request_relay($hotel, $endpoint, $method, $body) {
+    $requestId = bin2hex(random_bytes(16));
+
+    // Insérer la requête dans la file
+    db()->insert('pms_relay_queue', [
+        'hotel_id' => $hotel['id'],
+        'request_id' => $requestId,
+        'endpoint' => $endpoint,
+        'method' => $method,
+        'request_body' => $body ? json_encode($body) : null,
+        'status' => 'pending',
+        'created_at' => date('Y-m-d H:i:s')
+    ]);
+
+    // Attendre la réponse (polling avec timeout de 30 secondes)
+    $timeout = 30;
+    $start = time();
+
+    while (time() - $start < $timeout) {
+        $row = db()->queryOne(
+            "SELECT * FROM pms_relay_queue WHERE request_id = ? AND status IN ('completed', 'error', 'timeout')",
+            [$requestId]
+        );
+
+        if ($row) {
+            // Nettoyer l'entrée
+            db()->execute("DELETE FROM pms_relay_queue WHERE id = ?", [$row['id']]);
+
+            if ($row['status'] === 'error' || $row['status'] === 'timeout') {
+                return ['success' => false, 'error' => $row['error_message'] ?? 'Erreur relais PMS'];
+            }
+
+            $decoded = json_decode($row['response_body'], true);
+            $httpCode = (int)($row['response_status'] ?? 200);
+            return [
+                'success' => $httpCode >= 200 && $httpCode < 300,
+                'status' => $httpCode,
+                'data' => $decoded,
+                'raw' => $row['response_body']
+            ];
+        }
+
+        usleep(300000); // 300ms entre chaque vérification
+    }
+
+    // Timeout côté serveur
+    db()->execute(
+        "UPDATE pms_relay_queue SET status = 'timeout', error_message = 'Timeout: agent non connecté ou PMS ne répond pas' WHERE request_id = ?",
+        [$requestId]
+    );
+
+    return ['success' => false, 'error' => 'Timeout: l\'agent relais PMS ne répond pas. Vérifiez que l\'agent est en cours d\'exécution sur le PC de l\'hôtel.'];
 }
 
 /**
