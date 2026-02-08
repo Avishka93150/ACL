@@ -243,7 +243,18 @@ async function handleNotificationClick(notifId, link) {
             dd.classList.add('hidden');
             dd.classList.remove('active');
             notificationDropdownOpen = false;
-            navigateTo(link);
+
+            // Support deep-link format "page:id" (ex: "maintenance:42")
+            const parts = link.split(':');
+            const page = parts[0];
+            const itemId = parts[1] ? parseInt(parts[1]) : null;
+
+            navigateTo(page);
+
+            // Ouvrir le détail après chargement de la page
+            if (itemId && page === 'maintenance') {
+                setTimeout(() => { mtViewTicket(itemId); }, 600);
+            }
         }
     } catch (error) {
         console.error('Erreur:', error);
