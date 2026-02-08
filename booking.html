@@ -30,24 +30,136 @@
             --radius: 12px;
             --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
             --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--gray-50); color: var(--gray-800); min-height: 100vh; }
 
+        /* Header */
         .booking-header { background: white; border-bottom: 1px solid var(--gray-200); padding: 16px 0; }
         .booking-header .container { display: flex; align-items: center; justify-content: space-between; }
         .hotel-brand { display: flex; align-items: center; gap: 12px; }
         .hotel-brand img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; }
         .hotel-brand h1 { font-size: 20px; font-weight: 600; }
         .hotel-brand .stars { color: #F59E0B; font-size: 14px; }
+        .header-right { display: flex; align-items: center; gap: 16px; }
         .hotel-info-header { font-size: 13px; color: var(--gray-500); display: flex; align-items: center; gap: 12px; }
-        .lang-select { padding: 4px 8px; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 13px; background: white; cursor: pointer; }
+        .lang-switcher { display: flex; gap: 4px; }
+        .lang-btn { padding: 4px 10px; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 12px; font-weight: 600; background: white; cursor: pointer; transition: all 0.2s; color: var(--gray-500); }
+        .lang-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .lang-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
 
         .container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
 
         .booking-main { padding: 32px 0; }
 
+        /* ===== WELCOME PAGE ===== */
+        .welcome-hero {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2563EB 50%, #3b82f6 100%);
+            padding: 60px 0 50px;
+            text-align: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        .welcome-hero::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            opacity: 0.6;
+        }
+        .welcome-hero .container { position: relative; z-index: 1; }
+        .welcome-logo {
+            width: 80px; height: 80px; border-radius: 16px; object-fit: cover;
+            border: 3px solid rgba(255,255,255,0.3); margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        .welcome-logo-icon {
+            width: 80px; height: 80px; border-radius: 16px;
+            background: rgba(255,255,255,0.15);
+            display: inline-flex; align-items: center; justify-content: center;
+            margin-bottom: 20px; font-size: 36px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .welcome-hotel-name { font-size: 32px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.5px; }
+        .welcome-stars { color: #FCD34D; font-size: 20px; margin-bottom: 8px; letter-spacing: 2px; }
+        .welcome-address { font-size: 15px; opacity: 0.85; margin-bottom: 6px; }
+        .welcome-subtitle { font-size: 17px; opacity: 0.7; font-weight: 300; margin-top: 16px; }
+
+        .welcome-actions { padding: 40px 0 20px; }
+        .action-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 800px; margin: 0 auto; }
+        .action-card {
+            background: white;
+            border-radius: 16px;
+            padding: 32px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid var(--gray-200);
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+        .action-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-xl);
+            border-color: var(--primary);
+        }
+        .action-card .action-icon {
+            width: 64px; height: 64px;
+            border-radius: 16px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 26px;
+            margin-bottom: 16px;
+            transition: transform 0.3s;
+        }
+        .action-card:hover .action-icon { transform: scale(1.1); }
+        .action-card.card-book .action-icon { background: var(--primary-light); color: var(--primary); }
+        .action-card.card-lookup .action-icon { background: var(--success-light); color: var(--success); }
+        .action-card.card-help .action-icon { background: #FEF3C7; color: var(--warning); }
+        .action-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--gray-800); }
+        .action-card p { font-size: 13px; color: var(--gray-500); line-height: 1.5; }
+        .action-card .action-arrow {
+            display: inline-flex; align-items: center; gap: 6px;
+            margin-top: 16px; font-size: 13px; font-weight: 600;
+            transition: gap 0.2s;
+        }
+        .action-card.card-book .action-arrow { color: var(--primary); }
+        .action-card.card-lookup .action-arrow { color: var(--success); }
+        .action-card.card-help .action-arrow { color: var(--warning); }
+        .action-card:hover .action-arrow { gap: 10px; }
+
+        /* ===== LOOKUP PAGE ===== */
+        .lookup-page { max-width: 560px; margin: 0 auto; }
+        .lookup-page .card { overflow: hidden; }
+        .lookup-page .card-header { background: linear-gradient(135deg, var(--success-light), #D1FAE5); border-bottom: none; padding: 28px 24px; text-align: center; }
+        .lookup-page .card-header .lookup-icon { width: 56px; height: 56px; background: var(--success); color: white; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 22px; margin-bottom: 12px; }
+        .lookup-page .card-header h2 { color: #065F46; }
+        .lookup-page .card-header p { color: #047857; }
+        .lookup-or { text-align: center; color: var(--gray-400); font-size: 13px; font-weight: 500; padding: 4px 0; position: relative; }
+        .lookup-or::before, .lookup-or::after { content: ''; position: absolute; top: 50%; width: calc(50% - 24px); height: 1px; background: var(--gray-200); }
+        .lookup-or::before { left: 0; }
+        .lookup-or::after { right: 0; }
+
+        /* ===== PROBLEM PAGE ===== */
+        .problem-page { max-width: 560px; margin: 0 auto; }
+        .problem-page .card { overflow: hidden; }
+        .problem-page .card-header { background: linear-gradient(135deg, #FEF3C7, #FDE68A); border-bottom: none; padding: 28px 24px; text-align: center; }
+        .problem-page .card-header .problem-icon { width: 56px; height: 56px; background: var(--warning); color: white; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 22px; margin-bottom: 12px; }
+        .problem-page .card-header h2 { color: #92400E; }
+        .problem-page .card-header p { color: #B45309; }
+        .problem-info-card { border: 2px solid #FDE68A; border-radius: 12px; padding: 24px; text-align: center; background: #FFFBEB; }
+        .problem-info-card .phone-icon { width: 56px; height: 56px; background: var(--warning); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 22px; margin-bottom: 16px; }
+        .problem-info-card h3 { font-size: 18px; font-weight: 700; color: #92400E; margin-bottom: 8px; }
+        .problem-info-card p { font-size: 14px; color: #B45309; line-height: 1.6; }
+        .problem-tip { display: flex; align-items: flex-start; gap: 12px; padding: 16px; background: var(--gray-50); border-radius: 10px; margin-top: 16px; }
+        .problem-tip i { color: var(--primary); margin-top: 2px; flex-shrink: 0; }
+        .problem-tip p { font-size: 13px; color: var(--gray-600); line-height: 1.5; }
+
+        /* ===== BOOKING STEPS ===== */
         .booking-steps { display: flex; justify-content: center; gap: 0; margin-bottom: 32px; }
         .step { display: flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 14px; font-weight: 500; color: var(--gray-400); position: relative; }
         .step .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--gray-200); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; flex-shrink: 0; }
@@ -134,21 +246,21 @@
         .alert-warning { background: var(--warning-light); color: var(--warning); border: 1px solid #FDE68A; }
         .alert-info { background: var(--primary-light); color: var(--primary); border: 1px solid #93C5FD; }
 
-        .lookup-section { margin-top: 20px; }
-        .lookup-toggle { display: flex; align-items: center; gap: 8px; color: var(--primary); font-size: 14px; font-weight: 500; cursor: pointer; padding: 12px 0; border: none; background: none; }
-        .lookup-toggle:hover { text-decoration: underline; }
-        .lookup-form { background: var(--gray-50); border-radius: var(--radius); padding: 20px; margin-top: 8px; }
-        .lookup-form h4 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
         .lookup-result { margin-top: 16px; }
         .lookup-result .resa-card { border: 1px solid var(--gray-200); border-radius: 10px; padding: 16px; background: white; }
+        .lookup-result .resa-card + .resa-card { margin-top: 8px; }
         .lookup-result .resa-card h4 { font-size: 15px; margin-bottom: 8px; }
         .lookup-result .resa-row { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
         .lookup-result .resa-row .label { color: var(--gray-500); }
 
-        .section-divider { text-align: center; padding: 8px 0; color: var(--gray-400); font-size: 13px; }
-        .section-divider span { background: var(--gray-50); padding: 0 12px; position: relative; }
-
         .footer-booking { text-align: center; padding: 24px 0; font-size: 12px; color: var(--gray-400); border-top: 1px solid var(--gray-200); margin-top: 40px; }
+
+        @media (max-width: 768px) {
+            .action-cards { grid-template-columns: 1fr; max-width: 400px; }
+            .action-card { padding: 24px 20px; }
+            .welcome-hotel-name { font-size: 24px; }
+            .welcome-hero { padding: 40px 0 36px; }
+        }
 
         @media (max-width: 640px) {
             .form-row, .form-row-3 { grid-template-columns: 1fr; }
@@ -159,6 +271,8 @@
             .room-card .room-price { text-align: center; }
             .extra-card { flex-direction: column; text-align: center; }
             .hotel-brand h1 { font-size: 16px; }
+            .header-right { gap: 8px; }
+            .hotel-info-header { display: none; }
         }
     </style>
 </head>
@@ -172,6 +286,417 @@
 </div>
 
 <script>
+// ============ I18N ============
+const LANGS = {
+    fr: {
+        // Welcome
+        welcome_subtitle: 'Bienvenue',
+        welcome_question: 'Comment pouvons-nous vous aider ?',
+        no_reservation: "Je n'ai pas de r\u00e9servation",
+        no_reservation_desc: 'R\u00e9servez une chambre en ligne en quelques clics',
+        no_reservation_action: 'R\u00e9server maintenant',
+        has_reservation: "J'ai une r\u00e9servation",
+        has_reservation_desc: 'Retrouvez les d\u00e9tails de votre r\u00e9servation existante',
+        has_reservation_action: 'Rechercher',
+        has_problem: "J'ai un probl\u00e8me",
+        has_problem_desc: "Besoin d'aide pendant votre s\u00e9jour ?",
+        has_problem_action: 'Obtenir de l\'aide',
+        // Lookup
+        lookup_title: 'Retrouver ma r\u00e9servation',
+        lookup_subtitle: 'Recherchez par num\u00e9ro de r\u00e9servation ou par nom',
+        lookup_ref: 'Num\u00e9ro de r\u00e9servation',
+        lookup_ref_placeholder: 'ACL-XXXX-XXXXXX-XXXXX',
+        lookup_or: 'ou',
+        lookup_name: 'Nom de famille',
+        lookup_name_placeholder: 'Dupont',
+        lookup_search: 'Rechercher ma r\u00e9servation',
+        lookup_searching: 'Recherche en cours...',
+        lookup_no_result: 'Aucune r\u00e9servation trouv\u00e9e avec ces informations.',
+        lookup_error_empty: 'Veuillez saisir un num\u00e9ro de r\u00e9servation ou un nom.',
+        lookup_status: 'Statut',
+        lookup_checkin: 'Arriv\u00e9e',
+        lookup_checkout: 'D\u00e9part',
+        lookup_room: 'Chambre',
+        lookup_payment: 'Paiement',
+        lookup_total: 'Total',
+        lookup_guest: 'Client',
+        lookup_stay: 'S\u00e9jour',
+        lookup_balance: 'Solde',
+        // Problem
+        problem_title: "Besoin d'aide ?",
+        problem_subtitle: 'Nous sommes l\u00e0 pour vous aider',
+        problem_oncall_title: 'Num\u00e9ro d\'astreinte',
+        problem_oncall_msg: "Le num\u00e9ro de t\u00e9l\u00e9phone d'astreinte est affich\u00e9 sur la porte d'entr\u00e9e de l'\u00e9tablissement.",
+        problem_oncall_action: "Veuillez composer ce num\u00e9ro pour joindre un membre de notre \u00e9quipe qui vous assistera dans les plus brefs d\u00e9lais.",
+        problem_tip: 'En cas d\'urgence absolue (incendie, accident), contactez les services de secours au 15 (SAMU), 17 (Police) ou 18 (Pompiers).',
+        problem_available: 'Notre \u00e9quipe d\'astreinte est disponible 24h/24 et 7j/7.',
+        // Booking steps
+        step1: 'Dates & Chambre',
+        step2: 'Vos informations',
+        step3: 'Options',
+        step4: 'Paiement',
+        // Step 1
+        choose_dates: 'Choisissez vos dates et voyageurs',
+        checkin_date: "Date d'arriv\u00e9e",
+        checkout_date: 'Date de d\u00e9part',
+        adults: 'Adultes',
+        children: 'Enfants',
+        search_rooms: 'Rechercher les disponibilit\u00e9s',
+        no_rooms: 'Aucune chambre disponible',
+        no_rooms_desc: "Essayez d'autres dates ou un nombre de voyageurs diff\u00e9rent.",
+        available_rooms: 'Chambres disponibles',
+        night: 'nuit',
+        nights: 'nuits',
+        adult: 'adulte',
+        adults_pl: 'adultes',
+        child: 'enfant',
+        children_pl: 'enfants',
+        per_night: '/nuit',
+        total: 'Total',
+        full: 'Complet',
+        available: 'disponible',
+        available_pl: 'disponibles',
+        max: 'Max',
+        select_dates: 'Veuillez s\u00e9lectionner vos dates.',
+        searching: 'Recherche en cours...',
+        // Step 2
+        your_info: 'Vos informations',
+        your_info_desc: 'Renseignez vos coordonn\u00e9es pour la r\u00e9servation',
+        civility: 'Civilit\u00e9',
+        first_name: 'Pr\u00e9nom',
+        last_name: 'Nom',
+        email: 'Email',
+        phone: 'T\u00e9l\u00e9phone',
+        address: 'Adresse',
+        address_optional: '(facultatif)',
+        address_complement: 'Compl\u00e9ment',
+        postal_code: 'Code postal',
+        city: 'Ville',
+        special_requests: 'Demandes sp\u00e9ciales',
+        special_requests_placeholder: 'Lit b\u00e9b\u00e9, \u00e9tage \u00e9lev\u00e9, chambre calme...',
+        back: 'Retour',
+        back_home: "Retour \u00e0 l'accueil",
+        next_extras: 'Options & Extras',
+        required_fields: 'Veuillez remplir les champs obligatoires (Nom, Email).',
+        invalid_email: 'Veuillez saisir un email valide.',
+        // Step 3
+        extras_title: 'Options & Prestations',
+        extras_desc: 'Ajoutez des extras \u00e0 votre s\u00e9jour (facultatif)',
+        no_extras: 'Aucune option suppl\u00e9mentaire disponible pour le moment.',
+        extras_later: 'Les options seront disponibles apr\u00e8s cr\u00e9ation de la r\u00e9servation.',
+        extras_later_sub: 'Vous pourrez ajouter des extras lors de votre arriv\u00e9e.',
+        loading_extras: 'Chargement des options...',
+        added: 'Ajout\u00e9',
+        add: 'Ajouter',
+        per_person: 'par personne',
+        per_night_extra: 'par nuit',
+        per_stay: 'par s\u00e9jour',
+        flat_rate: 'forfait',
+        proceed_payment: 'Proc\u00e9der au paiement',
+        // Step 4
+        secure_payment: 'Paiement s\u00e9curis\u00e9',
+        your_booking: 'Votre r\u00e9servation',
+        total_to_pay: 'Total \u00e0 payer',
+        credit_card: 'Carte bancaire',
+        pay: 'Payer',
+        processing: 'Traitement en cours...',
+        stripe_info: 'Paiement s\u00e9curis\u00e9 par Stripe. Vos donn\u00e9es bancaires ne sont jamais stock\u00e9es sur nos serveurs.',
+        summary: 'R\u00e9capitulatif',
+        payment_failed: 'Paiement non finalis\u00e9. Statut :',
+        // Success
+        confirmed: 'R\u00e9servation confirm\u00e9e !',
+        thanks: 'Merci pour votre r\u00e9servation \u00e0',
+        email_sent: 'Un email de confirmation a \u00e9t\u00e9 envoy\u00e9 \u00e0',
+        client: 'Client',
+        arrival: 'Arriv\u00e9e',
+        departure: 'D\u00e9part',
+        room: 'Chambre',
+        travelers: 'Voyageurs',
+        paid: 'Pay\u00e9',
+        sync_warning: "Votre r\u00e9servation est enregistr\u00e9e. La synchronisation avec le syst\u00e8me de l'h\u00f4tel sera effectu\u00e9e sous peu.",
+        print: 'Imprimer',
+        // Footer
+        secure_booking: 'R\u00e9servation s\u00e9curis\u00e9e',
+        encrypted: 'Paiement chiffr\u00e9 par Stripe',
+        // Error
+        invalid_link: 'Lien invalide',
+        no_hotel: "Aucun h\u00f4tel sp\u00e9cifi\u00e9 dans l'URL.",
+        hotel_unavailable: 'H\u00f4tel non disponible',
+        loading: 'Chargement...',
+        at: '\u00e0'
+    },
+    en: {
+        welcome_subtitle: 'Welcome',
+        welcome_question: 'How can we help you?',
+        no_reservation: "I don't have a reservation",
+        no_reservation_desc: 'Book a room online in just a few clicks',
+        no_reservation_action: 'Book now',
+        has_reservation: 'I have a reservation',
+        has_reservation_desc: 'Find the details of your existing reservation',
+        has_reservation_action: 'Search',
+        has_problem: 'I have a problem',
+        has_problem_desc: 'Need help during your stay?',
+        has_problem_action: 'Get help',
+        lookup_title: 'Find my reservation',
+        lookup_subtitle: 'Search by reservation number or last name',
+        lookup_ref: 'Reservation number',
+        lookup_ref_placeholder: 'ACL-XXXX-XXXXXX-XXXXX',
+        lookup_or: 'or',
+        lookup_name: 'Last name',
+        lookup_name_placeholder: 'Smith',
+        lookup_search: 'Search my reservation',
+        lookup_searching: 'Searching...',
+        lookup_no_result: 'No reservation found with this information.',
+        lookup_error_empty: 'Please enter a reservation number or a name.',
+        lookup_status: 'Status',
+        lookup_checkin: 'Check-in',
+        lookup_checkout: 'Check-out',
+        lookup_room: 'Room',
+        lookup_payment: 'Payment',
+        lookup_total: 'Total',
+        lookup_guest: 'Guest',
+        lookup_stay: 'Stay',
+        lookup_balance: 'Balance',
+        problem_title: 'Need help?',
+        problem_subtitle: 'We are here to help you',
+        problem_oncall_title: 'On-call number',
+        problem_oncall_msg: 'The on-call phone number is displayed on the front door of the establishment.',
+        problem_oncall_action: 'Please dial this number to reach a team member who will assist you as soon as possible.',
+        problem_tip: 'In case of absolute emergency (fire, accident), contact emergency services at 15 (SAMU), 17 (Police) or 18 (Fire department).',
+        problem_available: 'Our on-call team is available 24/7.',
+        step1: 'Dates & Room',
+        step2: 'Your details',
+        step3: 'Options',
+        step4: 'Payment',
+        choose_dates: 'Choose your dates and guests',
+        checkin_date: 'Check-in date',
+        checkout_date: 'Check-out date',
+        adults: 'Adults',
+        children: 'Children',
+        search_rooms: 'Search availability',
+        no_rooms: 'No rooms available',
+        no_rooms_desc: 'Try different dates or a different number of guests.',
+        available_rooms: 'Available rooms',
+        night: 'night',
+        nights: 'nights',
+        adult: 'adult',
+        adults_pl: 'adults',
+        child: 'child',
+        children_pl: 'children',
+        per_night: '/night',
+        total: 'Total',
+        full: 'Full',
+        available: 'available',
+        available_pl: 'available',
+        max: 'Max',
+        select_dates: 'Please select your dates.',
+        searching: 'Searching...',
+        your_info: 'Your details',
+        your_info_desc: 'Enter your information for the reservation',
+        civility: 'Title',
+        first_name: 'First name',
+        last_name: 'Last name',
+        email: 'Email',
+        phone: 'Phone',
+        address: 'Address',
+        address_optional: '(optional)',
+        address_complement: 'Additional address',
+        postal_code: 'Postal code',
+        city: 'City',
+        special_requests: 'Special requests',
+        special_requests_placeholder: 'Baby cot, high floor, quiet room...',
+        back: 'Back',
+        back_home: 'Back to home',
+        next_extras: 'Options & Extras',
+        required_fields: 'Please fill in the required fields (Name, Email).',
+        invalid_email: 'Please enter a valid email address.',
+        extras_title: 'Options & Services',
+        extras_desc: 'Add extras to your stay (optional)',
+        no_extras: 'No additional options available at the moment.',
+        extras_later: 'Options will be available after the reservation is created.',
+        extras_later_sub: 'You can add extras upon your arrival.',
+        loading_extras: 'Loading options...',
+        added: 'Added',
+        add: 'Add',
+        per_person: 'per person',
+        per_night_extra: 'per night',
+        per_stay: 'per stay',
+        flat_rate: 'flat rate',
+        proceed_payment: 'Proceed to payment',
+        secure_payment: 'Secure payment',
+        your_booking: 'Your reservation',
+        total_to_pay: 'Total to pay',
+        credit_card: 'Credit card',
+        pay: 'Pay',
+        processing: 'Processing...',
+        stripe_info: 'Secure payment by Stripe. Your banking details are never stored on our servers.',
+        summary: 'Summary',
+        payment_failed: 'Payment not completed. Status:',
+        confirmed: 'Reservation confirmed!',
+        thanks: 'Thank you for your reservation at',
+        email_sent: 'A confirmation email has been sent to',
+        client: 'Guest',
+        arrival: 'Arrival',
+        departure: 'Departure',
+        room: 'Room',
+        travelers: 'Guests',
+        paid: 'Paid',
+        sync_warning: 'Your reservation is registered. Synchronisation with the hotel system will be done shortly.',
+        print: 'Print',
+        secure_booking: 'Secure booking',
+        encrypted: 'Payment encrypted by Stripe',
+        invalid_link: 'Invalid link',
+        no_hotel: 'No hotel specified in the URL.',
+        hotel_unavailable: 'Hotel not available',
+        loading: 'Loading...',
+        at: 'at'
+    },
+    es: {
+        welcome_subtitle: 'Bienvenido',
+        welcome_question: '\u00bfC\u00f3mo podemos ayudarle?',
+        no_reservation: 'No tengo reserva',
+        no_reservation_desc: 'Reserve una habitaci\u00f3n en l\u00ednea en unos clics',
+        no_reservation_action: 'Reservar ahora',
+        has_reservation: 'Tengo una reserva',
+        has_reservation_desc: 'Encuentre los detalles de su reserva existente',
+        has_reservation_action: 'Buscar',
+        has_problem: 'Tengo un problema',
+        has_problem_desc: '\u00bfNecesita ayuda durante su estancia?',
+        has_problem_action: 'Obtener ayuda',
+        lookup_title: 'Encontrar mi reserva',
+        lookup_subtitle: 'Busque por n\u00famero de reserva o apellido',
+        lookup_ref: 'N\u00famero de reserva',
+        lookup_ref_placeholder: 'ACL-XXXX-XXXXXX-XXXXX',
+        lookup_or: 'o',
+        lookup_name: 'Apellido',
+        lookup_name_placeholder: 'Garc\u00eda',
+        lookup_search: 'Buscar mi reserva',
+        lookup_searching: 'Buscando...',
+        lookup_no_result: 'No se encontr\u00f3 ninguna reserva con esta informaci\u00f3n.',
+        lookup_error_empty: 'Por favor, introduzca un n\u00famero de reserva o un nombre.',
+        lookup_status: 'Estado',
+        lookup_checkin: 'Llegada',
+        lookup_checkout: 'Salida',
+        lookup_room: 'Habitaci\u00f3n',
+        lookup_payment: 'Pago',
+        lookup_total: 'Total',
+        lookup_guest: 'Cliente',
+        lookup_stay: 'Estancia',
+        lookup_balance: 'Saldo',
+        problem_title: '\u00bfNecesita ayuda?',
+        problem_subtitle: 'Estamos aqu\u00ed para ayudarle',
+        problem_oncall_title: 'N\u00famero de guardia',
+        problem_oncall_msg: 'El n\u00famero de tel\u00e9fono de guardia est\u00e1 indicado en la puerta de entrada del establecimiento.',
+        problem_oncall_action: 'Por favor, marque este n\u00famero para contactar con un miembro de nuestro equipo que le asistir\u00e1 lo antes posible.',
+        problem_tip: 'En caso de emergencia absoluta (incendio, accidente), contacte a los servicios de emergencia al 15 (SAMU), 17 (Polic\u00eda) o 18 (Bomberos).',
+        problem_available: 'Nuestro equipo de guardia est\u00e1 disponible las 24 horas del d\u00eda, los 7 d\u00edas de la semana.',
+        step1: 'Fechas y habitaci\u00f3n',
+        step2: 'Sus datos',
+        step3: 'Opciones',
+        step4: 'Pago',
+        choose_dates: 'Elija sus fechas y viajeros',
+        checkin_date: 'Fecha de llegada',
+        checkout_date: 'Fecha de salida',
+        adults: 'Adultos',
+        children: 'Ni\u00f1os',
+        search_rooms: 'Buscar disponibilidad',
+        no_rooms: 'No hay habitaciones disponibles',
+        no_rooms_desc: 'Pruebe con otras fechas o un n\u00famero diferente de viajeros.',
+        available_rooms: 'Habitaciones disponibles',
+        night: 'noche',
+        nights: 'noches',
+        adult: 'adulto',
+        adults_pl: 'adultos',
+        child: 'ni\u00f1o',
+        children_pl: 'ni\u00f1os',
+        per_night: '/noche',
+        total: 'Total',
+        full: 'Completo',
+        available: 'disponible',
+        available_pl: 'disponibles',
+        max: 'M\u00e1x',
+        select_dates: 'Por favor seleccione sus fechas.',
+        searching: 'Buscando...',
+        your_info: 'Sus datos',
+        your_info_desc: 'Introduzca sus datos para la reserva',
+        civility: 'T\u00edtulo',
+        first_name: 'Nombre',
+        last_name: 'Apellido',
+        email: 'Email',
+        phone: 'Tel\u00e9fono',
+        address: 'Direcci\u00f3n',
+        address_optional: '(opcional)',
+        address_complement: 'Direcci\u00f3n adicional',
+        postal_code: 'C\u00f3digo postal',
+        city: 'Ciudad',
+        special_requests: 'Peticiones especiales',
+        special_requests_placeholder: 'Cuna, planta alta, habitaci\u00f3n tranquila...',
+        back: 'Volver',
+        back_home: 'Volver al inicio',
+        next_extras: 'Opciones y extras',
+        required_fields: 'Por favor, rellene los campos obligatorios (Nombre, Email).',
+        invalid_email: 'Por favor, introduzca un email v\u00e1lido.',
+        extras_title: 'Opciones y servicios',
+        extras_desc: 'A\u00f1ada extras a su estancia (opcional)',
+        no_extras: 'No hay opciones adicionales disponibles en este momento.',
+        extras_later: 'Las opciones estar\u00e1n disponibles despu\u00e9s de la creaci\u00f3n de la reserva.',
+        extras_later_sub: 'Podr\u00e1 a\u00f1adir extras a su llegada.',
+        loading_extras: 'Cargando opciones...',
+        added: 'A\u00f1adido',
+        add: 'A\u00f1adir',
+        per_person: 'por persona',
+        per_night_extra: 'por noche',
+        per_stay: 'por estancia',
+        flat_rate: 'tarifa plana',
+        proceed_payment: 'Proceder al pago',
+        secure_payment: 'Pago seguro',
+        your_booking: 'Su reserva',
+        total_to_pay: 'Total a pagar',
+        credit_card: 'Tarjeta bancaria',
+        pay: 'Pagar',
+        processing: 'Procesando...',
+        stripe_info: 'Pago seguro por Stripe. Sus datos bancarios nunca se almacenan en nuestros servidores.',
+        summary: 'Resumen',
+        payment_failed: 'Pago no completado. Estado:',
+        confirmed: '\u00a1Reserva confirmada!',
+        thanks: 'Gracias por su reserva en',
+        email_sent: 'Se ha enviado un email de confirmaci\u00f3n a',
+        client: 'Cliente',
+        arrival: 'Llegada',
+        departure: 'Salida',
+        room: 'Habitaci\u00f3n',
+        travelers: 'Viajeros',
+        paid: 'Pagado',
+        sync_warning: 'Su reserva est\u00e1 registrada. La sincronizaci\u00f3n con el sistema del hotel se realizar\u00e1 en breve.',
+        print: 'Imprimir',
+        secure_booking: 'Reserva segura',
+        encrypted: 'Pago cifrado por Stripe',
+        invalid_link: 'Enlace inv\u00e1lido',
+        no_hotel: 'No se especific\u00f3 ning\u00fan hotel en la URL.',
+        hotel_unavailable: 'Hotel no disponible',
+        loading: 'Cargando...',
+        at: 'a las'
+    }
+};
+
+let currentLang = 'fr';
+function t(key) { return (LANGS[currentLang] && LANGS[currentLang][key]) || LANGS.fr[key] || key; }
+function setLang(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    // Re-render current view
+    if (currentView === 'welcome') renderWelcome();
+    else if (currentView === 'lookup') renderLookupPage();
+    else if (currentView === 'problem') renderProblemPage();
+    else if (currentView === 'step1') renderStep1();
+    else if (currentView === 'step2') renderStep2();
+    else if (currentView === 'step3') renderStep3();
+    else if (currentView === 'step4') renderStep4();
+}
+
+const locales = { fr: 'fr-FR', en: 'en-GB', es: 'es-ES' };
+
+// ============ STATE ============
 const API_BASE = window.location.origin + '/api';
 let hotelSlug = null;
 let hotelData = null;
@@ -180,6 +705,7 @@ let stripeElements = null;
 let cardElement = null;
 let selectedRoom = null;
 let selectedExtras = [];
+let currentView = 'welcome';
 let bookingState = {
     checkin: '',
     checkout: '',
@@ -197,29 +723,33 @@ let bookingState = {
     special_requests: ''
 };
 
-// Init
+// ============ INIT ============
 (function() {
     const params = new URLSearchParams(window.location.search);
     hotelSlug = params.get('hotel');
+    const langParam = params.get('lang');
+    if (langParam && LANGS[langParam]) currentLang = langParam;
+
     if (!hotelSlug) {
-        document.getElementById('booking-app').innerHTML = '<div class="container" style="padding:80px 20px;text-align:center"><h2>Lien invalide</h2><p style="color:#6B7280">Aucun h&ocirc;tel sp&eacute;cifi&eacute; dans l\'URL.</p></div>';
+        document.getElementById('booking-app').innerHTML = `<div class="container" style="padding:80px 20px;text-align:center"><h2>${t('invalid_link')}</h2><p style="color:#6B7280">${t('no_hotel')}</p></div>`;
         return;
     }
     loadHotel();
 })();
 
+// ============ API ============
 async function apiGet(url) {
     const res = await fetch(API_BASE + url);
     if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Erreur serveur'); }
     return res.json();
 }
-
 async function apiPost(url, body) {
     const res = await fetch(API_BASE + url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Erreur serveur'); }
     return res.json();
 }
 
+// ============ LOAD HOTEL ============
 async function loadHotel() {
     try {
         const res = await apiGet(`/booking/${hotelSlug}`);
@@ -229,43 +759,94 @@ async function loadHotel() {
             stripe = Stripe(hotelData.stripe_public_key);
         }
 
-        // Default dates: tomorrow + day after
         const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
         const dayAfter = new Date(); dayAfter.setDate(dayAfter.getDate() + 2);
         bookingState.checkin = tomorrow.toISOString().split('T')[0];
         bookingState.checkout = dayAfter.toISOString().split('T')[0];
 
-        renderStep1();
+        renderWelcome();
     } catch (err) {
-        document.getElementById('booking-app').innerHTML = `<div class="container" style="padding:80px 20px;text-align:center"><h2>H&ocirc;tel non disponible</h2><p style="color:#6B7280">${esc(err.message)}</p></div>`;
+        document.getElementById('booking-app').innerHTML = `<div class="container" style="padding:80px 20px;text-align:center"><h2>${t('hotel_unavailable')}</h2><p style="color:#6B7280">${esc(err.message)}</p></div>`;
     }
 }
 
-function renderHeader() {
+// ============ HELPERS ============
+function esc(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+function getNights() {
+    return Math.max(1, Math.ceil((new Date(bookingState.checkout) - new Date(bookingState.checkin)) / 86400000));
+}
+function getExtrasTotal() {
+    if (!selectedExtras.length) return 0;
+    const nights = getNights();
+    const nbPersons = bookingState.nb_adult + bookingState.nb_child;
+    let total = 0;
+    selectedExtras.forEach(e => {
+        let price = e.UnitPrice * e.qty;
+        if (e.CalcRule === 'P') price *= nbPersons;
+        if (e.PostingType === 'D') price *= nights;
+        total += price;
+    });
+    return total;
+}
+function getGrandTotal() {
+    return (selectedRoom ? selectedRoom.total : 0) + getExtrasTotal();
+}
+function computeExtraLineTotal(e) {
+    const nights = getNights();
+    const nbPersons = bookingState.nb_adult + bookingState.nb_child;
+    let price = e.UnitPrice * e.qty;
+    if (e.CalcRule === 'P') price *= nbPersons;
+    if (e.PostingType === 'D') price *= nights;
+    return price;
+}
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString(locales[currentLang] || 'fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+function pluralize(n, singular, plural) { return n > 1 ? plural : singular; }
+
+// ============ HEADER ============
+function renderHeader(showBack) {
     return `
         <div class="booking-header">
             <div class="container">
                 <div class="hotel-brand">
+                    ${showBack ? `<button onclick="renderWelcome()" style="background:none;border:none;cursor:pointer;color:var(--gray-500);font-size:18px;padding:4px 8px;margin-right:4px" title="${t('back_home')}"><i class="fas fa-arrow-left"></i></button>` : ''}
                     ${hotelData.logo_url ? `<img src="${esc(hotelData.logo_url)}" alt="">` : '<i class="fas fa-hotel" style="font-size:28px;color:var(--primary)"></i>'}
                     <div>
                         <h1>${esc(hotelData.name)}</h1>
                         <div class="stars">${'&#9733;'.repeat(hotelData.stars || 0)}</div>
                     </div>
                 </div>
-                <div class="hotel-info-header">
-                    <span><i class="fas fa-map-marker-alt"></i> ${esc(hotelData.city || '')}</span>
+                <div class="header-right">
+                    <div class="hotel-info-header">
+                        <span><i class="fas fa-map-marker-alt"></i> ${esc(hotelData.city || '')}</span>
+                    </div>
+                    <div class="lang-switcher">
+                        <button class="lang-btn ${currentLang === 'fr' ? 'active' : ''}" onclick="setLang('fr')">FR</button>
+                        <button class="lang-btn ${currentLang === 'en' ? 'active' : ''}" onclick="setLang('en')">EN</button>
+                        <button class="lang-btn ${currentLang === 'es' ? 'active' : ''}" onclick="setLang('es')">ES</button>
+                    </div>
                 </div>
             </div>
         </div>
     `;
 }
 
+function renderFooter() {
+    return `<div class="footer-booking"><div class="container"><i class="fas fa-lock"></i> ${t('secure_booking')} &middot; ${t('encrypted')}</div></div>`;
+}
+
 function renderSteps(current) {
     const steps = [
-        { num: 1, label: 'Dates & Chambre', icon: 'fa-calendar-alt' },
-        { num: 2, label: 'Vos informations', icon: 'fa-user' },
-        { num: 3, label: 'Options', icon: 'fa-concierge-bell' },
-        { num: 4, label: 'Paiement', icon: 'fa-credit-card' }
+        { num: 1, label: t('step1') },
+        { num: 2, label: t('step2') },
+        { num: 3, label: t('step3') },
+        { num: 4, label: t('step4') }
     ];
     return `
         <div class="booking-steps">
@@ -277,192 +858,155 @@ function renderSteps(current) {
     `;
 }
 
-function getNights() {
-    return Math.max(1, Math.ceil((new Date(bookingState.checkout) - new Date(bookingState.checkin)) / 86400000));
-}
-
-function getExtrasTotal() {
-    if (!selectedExtras.length) return 0;
-    const nights = getNights();
-    const nbPersons = bookingState.nb_adult + bookingState.nb_child;
-    let total = 0;
-    selectedExtras.forEach(e => {
-        let price = e.UnitPrice * e.qty;
-        // CalcRule: F = forfait, P = par personne
-        if (e.CalcRule === 'P') price *= nbPersons;
-        // PostingType: D = par nuit, N = par séjour
-        if (e.PostingType === 'D') price *= nights;
-        total += price;
-    });
-    return total;
-}
-
-function getGrandTotal() {
-    return (selectedRoom ? selectedRoom.total : 0) + getExtrasTotal();
-}
-
-function formatDate(dateStr) {
-    if (!dateStr) return '';
-    const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 function renderSummary(showExtras) {
     const nights = getNights();
-    const extrasTotal = getExtrasTotal();
     const grandTotal = getGrandTotal();
-
     let html = `
         <div class="booking-summary">
-            <h4><i class="fas fa-receipt"></i> R&eacute;capitulatif</h4>
-            <div class="summary-row"><span>${esc(selectedRoom.label)}</span><span>${selectedRoom.ratePerNight.toFixed(0)} &euro; / nuit</span></div>
-            <div class="summary-row"><span>${nights} nuit${nights > 1 ? 's' : ''}</span><span>${formatDate(bookingState.checkin)} &rarr; ${formatDate(bookingState.checkout)}</span></div>
-            <div class="summary-row"><span>${bookingState.nb_adult} adulte${bookingState.nb_adult > 1 ? 's' : ''}${bookingState.nb_child > 0 ? `, ${bookingState.nb_child} enfant${bookingState.nb_child > 1 ? 's' : ''}` : ''}</span><span>${selectedRoom.total.toFixed(2)} &euro;</span></div>
+            <h4><i class="fas fa-receipt"></i> ${t('summary')}</h4>
+            <div class="summary-row"><span>${esc(selectedRoom.label)}</span><span>${selectedRoom.ratePerNight.toFixed(0)} &euro; ${t('per_night')}</span></div>
+            <div class="summary-row"><span>${nights} ${pluralize(nights, t('night'), t('nights'))}</span><span>${formatDate(bookingState.checkin)} &rarr; ${formatDate(bookingState.checkout)}</span></div>
+            <div class="summary-row"><span>${bookingState.nb_adult} ${pluralize(bookingState.nb_adult, t('adult'), t('adults_pl'))}${bookingState.nb_child > 0 ? `, ${bookingState.nb_child} ${pluralize(bookingState.nb_child, t('child'), t('children_pl'))}` : ''}</span><span>${selectedRoom.total.toFixed(2)} &euro;</span></div>
     `;
-
     if (showExtras && selectedExtras.length > 0) {
         selectedExtras.forEach(e => {
             const eTotal = computeExtraLineTotal(e);
             html += `<div class="summary-row extras-label"><span>${esc(e.Name)} x${e.qty}</span><span>${eTotal.toFixed(2)} &euro;</span></div>`;
         });
     }
-
-    html += `<div class="summary-row total"><span>Total</span><span>${grandTotal.toFixed(2)} &euro;</span></div>`;
-    html += `</div>`;
+    html += `<div class="summary-row total"><span>${t('total')}</span><span>${grandTotal.toFixed(2)} &euro;</span></div></div>`;
     return html;
 }
 
-function computeExtraLineTotal(e) {
-    const nights = getNights();
-    const nbPersons = bookingState.nb_adult + bookingState.nb_child;
-    let price = e.UnitPrice * e.qty;
-    if (e.CalcRule === 'P') price *= nbPersons;
-    if (e.PostingType === 'D') price *= nights;
-    return price;
-}
-
-// ============ STEP 1: Dates & Room ============
-function renderStep1() {
-    const today = new Date().toISOString().split('T')[0];
-
+// ============ WELCOME PAGE ============
+function renderWelcome() {
+    currentView = 'welcome';
     document.getElementById('booking-app').innerHTML = `
-        ${renderHeader()}
-        <div class="booking-main">
+        <div class="welcome-hero">
             <div class="container">
-                ${renderSteps(1)}
-                <div class="card">
-                    <div class="card-header">
-                        <h2><i class="fas fa-calendar-alt"></i> Choisissez vos dates et voyageurs</h2>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Date d'arriv&eacute;e</label>
-                                <input type="date" id="checkin" value="${bookingState.checkin}" min="${today}" onchange="onDateChange()">
-                            </div>
-                            <div class="form-group">
-                                <label>Date de d&eacute;part</label>
-                                <input type="date" id="checkout" value="${bookingState.checkout}" min="${bookingState.checkin || today}" onchange="onDateChange()">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Adultes</label>
-                                <select id="nb_adult" onchange="bookingState.nb_adult = parseInt(this.value)">
-                                    ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${bookingState.nb_adult === n ? 'selected' : ''}>${n}</option>`).join('')}
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Enfants</label>
-                                <select id="nb_child" onchange="bookingState.nb_child = parseInt(this.value)">
-                                    ${[0,1,2,3,4].map(n => `<option value="${n}" ${bookingState.nb_child === n ? 'selected' : ''}>${n}</option>`).join('')}
-                                </select>
-                            </div>
-                        </div>
-                        <button class="btn btn-primary btn-lg" onclick="searchAvailability()">
-                            <i class="fas fa-search"></i> Rechercher les disponibilit&eacute;s
-                        </button>
-                    </div>
+                <div class="lang-switcher" style="position:absolute;top:16px;right:20px;">
+                    <button class="lang-btn ${currentLang === 'fr' ? 'active' : ''}" onclick="setLang('fr')" style="color:${currentLang === 'fr' ? 'white' : 'rgba(255,255,255,0.7)'};border-color:rgba(255,255,255,0.3);background:${currentLang === 'fr' ? 'rgba(255,255,255,0.2)' : 'transparent'}">FR</button>
+                    <button class="lang-btn ${currentLang === 'en' ? 'active' : ''}" onclick="setLang('en')" style="color:${currentLang === 'en' ? 'white' : 'rgba(255,255,255,0.7)'};border-color:rgba(255,255,255,0.3);background:${currentLang === 'en' ? 'rgba(255,255,255,0.2)' : 'transparent'}">EN</button>
+                    <button class="lang-btn ${currentLang === 'es' ? 'active' : ''}" onclick="setLang('es')" style="color:${currentLang === 'es' ? 'white' : 'rgba(255,255,255,0.7)'};border-color:rgba(255,255,255,0.3);background:${currentLang === 'es' ? 'rgba(255,255,255,0.2)' : 'transparent'}">ES</button>
                 </div>
-                <div id="rooms-container"></div>
+                ${hotelData.logo_url
+                    ? `<img src="${esc(hotelData.logo_url)}" alt="${esc(hotelData.name)}" class="welcome-logo">`
+                    : `<div class="welcome-logo-icon"><i class="fas fa-hotel"></i></div>`
+                }
+                <h1 class="welcome-hotel-name">${esc(hotelData.name)}</h1>
+                ${hotelData.stars ? `<div class="welcome-stars">${'&#9733;'.repeat(hotelData.stars)}</div>` : ''}
+                ${hotelData.address ? `<p class="welcome-address"><i class="fas fa-map-marker-alt"></i> ${esc(hotelData.address)}${hotelData.city ? ', ' + esc(hotelData.city) : ''}</p>` : ''}
+                <p class="welcome-subtitle">${t('welcome_subtitle')}</p>
+            </div>
+        </div>
 
-                <div class="lookup-section">
-                    <button class="lookup-toggle" onclick="toggleLookup()">
-                        <i class="fas fa-search"></i> Vous avez d&eacute;j&agrave; une r&eacute;servation ?
-                    </button>
-                    <div id="lookup-panel" style="display:none">
-                        <div class="lookup-form">
-                            <h4><i class="fas fa-search"></i> Rechercher votre r&eacute;servation</h4>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>R&eacute;f&eacute;rence</label>
-                                    <input type="text" id="lookup_ref" placeholder="ACL-XXXX-XXXXXX-XXXXX">
-                                </div>
-                                <div class="form-group">
-                                    <label>ou Email</label>
-                                    <input type="email" id="lookup_email" placeholder="votre@email.com">
-                                </div>
-                            </div>
-                            <button class="btn btn-outline btn-sm" onclick="doLookup()">
-                                <i class="fas fa-search"></i> Rechercher
-                            </button>
-                            <div id="lookup-result"></div>
-                        </div>
+        <div class="welcome-actions">
+            <div class="container">
+                <h2 style="text-align:center;font-size:20px;font-weight:600;color:var(--gray-800);margin-bottom:28px">${t('welcome_question')}</h2>
+                <div class="action-cards">
+                    <div class="action-card card-book" onclick="renderStep1()">
+                        <div class="action-icon"><i class="fas fa-calendar-plus"></i></div>
+                        <h3>${t('no_reservation')}</h3>
+                        <p>${t('no_reservation_desc')}</p>
+                        <div class="action-arrow">${t('no_reservation_action')} <i class="fas fa-arrow-right"></i></div>
+                    </div>
+                    <div class="action-card card-lookup" onclick="renderLookupPage()">
+                        <div class="action-icon"><i class="fas fa-search"></i></div>
+                        <h3>${t('has_reservation')}</h3>
+                        <p>${t('has_reservation_desc')}</p>
+                        <div class="action-arrow">${t('has_reservation_action')} <i class="fas fa-arrow-right"></i></div>
+                    </div>
+                    <div class="action-card card-help" onclick="renderProblemPage()">
+                        <div class="action-icon"><i class="fas fa-life-ring"></i></div>
+                        <h3>${t('has_problem')}</h3>
+                        <p>${t('has_problem_desc')}</p>
+                        <div class="action-arrow">${t('has_problem_action')} <i class="fas fa-arrow-right"></i></div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="footer-booking">
-            <div class="container">
-                <i class="fas fa-lock"></i> R&eacute;servation s&eacute;curis&eacute;e &middot; Paiement chiffr&eacute; par Stripe
-            </div>
-        </div>
+        ${renderFooter()}
     `;
 }
 
-function toggleLookup() {
-    const panel = document.getElementById('lookup-panel');
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+// ============ LOOKUP PAGE ============
+function renderLookupPage() {
+    currentView = 'lookup';
+    document.getElementById('booking-app').innerHTML = `
+        ${renderHeader(true)}
+        <div class="booking-main">
+            <div class="container">
+                <div class="lookup-page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="lookup-icon"><i class="fas fa-search"></i></div>
+                            <h2>${t('lookup_title')}</h2>
+                            <p>${t('lookup_subtitle')}</p>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>${t('lookup_ref')}</label>
+                                <input type="text" id="lookup_ref" placeholder="${t('lookup_ref_placeholder')}">
+                            </div>
+                            <div class="lookup-or">${t('lookup_or')}</div>
+                            <div class="form-group" style="margin-top:12px">
+                                <label>${t('lookup_name')}</label>
+                                <input type="text" id="lookup_name" placeholder="${t('lookup_name_placeholder')}">
+                            </div>
+                            <button class="btn btn-success btn-lg btn-block" style="margin-top:20px" onclick="doLookup()">
+                                <i class="fas fa-search"></i> ${t('lookup_search')}
+                            </button>
+                            <div id="lookup-result"></div>
+                            <div style="margin-top:24px;text-align:center">
+                                <button class="btn btn-outline" onclick="renderWelcome()"><i class="fas fa-arrow-left"></i> ${t('back_home')}</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        ${renderFooter()}
+    `;
 }
 
 async function doLookup() {
     const ref = document.getElementById('lookup_ref').value.trim();
-    const email = document.getElementById('lookup_email').value.trim();
+    const name = document.getElementById('lookup_name').value.trim();
     const resultDiv = document.getElementById('lookup-result');
 
-    if (!ref && !email) {
-        resultDiv.innerHTML = '<div class="alert alert-danger" style="margin-top:12px">Saisissez une r&eacute;f&eacute;rence ou un email.</div>';
+    if (!ref && !name) {
+        resultDiv.innerHTML = `<div class="alert alert-danger" style="margin-top:16px">${t('lookup_error_empty')}</div>`;
         return;
     }
 
-    resultDiv.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Recherche...</div>';
+    resultDiv.innerHTML = `<div class="loading-spinner" style="padding:20px"><i class="fas fa-spinner fa-spin"></i> ${t('lookup_searching')}</div>`;
 
     try {
         const res = await apiPost(`/booking/${hotelSlug}/lookup`, {
             booking_ref: ref,
-            email: email
+            last_name: name
         });
 
         const local = res.local_booking;
         const pms = res.pms_result;
 
         if (!local && (!pms || !pms.success || !pms.reservations || pms.reservations.length === 0)) {
-            resultDiv.innerHTML = '<div class="alert alert-warning" style="margin-top:12px">Aucune r&eacute;servation trouv&eacute;e.</div>';
+            resultDiv.innerHTML = `<div class="alert alert-warning" style="margin-top:16px">${t('lookup_no_result')}</div>`;
             return;
         }
 
-        let html = '<div class="lookup-result" style="margin-top:12px">';
+        let html = '<div class="lookup-result" style="margin-top:16px">';
 
         if (local) {
             html += `
                 <div class="resa-card">
-                    <h4><i class="fas fa-bookmark"></i> R&eacute;servation ${esc(local.booking_ref)}</h4>
-                    <div class="resa-row"><span class="label">Statut</span><span><strong>${esc(local.status)}</strong></span></div>
-                    <div class="resa-row"><span class="label">Arriv&eacute;e</span><span>${formatDate(local.checkin_date)}</span></div>
-                    <div class="resa-row"><span class="label">D&eacute;part</span><span>${formatDate(local.checkout_date)}</span></div>
-                    <div class="resa-row"><span class="label">Chambre</span><span>${esc(local.room_type)}</span></div>
-                    <div class="resa-row"><span class="label">Paiement</span><span>${esc(local.payment_status)}</span></div>
-                    <div class="resa-row"><span class="label">Total</span><span><strong>${parseFloat(local.total_amount).toFixed(2)} &euro;</strong></span></div>
+                    <h4><i class="fas fa-bookmark" style="color:var(--primary)"></i> ${esc(local.booking_ref)}</h4>
+                    <div class="resa-row"><span class="label">${t('lookup_status')}</span><span><strong>${esc(local.status)}</strong></span></div>
+                    <div class="resa-row"><span class="label">${t('lookup_checkin')}</span><span>${formatDate(local.checkin_date)}</span></div>
+                    <div class="resa-row"><span class="label">${t('lookup_checkout')}</span><span>${formatDate(local.checkout_date)}</span></div>
+                    <div class="resa-row"><span class="label">${t('lookup_room')}</span><span>${esc(local.room_type)}</span></div>
+                    <div class="resa-row"><span class="label">${t('lookup_payment')}</span><span>${esc(local.payment_status)}</span></div>
+                    <div class="resa-row"><span class="label">${t('lookup_total')}</span><span><strong>${parseFloat(local.total_amount).toFixed(2)} &euro;</strong></span></div>
                 </div>
             `;
         }
@@ -470,13 +1014,13 @@ async function doLookup() {
         if (pms && pms.success && pms.reservations && pms.reservations.length > 0) {
             pms.reservations.forEach(r => {
                 html += `
-                    <div class="resa-card" style="margin-top:8px">
-                        <h4><i class="fas fa-hotel"></i> PMS : ${esc(r.NoResa)}</h4>
-                        <div class="resa-row"><span class="label">Client</span><span>${esc(r.ClientInfo?.LastName || '')}</span></div>
-                        <div class="resa-row"><span class="label">S&eacute;jour</span><span>${formatDate(r.StartDate)} &rarr; ${formatDate(r.EndDate)}</span></div>
-                        <div class="resa-row"><span class="label">Chambre</span><span>${esc(r.RoomInfo?.Name || '')} (n&deg;${esc(r.RoomInfo?.RoomNumber || '')})</span></div>
-                        <div class="resa-row"><span class="label">Total TTC</span><span><strong>${(r.TotalAmountIT || 0).toFixed(2)} &euro;</strong></span></div>
-                        <div class="resa-row"><span class="label">Solde</span><span>${(r.TotalBalanceIT || 0).toFixed(2)} &euro;</span></div>
+                    <div class="resa-card">
+                        <h4><i class="fas fa-hotel" style="color:var(--success)"></i> PMS : ${esc(r.NoResa)}</h4>
+                        <div class="resa-row"><span class="label">${t('lookup_guest')}</span><span>${esc(r.ClientInfo?.LastName || '')}</span></div>
+                        <div class="resa-row"><span class="label">${t('lookup_stay')}</span><span>${formatDate(r.StartDate)} &rarr; ${formatDate(r.EndDate)}</span></div>
+                        <div class="resa-row"><span class="label">${t('lookup_room')}</span><span>${esc(r.RoomInfo?.Name || '')} (n&deg;${esc(r.RoomInfo?.RoomNumber || '')})</span></div>
+                        <div class="resa-row"><span class="label">${t('lookup_total')}</span><span><strong>${(r.TotalAmountIT || 0).toFixed(2)} &euro;</strong></span></div>
+                        <div class="resa-row"><span class="label">${t('lookup_balance')}</span><span>${(r.TotalBalanceIT || 0).toFixed(2)} &euro;</span></div>
                     </div>
                 `;
             });
@@ -485,14 +1029,108 @@ async function doLookup() {
         html += '</div>';
         resultDiv.innerHTML = html;
     } catch (err) {
-        resultDiv.innerHTML = `<div class="alert alert-danger" style="margin-top:12px">${esc(err.message)}</div>`;
+        resultDiv.innerHTML = `<div class="alert alert-danger" style="margin-top:16px">${esc(err.message)}</div>`;
     }
+}
+
+// ============ PROBLEM PAGE ============
+function renderProblemPage() {
+    currentView = 'problem';
+    document.getElementById('booking-app').innerHTML = `
+        ${renderHeader(true)}
+        <div class="booking-main">
+            <div class="container">
+                <div class="problem-page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="problem-icon"><i class="fas fa-life-ring"></i></div>
+                            <h2>${t('problem_title')}</h2>
+                            <p>${t('problem_subtitle')}</p>
+                        </div>
+                        <div class="card-body">
+                            <div class="problem-info-card">
+                                <div class="phone-icon"><i class="fas fa-phone-alt"></i></div>
+                                <h3>${t('problem_oncall_title')}</h3>
+                                <p>${t('problem_oncall_msg')}</p>
+                                <p style="margin-top:12px">${t('problem_oncall_action')}</p>
+                            </div>
+
+                            <div class="problem-tip" style="margin-top:20px">
+                                <i class="fas fa-clock"></i>
+                                <p>${t('problem_available')}</p>
+                            </div>
+
+                            <div class="problem-tip">
+                                <i class="fas fa-exclamation-triangle" style="color:var(--danger)"></i>
+                                <p>${t('problem_tip')}</p>
+                            </div>
+
+                            <div style="margin-top:28px;text-align:center">
+                                <button class="btn btn-outline" onclick="renderWelcome()"><i class="fas fa-arrow-left"></i> ${t('back_home')}</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        ${renderFooter()}
+    `;
+}
+
+// ============ STEP 1: Dates & Room ============
+function renderStep1() {
+    currentView = 'step1';
+    const today = new Date().toISOString().split('T')[0];
+
+    document.getElementById('booking-app').innerHTML = `
+        ${renderHeader(true)}
+        <div class="booking-main">
+            <div class="container">
+                ${renderSteps(1)}
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-calendar-alt"></i> ${t('choose_dates')}</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>${t('checkin_date')}</label>
+                                <input type="date" id="checkin" value="${bookingState.checkin}" min="${today}" onchange="onDateChange()">
+                            </div>
+                            <div class="form-group">
+                                <label>${t('checkout_date')}</label>
+                                <input type="date" id="checkout" value="${bookingState.checkout}" min="${bookingState.checkin || today}" onchange="onDateChange()">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>${t('adults')}</label>
+                                <select id="nb_adult" onchange="bookingState.nb_adult = parseInt(this.value)">
+                                    ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${bookingState.nb_adult === n ? 'selected' : ''}>${n}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>${t('children')}</label>
+                                <select id="nb_child" onchange="bookingState.nb_child = parseInt(this.value)">
+                                    ${[0,1,2,3,4].map(n => `<option value="${n}" ${bookingState.nb_child === n ? 'selected' : ''}>${n}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary btn-lg" onclick="searchAvailability()">
+                            <i class="fas fa-search"></i> ${t('search_rooms')}
+                        </button>
+                    </div>
+                </div>
+                <div id="rooms-container"></div>
+            </div>
+        </div>
+        ${renderFooter()}
+    `;
 }
 
 function onDateChange() {
     bookingState.checkin = document.getElementById('checkin').value;
     bookingState.checkout = document.getElementById('checkout').value;
-
     const checkoutInput = document.getElementById('checkout');
     if (checkoutInput && bookingState.checkin) {
         checkoutInput.min = bookingState.checkin;
@@ -508,11 +1146,11 @@ function onDateChange() {
 async function searchAvailability() {
     const container = document.getElementById('rooms-container');
     if (!bookingState.checkin || !bookingState.checkout) {
-        container.innerHTML = '<div class="alert alert-danger" style="margin-top:16px">Veuillez s&eacute;lectionner vos dates.</div>';
+        container.innerHTML = `<div class="alert alert-danger" style="margin-top:16px">${t('select_dates')}</div>`;
         return;
     }
 
-    container.innerHTML = '<div class="loading-spinner" style="margin-top:20px"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top:10px">Recherche en cours...</p></div>';
+    container.innerHTML = `<div class="loading-spinner" style="margin-top:20px"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top:10px">${t('searching')}</p></div>`;
 
     try {
         const res = await apiGet(`/booking/${hotelSlug}/availability?checkin=${bookingState.checkin}&checkout=${bookingState.checkout}&nb_adult=${bookingState.nb_adult}&nb_child=${bookingState.nb_child}`);
@@ -524,8 +1162,8 @@ async function searchAvailability() {
                 <div class="card" style="margin-top:20px">
                     <div class="card-body" style="text-align:center;padding:40px">
                         <i class="fas fa-bed" style="font-size:32px;color:var(--gray-300);margin-bottom:12px"></i>
-                        <h3>Aucune chambre disponible</h3>
-                        <p style="color:var(--gray-500)">Essayez d'autres dates ou un nombre de voyageurs diff&eacute;rent.</p>
+                        <h3>${t('no_rooms')}</h3>
+                        <p style="color:var(--gray-500)">${t('no_rooms_desc')}</p>
                     </div>
                 </div>`;
             return;
@@ -534,15 +1172,15 @@ async function searchAvailability() {
         container.innerHTML = `
             <div class="card" style="margin-top:20px">
                 <div class="card-header">
-                    <h2><i class="fas fa-door-open"></i> Chambres disponibles</h2>
-                    <p>${nights} nuit${nights > 1 ? 's' : ''} &middot; ${bookingState.nb_adult} adulte${bookingState.nb_adult > 1 ? 's' : ''}${bookingState.nb_child > 0 ? ` &middot; ${bookingState.nb_child} enfant${bookingState.nb_child > 1 ? 's' : ''}` : ''}</p>
+                    <h2><i class="fas fa-door-open"></i> ${t('available_rooms')}</h2>
+                    <p>${nights} ${pluralize(nights, t('night'), t('nights'))} &middot; ${bookingState.nb_adult} ${pluralize(bookingState.nb_adult, t('adult'), t('adults_pl'))}${bookingState.nb_child > 0 ? ` &middot; ${bookingState.nb_child} ${pluralize(bookingState.nb_child, t('child'), t('children_pl'))}` : ''}</p>
                 </div>
                 <div class="card-body">
                     <div class="room-cards">
                         ${rooms.map(r => {
                             const total = r.total || (r.rate_per_night * nights);
                             const avail = r.available > 0;
-                            const cap = r.max_capacity ? `<span><i class="fas fa-user-friends"></i> Max ${r.max_capacity}</span>` : '';
+                            const cap = r.max_capacity ? `<span><i class="fas fa-user-friends"></i> ${t('max')} ${r.max_capacity}</span>` : '';
                             const desc = r.description ? `<div class="room-desc">${esc(r.description)}</div>` : '';
                             return `
                                 <div class="room-card ${avail ? '' : 'unavailable'}" onclick="${avail ? `selectRoom(this, '${esc(r.room_type)}', '${esc(r.room_type_label || r.room_type)}', ${r.rate_per_night}, ${total}, ${nights}, '${esc(r.description || '')}')` : ''}">
@@ -551,14 +1189,14 @@ async function searchAvailability() {
                                         ${desc}
                                         <div class="room-meta">
                                             ${cap}
-                                            <span><i class="fas fa-check-circle"></i> ${avail ? `${r.available} disponible${r.available > 1 ? 's' : ''}` : 'Complet'}</span>
+                                            <span><i class="fas fa-check-circle"></i> ${avail ? `${r.available} ${pluralize(r.available, t('available'), t('available_pl'))}` : t('full')}</span>
                                         </div>
                                     </div>
                                     <div class="room-price">
                                         ${avail ? `
-                                            <div class="price-night">${r.rate_per_night.toFixed(0)} &euro; <small style="font-size:13px;font-weight:400">/nuit</small></div>
-                                            <div class="price-total">Total : ${total.toFixed(2)} &euro;</div>
-                                        ` : '<div style="color:var(--gray-400)">Complet</div>'}
+                                            <div class="price-night">${r.rate_per_night.toFixed(0)} &euro; <small style="font-size:13px;font-weight:400">${t('per_night')}</small></div>
+                                            <div class="price-total">${t('total')} : ${total.toFixed(2)} &euro;</div>
+                                        ` : `<div style="color:var(--gray-400)">${t('full')}</div>`}
                                     </div>
                                 </div>
                             `;
@@ -575,30 +1213,28 @@ async function searchAvailability() {
 function selectRoom(el, type, label, ratePerNight, total, nights, description) {
     selectedRoom = { type, label, ratePerNight, total, nights, description };
     selectedExtras = [];
-
-    // Highlight
     document.querySelectorAll('.room-card').forEach(c => c.classList.remove('selected'));
     el.classList.add('selected');
-
     renderStep2();
 }
 
 // ============ STEP 2: Guest Info ============
 function renderStep2() {
+    currentView = 'step2';
     document.getElementById('booking-app').innerHTML = `
-        ${renderHeader()}
+        ${renderHeader(true)}
         <div class="booking-main">
             <div class="container">
                 ${renderSteps(2)}
                 <div class="card">
                     <div class="card-header">
-                        <h2><i class="fas fa-user"></i> Vos informations</h2>
-                        <p>Renseignez vos coordonn&eacute;es pour la r&eacute;servation</p>
+                        <h2><i class="fas fa-user"></i> ${t('your_info')}</h2>
+                        <p>${t('your_info_desc')}</p>
                     </div>
                     <div class="card-body">
                         <div class="form-row-3">
                             <div class="form-group">
-                                <label>Civilit&eacute; *</label>
+                                <label>${t('civility')} *</label>
                                 <select id="civilite">
                                     <option value="M." ${bookingState.civilite === 'M.' ? 'selected' : ''}>M.</option>
                                     <option value="Mme" ${bookingState.civilite === 'Mme' ? 'selected' : ''}>Mme</option>
@@ -606,57 +1242,57 @@ function renderStep2() {
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>Pr&eacute;nom *</label>
+                                <label>${t('first_name')} *</label>
                                 <input type="text" id="guest_first_name" value="${esc(bookingState.guest_first_name)}" placeholder="Jean" required>
                             </div>
                             <div class="form-group">
-                                <label>Nom *</label>
+                                <label>${t('last_name')} *</label>
                                 <input type="text" id="guest_last_name" value="${esc(bookingState.guest_last_name)}" placeholder="Dupont" required>
                             </div>
                         </div>
                         <div class="form-row">
                             <div class="form-group">
-                                <label>Email *</label>
+                                <label>${t('email')} *</label>
                                 <input type="email" id="guest_email" value="${esc(bookingState.guest_email)}" placeholder="jean.dupont@email.com" required>
                             </div>
                             <div class="form-group">
-                                <label>T&eacute;l&eacute;phone</label>
+                                <label>${t('phone')}</label>
                                 <input type="tel" id="guest_phone" value="${esc(bookingState.guest_phone)}" placeholder="06 12 34 56 78">
                             </div>
                         </div>
 
                         <div style="border-top:1px solid var(--gray-100);margin:20px 0;padding-top:20px">
-                            <p style="font-size:14px;font-weight:500;color:var(--gray-700);margin-bottom:12px">Adresse <span style="font-weight:400;color:var(--gray-400)">(facultatif)</span></p>
+                            <p style="font-size:14px;font-weight:500;color:var(--gray-700);margin-bottom:12px">${t('address')} <span style="font-weight:400;color:var(--gray-400)">${t('address_optional')}</span></p>
                             <div class="form-group">
-                                <label>Adresse</label>
+                                <label>${t('address')}</label>
                                 <input type="text" id="address1" value="${esc(bookingState.address1)}" placeholder="18 avenue des moulins">
                             </div>
                             <div class="form-group">
-                                <label>Compl&eacute;ment</label>
-                                <input type="text" id="address2" value="${esc(bookingState.address2)}" placeholder="R&eacute;s. des pommiers, B&acirc;t. A">
+                                <label>${t('address_complement')}</label>
+                                <input type="text" id="address2" value="${esc(bookingState.address2)}">
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label>Code postal</label>
+                                    <label>${t('postal_code')}</label>
                                     <input type="text" id="postal_code" value="${esc(bookingState.postal_code)}" placeholder="34000">
                                 </div>
                                 <div class="form-group">
-                                    <label>Ville</label>
+                                    <label>${t('city')}</label>
                                     <input type="text" id="city" value="${esc(bookingState.city)}" placeholder="Montpellier">
                                 </div>
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <label>Demandes sp&eacute;ciales</label>
-                            <textarea id="special_requests" rows="3" placeholder="Lit b&eacute;b&eacute;, &eacute;tage &eacute;lev&eacute;, chambre calme...">${esc(bookingState.special_requests)}</textarea>
+                            <label>${t('special_requests')}</label>
+                            <textarea id="special_requests" rows="3" placeholder="${t('special_requests_placeholder')}">${esc(bookingState.special_requests)}</textarea>
                         </div>
 
                         ${renderSummary(false)}
 
                         <div style="display:flex;gap:12px;margin-top:24px">
-                            <button class="btn btn-outline" onclick="renderStep1()"><i class="fas fa-arrow-left"></i> Retour</button>
-                            <button class="btn btn-primary btn-lg" style="flex:1" onclick="goToExtras()"><i class="fas fa-concierge-bell"></i> Options & Extras</button>
+                            <button class="btn btn-outline" onclick="renderStep1()"><i class="fas fa-arrow-left"></i> ${t('back')}</button>
+                            <button class="btn btn-primary btn-lg" style="flex:1" onclick="goToExtras()"><i class="fas fa-concierge-bell"></i> ${t('next_extras')}</button>
                         </div>
                     </div>
                 </div>
@@ -680,87 +1316,63 @@ function saveGuestInfo() {
 
 function goToExtras() {
     saveGuestInfo();
-
     if (!bookingState.guest_last_name || !bookingState.guest_email) {
-        alert('Veuillez remplir les champs obligatoires (Nom, Email).');
+        alert(t('required_fields'));
         return;
     }
     if (!bookingState.guest_email.includes('@')) {
-        alert('Veuillez saisir un email valide.');
+        alert(t('invalid_email'));
         return;
     }
-
     renderStep3();
 }
 
-// ============ STEP 3: Extras / Products ============
+// ============ STEP 3: Extras ============
 async function renderStep3() {
+    currentView = 'step3';
     document.getElementById('booking-app').innerHTML = `
-        ${renderHeader()}
+        ${renderHeader(true)}
         <div class="booking-main">
             <div class="container">
                 ${renderSteps(3)}
                 <div class="card">
                     <div class="card-header">
-                        <h2><i class="fas fa-concierge-bell"></i> Options & Prestations</h2>
-                        <p>Ajoutez des extras &agrave; votre s&eacute;jour (facultatif)</p>
+                        <h2><i class="fas fa-concierge-bell"></i> ${t('extras_title')}</h2>
+                        <p>${t('extras_desc')}</p>
                     </div>
                     <div class="card-body">
                         <div id="extras-container">
-                            <div class="loading-spinner"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top:10px">Chargement des options...</p></div>
+                            <div class="loading-spinner"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top:10px">${t('loading_extras')}</p></div>
                         </div>
-
                         <div id="extras-summary-area">${renderSummary(true)}</div>
-
                         <div style="display:flex;gap:12px;margin-top:24px">
-                            <button class="btn btn-outline" onclick="renderStep2()"><i class="fas fa-arrow-left"></i> Retour</button>
-                            <button class="btn btn-primary btn-lg" style="flex:1" onclick="goToPayment()"><i class="fas fa-lock"></i> Proc&eacute;der au paiement</button>
+                            <button class="btn btn-outline" onclick="renderStep2()"><i class="fas fa-arrow-left"></i> ${t('back')}</button>
+                            <button class="btn btn-primary btn-lg" style="flex:1" onclick="goToPayment()"><i class="fas fa-lock"></i> ${t('proceed_payment')}</button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     `;
-
-    // Tenter de charger les produits depuis le PMS
     await loadExtras();
 }
 
 async function loadExtras() {
     const container = document.getElementById('extras-container');
-
     try {
-        // On n'a pas encore de NoResa PMS ici, on essaie une recherche de produits générique
-        // Le backend peut renvoyer des produits même sans NoResa (produits par défaut de l'hôtel)
         const res = await apiPost(`/booking/${hotelSlug}/products`, { noresa: '' });
-
         if (!res.success || !res.products || res.products.length === 0) {
-            container.innerHTML = `
-                <div style="text-align:center;padding:24px;color:var(--gray-400)">
-                    <i class="fas fa-gift" style="font-size:28px;margin-bottom:8px"></i>
-                    <p>Aucune option suppl&eacute;mentaire disponible pour le moment.</p>
-                </div>
-            `;
+            container.innerHTML = `<div style="text-align:center;padding:24px;color:var(--gray-400)"><i class="fas fa-gift" style="font-size:28px;margin-bottom:8px"></i><p>${t('no_extras')}</p></div>`;
             return;
         }
-
         renderExtrasCards(res.products);
     } catch (err) {
-        container.innerHTML = `
-            <div style="text-align:center;padding:24px;color:var(--gray-400)">
-                <i class="fas fa-gift" style="font-size:28px;margin-bottom:8px"></i>
-                <p>Les options seront disponibles apr&egrave;s cr&eacute;ation de la r&eacute;servation.</p>
-                <p style="font-size:12px;margin-top:4px">Vous pourrez ajouter des extras lors de votre arriv&eacute;e.</p>
-            </div>
-        `;
+        container.innerHTML = `<div style="text-align:center;padding:24px;color:var(--gray-400)"><i class="fas fa-gift" style="font-size:28px;margin-bottom:8px"></i><p>${t('extras_later')}</p><p style="font-size:12px;margin-top:4px">${t('extras_later_sub')}</p></div>`;
     }
 }
 
 function renderExtrasCards(products) {
     const container = document.getElementById('extras-container');
-    const nights = getNights();
-    const nbPersons = bookingState.nb_adult + bookingState.nb_child;
-
     container.innerHTML = `
         <div class="extras-list">
             ${products.map(p => {
@@ -768,7 +1380,6 @@ function renderExtrasCards(products) {
                 const qty = existing ? existing.qty : 0;
                 const isYesNo = p.QuantityType === 'YesNo';
                 const pricingLabel = getPricingLabel(p);
-
                 return `
                     <div class="extra-card ${qty > 0 ? 'selected' : ''}" id="extra-${esc(p.ProductCode)}">
                         <div class="extra-info">
@@ -779,7 +1390,7 @@ function renderExtrasCards(products) {
                             <div class="extra-price">${p.UnitPrice.toFixed(2)} &euro;</div>
                             ${isYesNo ? `
                                 <button class="btn btn-sm ${qty > 0 ? 'btn-primary' : 'btn-outline'}" onclick="toggleExtra('${esc(p.ProductCode)}', '${esc(p.Name)}', ${p.UnitPrice}, '${p.CalcRule}', '${p.PostingType}', '${p.QuantityType}')">
-                                    ${qty > 0 ? '<i class="fas fa-check"></i> Ajout&eacute;' : '<i class="fas fa-plus"></i> Ajouter'}
+                                    ${qty > 0 ? `<i class="fas fa-check"></i> ${t('added')}` : `<i class="fas fa-plus"></i> ${t('add')}`}
                                 </button>
                             ` : `
                                 <div class="extra-qty">
@@ -798,19 +1409,16 @@ function renderExtrasCards(products) {
 
 function getPricingLabel(p) {
     const parts = [];
-    if (p.CalcRule === 'P') parts.push('par personne');
-    if (p.PostingType === 'D') parts.push('par nuit');
-    if (p.PostingType === 'N') parts.push('par s\u00e9jour');
-    return parts.length > 0 ? parts.join(' &middot; ') : 'forfait';
+    if (p.CalcRule === 'P') parts.push(t('per_person'));
+    if (p.PostingType === 'D') parts.push(t('per_night_extra'));
+    if (p.PostingType === 'N') parts.push(t('per_stay'));
+    return parts.length > 0 ? parts.join(' &middot; ') : t('flat_rate');
 }
 
 function toggleExtra(code, name, price, calcRule, postingType, qtyType) {
     const idx = selectedExtras.findIndex(e => e.ProductCode === code);
-    if (idx >= 0) {
-        selectedExtras.splice(idx, 1);
-    } else {
-        selectedExtras.push({ ProductCode: code, Name: name, UnitPrice: price, CalcRule: calcRule, PostingType: postingType, QuantityType: qtyType, qty: 1 });
-    }
+    if (idx >= 0) { selectedExtras.splice(idx, 1); }
+    else { selectedExtras.push({ ProductCode: code, Name: name, UnitPrice: price, CalcRule: calcRule, PostingType: postingType, QuantityType: qtyType, qty: 1 }); }
     refreshExtrasUI();
 }
 
@@ -826,23 +1434,17 @@ function changeExtraQty(code, name, price, calcRule, postingType, qtyType, delta
 }
 
 function refreshExtrasUI() {
-    // Refresh summary
     const summaryArea = document.getElementById('extras-summary-area');
     if (summaryArea) summaryArea.innerHTML = renderSummary(true);
 
-    // Refresh card states
     selectedExtras.forEach(e => {
         const card = document.getElementById('extra-' + e.ProductCode);
         if (card) card.classList.add('selected');
     });
     document.querySelectorAll('.extra-card').forEach(card => {
         const code = card.id.replace('extra-', '');
-        if (!selectedExtras.find(e => e.ProductCode === code)) {
-            card.classList.remove('selected');
-        }
+        if (!selectedExtras.find(e => e.ProductCode === code)) card.classList.remove('selected');
     });
-
-    // Refresh qty displays
     document.querySelectorAll('.extra-qty span').forEach(span => {
         const btn = span.closest('.extra-card');
         if (btn) {
@@ -851,8 +1453,6 @@ function refreshExtrasUI() {
             span.textContent = extra ? extra.qty : 0;
         }
     });
-
-    // Refresh YesNo buttons
     document.querySelectorAll('.extra-card').forEach(card => {
         const code = card.id.replace('extra-', '');
         const extra = selectedExtras.find(e => e.ProductCode === code);
@@ -860,48 +1460,48 @@ function refreshExtrasUI() {
         if (yesNoBtn && !card.querySelector('.extra-qty')) {
             if (extra && extra.qty > 0) {
                 yesNoBtn.className = 'btn btn-sm btn-primary';
-                yesNoBtn.innerHTML = '<i class="fas fa-check"></i> Ajout\u00e9';
+                yesNoBtn.innerHTML = `<i class="fas fa-check"></i> ${t('added')}`;
             } else {
                 yesNoBtn.className = 'btn btn-sm btn-outline';
-                yesNoBtn.innerHTML = '<i class="fas fa-plus"></i> Ajouter';
+                yesNoBtn.innerHTML = `<i class="fas fa-plus"></i> ${t('add')}`;
             }
         }
     });
 }
 
-function goToPayment() {
-    renderStep4();
-}
+function goToPayment() { renderStep4(); }
 
 // ============ STEP 4: Payment ============
 function renderStep4() {
+    currentView = 'step4';
     const grandTotal = getGrandTotal();
+    const nights = getNights();
 
     document.getElementById('booking-app').innerHTML = `
-        ${renderHeader()}
+        ${renderHeader(true)}
         <div class="booking-main">
             <div class="container">
                 ${renderSteps(4)}
                 <div class="card">
                     <div class="card-header">
-                        <h2><i class="fas fa-credit-card"></i> Paiement s&eacute;curis&eacute;</h2>
+                        <h2><i class="fas fa-credit-card"></i> ${t('secure_payment')}</h2>
                     </div>
                     <div class="card-body">
                         <div class="booking-summary" style="margin-bottom:24px">
-                            <h4><i class="fas fa-receipt"></i> Votre r&eacute;servation</h4>
+                            <h4><i class="fas fa-receipt"></i> ${t('your_booking')}</h4>
                             <div class="summary-row"><span>${esc(hotelData.name)}</span><span></span></div>
-                            <div class="summary-row"><span>${esc(selectedRoom.label)} - ${getNights()} nuit${getNights() > 1 ? 's' : ''}</span><span>${selectedRoom.total.toFixed(2)} &euro;</span></div>
+                            <div class="summary-row"><span>${esc(selectedRoom.label)} - ${nights} ${pluralize(nights, t('night'), t('nights'))}</span><span>${selectedRoom.total.toFixed(2)} &euro;</span></div>
                             <div class="summary-row"><span>${formatDate(bookingState.checkin)} &rarr; ${formatDate(bookingState.checkout)}</span><span></span></div>
                             <div class="summary-row"><span>${esc(bookingState.civilite)} ${esc(bookingState.guest_first_name)} ${esc(bookingState.guest_last_name)}</span><span>${esc(bookingState.guest_email)}</span></div>
                             ${selectedExtras.map(e => {
                                 const eTotal = computeExtraLineTotal(e);
                                 return `<div class="summary-row extras-label"><span>${esc(e.Name)} x${e.qty}</span><span>${eTotal.toFixed(2)} &euro;</span></div>`;
                             }).join('')}
-                            <div class="summary-row total"><span>Total &agrave; payer</span><span>${grandTotal.toFixed(2)} &euro;</span></div>
+                            <div class="summary-row total"><span>${t('total_to_pay')}</span><span>${grandTotal.toFixed(2)} &euro;</span></div>
                         </div>
 
                         <div class="form-group">
-                            <label><i class="fas fa-credit-card"></i> Carte bancaire</label>
+                            <label><i class="fas fa-credit-card"></i> ${t('credit_card')}</label>
                             <div id="stripe-card-element"></div>
                             <div class="stripe-errors" id="card-errors"></div>
                         </div>
@@ -909,14 +1509,14 @@ function renderStep4() {
                         <div id="payment-error" style="display:none" class="alert alert-danger"></div>
 
                         <div style="display:flex;gap:12px;margin-top:24px">
-                            <button class="btn btn-outline" onclick="renderStep3()"><i class="fas fa-arrow-left"></i> Retour</button>
+                            <button class="btn btn-outline" onclick="renderStep3()"><i class="fas fa-arrow-left"></i> ${t('back')}</button>
                             <button class="btn btn-primary btn-lg" style="flex:1" id="pay-btn" onclick="processPayment()">
-                                <i class="fas fa-lock"></i> Payer ${grandTotal.toFixed(2)} &euro;
+                                <i class="fas fa-lock"></i> ${t('pay')} ${grandTotal.toFixed(2)} &euro;
                             </button>
                         </div>
 
                         <p style="text-align:center;margin-top:16px;font-size:12px;color:var(--gray-400)">
-                            <i class="fas fa-shield-alt"></i> Paiement s&eacute;curis&eacute; par Stripe. Vos donn&eacute;es bancaires ne sont jamais stock&eacute;es sur nos serveurs.
+                            <i class="fas fa-shield-alt"></i> ${t('stripe_info')}
                         </p>
                     </div>
                 </div>
@@ -924,7 +1524,6 @@ function renderStep4() {
         </div>
     `;
 
-    // Mount Stripe Elements
     if (stripe) {
         stripeElements = stripe.elements();
         cardElement = stripeElements.create('card', {
@@ -946,10 +1545,9 @@ async function processPayment() {
     const grandTotal = getGrandTotal();
     errorDiv.style.display = 'none';
     payBtn.disabled = true;
-    payBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Traitement en cours...';
+    payBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${t('processing')}`;
 
     try {
-        // 1. Create reservation + get Stripe client_secret
         const reserveRes = await apiPost(`/booking/${hotelSlug}/reserve`, {
             checkin_date: bookingState.checkin,
             checkout_date: bookingState.checkout,
@@ -974,7 +1572,6 @@ async function processPayment() {
         const bookingRef = reserveRes.booking_ref;
         const paymentIntentId = reserveRes.payment_intent_id;
 
-        // 2. Confirm payment with Stripe
         const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
             payment_method: {
                 card: cardElement,
@@ -993,84 +1590,65 @@ async function processPayment() {
             }
         });
 
-        if (error) {
-            throw new Error(error.message);
-        }
+        if (error) throw new Error(error.message);
 
         if (paymentIntent.status === 'succeeded') {
-            // 3. Confirm booking on our backend + sync to PMS
             const confirmRes = await apiPost(`/booking/${hotelSlug}/confirm`, {
                 booking_ref: bookingRef,
                 payment_intent_id: paymentIntentId,
-                extras: selectedExtras.map(e => ({
-                    ProductCode: e.ProductCode,
-                    Quantity: e.qty
-                }))
+                extras: selectedExtras.map(e => ({ ProductCode: e.ProductCode, Quantity: e.qty }))
             });
-
             renderSuccess(bookingRef, confirmRes.pms_synced);
         } else {
-            throw new Error('Paiement non finalis\u00e9. Statut: ' + paymentIntent.status);
+            throw new Error(`${t('payment_failed')} ${paymentIntent.status}`);
         }
-
     } catch (err) {
         errorDiv.textContent = err.message;
         errorDiv.style.display = 'block';
         payBtn.disabled = false;
-        payBtn.innerHTML = `<i class="fas fa-lock"></i> Payer ${grandTotal.toFixed(2)} \u20ac`;
+        payBtn.innerHTML = `<i class="fas fa-lock"></i> ${t('pay')} ${grandTotal.toFixed(2)} \u20ac`;
     }
 }
 
 // ============ SUCCESS ============
 function renderSuccess(bookingRef, pmsSynced) {
+    currentView = 'success';
     const grandTotal = getGrandTotal();
+    const nights = getNights();
 
     document.getElementById('booking-app').innerHTML = `
-        ${renderHeader()}
+        ${renderHeader(false)}
         <div class="booking-main">
             <div class="container">
                 <div class="card">
                     <div class="card-body success-page">
                         <div class="success-icon"><i class="fas fa-check"></i></div>
-                        <h2>R&eacute;servation confirm&eacute;e !</h2>
-                        <p>Merci pour votre r&eacute;servation &agrave; <strong>${esc(hotelData.name)}</strong></p>
+                        <h2>${t('confirmed')}</h2>
+                        <p>${t('thanks')} <strong>${esc(hotelData.name)}</strong></p>
                         <div class="booking-ref">${esc(bookingRef)}</div>
-                        <p>Un email de confirmation a &eacute;t&eacute; envoy&eacute; &agrave; <strong>${esc(bookingState.guest_email)}</strong></p>
+                        <p>${t('email_sent')} <strong>${esc(bookingState.guest_email)}</strong></p>
 
                         <div class="booking-summary" style="max-width:450px;margin:24px auto;text-align:left">
-                            <div class="summary-row"><span>Client</span><span>${esc(bookingState.civilite)} ${esc(bookingState.guest_first_name)} ${esc(bookingState.guest_last_name)}</span></div>
-                            <div class="summary-row"><span>Arriv&eacute;e</span><span>${formatDate(bookingState.checkin)} &agrave; ${hotelData.checkin_time ? hotelData.checkin_time.substring(0,5) : '15:00'}</span></div>
-                            <div class="summary-row"><span>D&eacute;part</span><span>${formatDate(bookingState.checkout)} &agrave; ${hotelData.checkout_time ? hotelData.checkout_time.substring(0,5) : '11:00'}</span></div>
-                            <div class="summary-row"><span>Chambre</span><span>${esc(selectedRoom.label)}</span></div>
-                            <div class="summary-row"><span>Voyageurs</span><span>${bookingState.nb_adult} adulte${bookingState.nb_adult > 1 ? 's' : ''}${bookingState.nb_child > 0 ? `, ${bookingState.nb_child} enfant${bookingState.nb_child > 1 ? 's' : ''}` : ''}</span></div>
+                            <div class="summary-row"><span>${t('client')}</span><span>${esc(bookingState.civilite)} ${esc(bookingState.guest_first_name)} ${esc(bookingState.guest_last_name)}</span></div>
+                            <div class="summary-row"><span>${t('arrival')}</span><span>${formatDate(bookingState.checkin)} ${t('at')} ${hotelData.checkin_time ? hotelData.checkin_time.substring(0,5) : '15:00'}</span></div>
+                            <div class="summary-row"><span>${t('departure')}</span><span>${formatDate(bookingState.checkout)} ${t('at')} ${hotelData.checkout_time ? hotelData.checkout_time.substring(0,5) : '11:00'}</span></div>
+                            <div class="summary-row"><span>${t('room')}</span><span>${esc(selectedRoom.label)}</span></div>
+                            <div class="summary-row"><span>${t('travelers')}</span><span>${bookingState.nb_adult} ${pluralize(bookingState.nb_adult, t('adult'), t('adults_pl'))}${bookingState.nb_child > 0 ? `, ${bookingState.nb_child} ${pluralize(bookingState.nb_child, t('child'), t('children_pl'))}` : ''}</span></div>
                             ${selectedExtras.length > 0 ? selectedExtras.map(e => `<div class="summary-row extras-label"><span>${esc(e.Name)}</span><span>x${e.qty}</span></div>`).join('') : ''}
-                            <div class="summary-row total"><span>Pay&eacute;</span><span>${grandTotal.toFixed(2)} &euro;</span></div>
+                            <div class="summary-row total"><span>${t('paid')}</span><span>${grandTotal.toFixed(2)} &euro;</span></div>
                         </div>
 
-                        ${!pmsSynced ? `
-                            <div class="alert alert-warning" style="max-width:450px;margin:16px auto;text-align:left">
-                                <i class="fas fa-info-circle"></i> Votre r&eacute;servation est enregistr&eacute;e. La synchronisation avec le syst&egrave;me de l'h&ocirc;tel sera effectu&eacute;e sous peu.
-                            </div>
-                        ` : ''}
+                        ${!pmsSynced ? `<div class="alert alert-warning" style="max-width:450px;margin:16px auto;text-align:left"><i class="fas fa-info-circle"></i> ${t('sync_warning')}</div>` : ''}
 
                         <div style="margin-top:24px">
-                            <button class="btn btn-outline" onclick="window.print()"><i class="fas fa-print"></i> Imprimer</button>
+                            <button class="btn btn-outline" onclick="window.print()"><i class="fas fa-print"></i> ${t('print')}</button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="footer-booking">
-            <div class="container">
-                <i class="fas fa-lock"></i> R&eacute;servation s&eacute;curis&eacute;e &middot; Paiement chiffr&eacute; par Stripe
-            </div>
-        </div>
+        ${renderFooter()}
     `;
-}
-
-function esc(str) {
-    if (!str) return '';
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 </script>
 </body>
