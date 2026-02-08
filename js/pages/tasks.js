@@ -273,20 +273,60 @@ async function saveTaskTitleInline(taskId, input, originalTitle) {
     }
 }
 
-function dragStart(e, taskId) { draggedTask = taskId; e.target.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
-function dragEnd(e) { e.target.classList.remove('dragging'); document.querySelectorAll('.kanban-tasks').forEach(el => el.classList.remove('drag-over')); }
-function allowDrop(e) { e.preventDefault(); }
+function dragStart(e, taskId) {
+    draggedTask = taskId;
+    e.target.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    // Image ghost transparente pour un meilleur feedback visuel
+    const ghost = e.target.cloneNode(true);
+    ghost.style.opacity = '0.8';
+    ghost.style.transform = 'rotate(3deg)';
+    ghost.style.position = 'absolute';
+    ghost.style.top = '-9999px';
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, 50, 20);
+    setTimeout(() => ghost.remove(), 0);
+}
+function dragEnd(e) {
+    e.target.classList.remove('dragging');
+    document.querySelectorAll('.kanban-tasks').forEach(el => el.classList.remove('drag-over'));
+}
+function allowDrop(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
 function dragEnter(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
-function dragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+function dragLeave(e) {
+    // Ne retirer drag-over que si on quitte vraiment la zone (pas un enfant)
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
+        e.currentTarget.classList.remove('drag-over');
+    }
+}
 
 async function dropTask(e, columnId) {
-    e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
     if (!draggedTask) return;
+    // Déplacer visuellement la carte immédiatement pour la fluidité
+    const card = document.querySelector(`.task-card[data-task-id="${draggedTask}"]`);
+    const target = e.currentTarget;
+    if (card) {
+        card.style.transition = 'opacity 0.15s';
+        card.style.opacity = '0.5';
+        target.appendChild(card);
+        // Mettre à jour le compteur visuellement
+        document.querySelectorAll('.kanban-column').forEach(col => {
+            const count = col.querySelector('.task-count');
+            const tasks = col.querySelectorAll('.kanban-tasks .task-card');
+            if (count) count.textContent = tasks.length;
+        });
+        setTimeout(() => { card.style.opacity = '1'; }, 50);
+    }
     try {
-        const tasksInColumn = document.querySelectorAll(`.kanban-tasks[data-column-id="${columnId}"] .task-card`);
+        const tasksInColumn = target.querySelectorAll('.task-card');
         await API.moveTask(currentBoard, draggedTask, { column_id: columnId, position: tasksInColumn.length });
+    } catch (error) {
+        toast(error.message, 'error');
         openBoard(currentBoard);
-    } catch (error) { toast(error.message, 'error'); }
+    }
     draggedTask = null;
 }
 
