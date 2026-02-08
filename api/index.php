@@ -2119,6 +2119,7 @@ try {
                 if (isset($data['pms_api_key'])) { $sets[] = "pms_api_key = ?"; $params[] = $data['pms_api_key'] ?: null; }
                 if (isset($data['pms_username'])) { $sets[] = "pms_username = ?"; $params[] = $data['pms_username'] ?: null; }
                 if (isset($data['pms_password'])) { $sets[] = "pms_password = ?"; $params[] = $data['pms_password'] ?: null; }
+                if (isset($data['pms_connection_mode'])) { $sets[] = "pms_connection_mode = ?"; $params[] = in_array($data['pms_connection_mode'], ['direct', 'relay']) ? $data['pms_connection_mode'] : 'direct'; }
 
                 // Stripe fields
                 if (isset($data['stripe_public_key'])) { $sets[] = "stripe_public_key = ?"; $params[] = $data['stripe_public_key'] ?: null; }
