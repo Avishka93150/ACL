@@ -24,11 +24,11 @@ async function loadEvaluations(container) {
         const canEvaluate = hasPermission('evaluations.evaluate');
 
         container.innerHTML = `
-            <div class="tabs mb-20">
-                <button class="tab-btn active" onclick="showEvalTab('list')">${t('evaluations.title')}</button>
-                ${canManageGrids ? '<button class="tab-btn" onclick="showEvalTab(\'grids\')">' + t('evaluations.grids') + '</button>' : ''}
-                <button class="tab-btn" onclick="showEvalTab('mine')">${t('evaluations.my_evaluations')}</button>
-                <button class="tab-btn" onclick="showEvalTab('stats')">Statistiques</button>
+            <div class="tabs mb-20" style="background: white; border-radius: 12px; padding: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid var(--gray-100); display: inline-flex; gap: 4px;">
+                <button class="tab-btn active" onclick="showEvalTab('list')" style="border-radius: 8px; padding: 10px 20px;"><i class="fas fa-clipboard-check" style="margin-right: 6px;"></i>${t('evaluations.title')}</button>
+                ${canManageGrids ? '<button class="tab-btn" onclick="showEvalTab(\'grids\')" style="border-radius: 8px; padding: 10px 20px;"><i class="fas fa-th-list" style="margin-right: 6px;"></i>' + t('evaluations.grids') + '</button>' : ''}
+                <button class="tab-btn" onclick="showEvalTab('mine')" style="border-radius: 8px; padding: 10px 20px;"><i class="fas fa-user-check" style="margin-right: 6px;"></i>${t('evaluations.my_evaluations')}</button>
+                <button class="tab-btn" onclick="showEvalTab('stats')" style="border-radius: 8px; padding: 10px 20px;"><i class="fas fa-chart-bar" style="margin-right: 6px;"></i>Statistiques</button>
             </div>
             <div id="eval-tab-content"></div>
         `;
@@ -498,36 +498,51 @@ async function renderGridsList(container) {
     try {
         const res = await API.getEvaluationGrids();
         const grids = res.grids || [];
-        
+
+        const periodicityLabels = { monthly: 'Mensuel', quarterly: 'Trimestriel', annual: 'Annuel', one_time: 'Ponctuel' };
+
         container.innerHTML = `
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-th-list"></i> ${t('evaluations.grids')}</h3>
+            <div class="eval-grids-container">
+                <div class="eval-grids-header">
+                    <h3><i class="fas fa-th-list"></i> ${t('evaluations.grids')} <span class="count-badge">${grids.length}</span></h3>
                     <button class="btn btn-primary" onclick="evalCreateGrid()"><i class="fas fa-plus"></i> ${t('evaluations.new_grid')}</button>
                 </div>
                 ${grids.length ? `
-                    <div class="audit-grids-list">
+                    <div class="eval-grids-grid">
                         ${grids.map(g => `
-                            <div class="audit-grid-card">
-                                <div class="audit-grid-info">
-                                    <h5>${esc(g.name)}</h5>
-                                    <p>${g.instructions ? esc(g.instructions.substring(0, 100)) + '...' : 'Pas de description'}</p>
-                                    <div class="audit-grid-meta">
-                                        <span><i class="fas fa-building"></i> ${g.hotel_name || 'Tous les hôtels'}</span>
-                                        <span><i class="fas fa-user-tag"></i> ${LABELS.role[g.target_role] || g.target_role}</span>
-                                        <span><i class="fas fa-question-circle"></i> ${g.question_count || 0} questions</span>
-                                        <span class="badge badge-${g.is_active == 1 ? 'success' : 'secondary'}">${g.is_active == 1 ? 'Active' : 'Inactive'}</span>
+                            <div class="eval-grid-card">
+                                <div class="eval-grid-card-header">
+                                    <div class="eval-grid-card-icon"><i class="fas fa-clipboard-list"></i></div>
+                                    <div class="eval-grid-card-title">
+                                        <h4>${esc(g.name)}</h4>
+                                        <p>${g.instructions ? esc(g.instructions.substring(0, 80)) + '...' : 'Pas de description'}</p>
                                     </div>
                                 </div>
-                                <div class="table-actions">
-                                    <button onclick="evalEditGrid(${g.id})" title="Modifier"><i class="fas fa-edit"></i></button>
-                                    <button onclick="evalDuplicateGrid(${g.id})" title="Dupliquer"><i class="fas fa-copy"></i></button>
-                                    <button onclick="evalDeleteGrid(${g.id})" title="Supprimer"><i class="fas fa-trash"></i></button>
+                                <div class="eval-grid-card-body">
+                                    <span class="eval-grid-tag hotel"><i class="fas fa-building"></i> ${g.hotel_name || 'Tous'}</span>
+                                    <span class="eval-grid-tag role"><i class="fas fa-user-tag"></i> ${LABELS.role[g.target_role] || g.target_role}</span>
+                                    <span class="eval-grid-tag questions"><i class="fas fa-question-circle"></i> ${g.question_count || 0} questions</span>
+                                    ${g.periodicity ? `<span class="eval-grid-tag period"><i class="fas fa-sync-alt"></i> ${periodicityLabels[g.periodicity] || g.periodicity}</span>` : ''}
+                                </div>
+                                <div class="eval-grid-card-footer">
+                                    <span class="badge badge-${g.is_active == 1 ? 'success' : 'secondary'}">${g.is_active == 1 ? 'Active' : 'Inactive'}</span>
+                                    <div class="eval-grid-actions">
+                                        <button onclick="evalEditGrid(${g.id})" title="Modifier"><i class="fas fa-edit"></i></button>
+                                        <button onclick="evalDuplicateGrid(${g.id})" title="Dupliquer"><i class="fas fa-copy"></i></button>
+                                        <button class="btn-delete" onclick="evalDeleteGrid(${g.id})" title="Supprimer"><i class="fas fa-trash"></i></button>
+                                    </div>
                                 </div>
                             </div>
                         `).join('')}
                     </div>
-                ` : '<div class="empty-state"><i class="fas fa-th-list"></i><h3>' + t('evaluations.no_grids') + '</h3></div>'}
+                ` : `
+                    <div class="eval-empty-state">
+                        <div class="empty-icon"><i class="fas fa-th-list"></i></div>
+                        <h3>${t('evaluations.no_grids')}</h3>
+                        <p>Créez votre première grille d'évaluation</p>
+                        <button class="btn btn-primary" onclick="evalCreateGrid()"><i class="fas fa-plus"></i> ${t('evaluations.new_grid')}</button>
+                    </div>
+                `}
             </div>
         `;
     } catch (error) {
@@ -541,28 +556,90 @@ async function renderMyEvaluations(container) {
     try {
         const res = await API.getMyEvaluations();
         const evaluations = res.evaluations || [];
-        
+
+        // Compute summary stats
+        const totalCount = evaluations.length;
+        const withScore = evaluations.filter(e => e.score_weighted || e.score_simple);
+        const avgScore = withScore.length > 0 ? (withScore.reduce((a, e) => a + (e.score_weighted || (e.score_simple * 10)), 0) / withScore.length) : 0;
+        const bestScore = withScore.length > 0 ? Math.max(...withScore.map(e => e.score_weighted || (e.score_simple * 10))) : 0;
+        const latestDate = evaluations.length > 0 ? formatDateEval(evaluations[0].evaluation_date) : '-';
+
+        const months = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
+
         container.innerHTML = `
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-user-check"></i> ${t('evaluations.my_evaluations')}</h3>
+            <div class="eval-my-container">
+                <div class="eval-my-header">
+                    <h3><i class="fas fa-user-check"></i> ${t('evaluations.my_evaluations')}</h3>
                 </div>
+
+                <div class="eval-my-summary">
+                    <div class="eval-my-stat">
+                        <div class="eval-my-stat-icon blue"><i class="fas fa-clipboard-check"></i></div>
+                        <div class="eval-my-stat-info">
+                            <span class="eval-my-stat-value">${totalCount}</span>
+                            <span class="eval-my-stat-label">Évaluations</span>
+                        </div>
+                    </div>
+                    <div class="eval-my-stat">
+                        <div class="eval-my-stat-icon green"><i class="fas fa-chart-line"></i></div>
+                        <div class="eval-my-stat-info">
+                            <span class="eval-my-stat-value">${avgScore > 0 ? avgScore.toFixed(1) + '%' : '-'}</span>
+                            <span class="eval-my-stat-label">Score moyen</span>
+                        </div>
+                    </div>
+                    <div class="eval-my-stat">
+                        <div class="eval-my-stat-icon purple"><i class="fas fa-trophy"></i></div>
+                        <div class="eval-my-stat-info">
+                            <span class="eval-my-stat-value">${bestScore > 0 ? bestScore.toFixed(1) + '%' : '-'}</span>
+                            <span class="eval-my-stat-label">Meilleur score</span>
+                        </div>
+                    </div>
+                    <div class="eval-my-stat">
+                        <div class="eval-my-stat-icon amber"><i class="fas fa-calendar-check"></i></div>
+                        <div class="eval-my-stat-info">
+                            <span class="eval-my-stat-value" style="font-size:16px">${latestDate}</span>
+                            <span class="eval-my-stat-label">Dernière éval.</span>
+                        </div>
+                    </div>
+                </div>
+
                 ${evaluations.length ? `
-                    <table>
-                        <thead><tr><th>${t('audit.date')}</th><th>${t('evaluations.grids')}</th><th>${t('evaluations.evaluated_by')}</th><th>${t('evaluations.score')}</th><th>Actions</th></tr></thead>
-                        <tbody>
-                            ${evaluations.map(e => `
-                                <tr>
-                                    <td>${formatDateEval(e.evaluation_date)}</td>
-                                    <td>${esc(e.grid_name)}</td>
-                                    <td>${esc(e.evaluator_name)}</td>
-                                    <td><span class="eval-score ${evalScoreClass((e.score_weighted || e.score_simple * 10))}">${e.score_weighted ? e.score_weighted.toFixed(1) + '%' : e.score_simple + '/10'}</span></td>
-                                    <td><button class="btn btn-sm btn-outline" onclick="evalOpen(${e.id})"><i class="fas fa-eye"></i> Voir</button></td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                ` : '<div class="empty-state"><i class="fas fa-clipboard-list"></i><h3>' + t('evaluations.no_evaluations') + '</h3></div>'}
+                    <div class="eval-my-list">
+                        ${evaluations.map(e => {
+                            const d = e.evaluation_date ? new Date(e.evaluation_date) : null;
+                            const day = d ? d.getDate() : '';
+                            const month = d ? months[d.getMonth()] : '';
+                            const scoreVal = e.score_weighted || (e.score_simple ? e.score_simple * 10 : 0);
+                            const scoreText = e.score_weighted ? e.score_weighted.toFixed(1) + '%' : (e.score_simple ? e.score_simple + '/10' : '-');
+                            return `
+                            <div class="eval-my-item" onclick="evalOpen(${e.id})">
+                                <div class="eval-my-item-date">
+                                    <span class="day">${day}</span>
+                                    <span class="month">${month}</span>
+                                </div>
+                                <div class="eval-my-item-info">
+                                    <h4>${esc(e.grid_name)}</h4>
+                                    <div class="eval-my-item-meta">
+                                        <span><i class="fas fa-user-edit"></i> ${esc(e.evaluator_name)}</span>
+                                        ${e.hotel_name ? `<span><i class="fas fa-building"></i> ${esc(e.hotel_name)}</span>` : ''}
+                                    </div>
+                                </div>
+                                <div class="eval-my-item-score">
+                                    <span class="eval-my-score-badge ${evalScoreClass(scoreVal)}">${scoreText}</span>
+                                </div>
+                                <div class="eval-my-item-action">
+                                    <button class="btn-action" onclick="event.stopPropagation(); evalOpen(${e.id})" title="Voir"><i class="fas fa-eye"></i></button>
+                                </div>
+                            </div>
+                        `}).join('')}
+                    </div>
+                ` : `
+                    <div class="eval-empty-state">
+                        <div class="empty-icon"><i class="fas fa-clipboard-list"></i></div>
+                        <h3>${t('evaluations.no_evaluations')}</h3>
+                        <p>Aucune évaluation vous concernant pour le moment</p>
+                    </div>
+                `}
             </div>
         `;
     } catch (error) {
@@ -577,39 +654,72 @@ async function renderEvalStats(container) {
         const res = await API.getEvaluationStats();
         const stats = res.stats || {};
         const byCategory = res.by_category || [];
-        
+
+        const avgPct = stats.avg_score ? (parseFloat(stats.avg_score) * 10) : 0;
+        const minPct = stats.min_score ? (parseFloat(stats.min_score) * 10) : 0;
+        const maxPct = stats.max_score ? (parseFloat(stats.max_score) * 10) : 0;
+
+        const scoreLevel = (pct) => {
+            if (pct >= 80) return 'excellent';
+            if (pct >= 60) return 'good';
+            if (pct >= 40) return 'average';
+            return 'low';
+        };
+
         container.innerHTML = `
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-chart-bar"></i> Statistiques</h3>
+            <div class="eval-stats-container">
+                <div class="eval-stats-header">
+                    <h3><i class="fas fa-chart-bar"></i> Statistiques des évaluations</h3>
                 </div>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-value">${stats.total || 0}</div>
-                        <div class="stat-label">Évaluations validées</div>
+
+                <div class="eval-stats-kpis">
+                    <div class="eval-stats-kpi">
+                        <div class="eval-stats-kpi-icon blue"><i class="fas fa-clipboard-check"></i></div>
+                        <div class="eval-stats-kpi-value">${stats.total || 0}</div>
+                        <div class="eval-stats-kpi-label">Évaluations validées</div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-value ${evalScoreClass((stats.avg_score || 0) * 10)}">${stats.avg_score ? parseFloat(stats.avg_score).toFixed(1) : '-'}/10</div>
-                        <div class="stat-label">Score moyen</div>
+                    <div class="eval-stats-kpi">
+                        <div class="eval-stats-kpi-icon green"><i class="fas fa-chart-line"></i></div>
+                        <div class="eval-stats-kpi-value">${stats.avg_score ? parseFloat(stats.avg_score).toFixed(1) + '<small>/10</small>' : '-'}</div>
+                        <div class="eval-stats-kpi-label">Score moyen</div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${stats.min_score ? parseFloat(stats.min_score).toFixed(1) : '-'}</div>
-                        <div class="stat-label">Score min</div>
+                    <div class="eval-stats-kpi">
+                        <div class="eval-stats-kpi-icon red"><i class="fas fa-arrow-down"></i></div>
+                        <div class="eval-stats-kpi-value">${stats.min_score ? parseFloat(stats.min_score).toFixed(1) + '<small>/10</small>' : '-'}</div>
+                        <div class="eval-stats-kpi-label">Score minimum</div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${stats.max_score ? parseFloat(stats.max_score).toFixed(1) : '-'}</div>
-                        <div class="stat-label">Score max</div>
+                    <div class="eval-stats-kpi">
+                        <div class="eval-stats-kpi-icon purple"><i class="fas fa-arrow-up"></i></div>
+                        <div class="eval-stats-kpi-value">${stats.max_score ? parseFloat(stats.max_score).toFixed(1) + '<small>/10</small>' : '-'}</div>
+                        <div class="eval-stats-kpi-label">Score maximum</div>
                     </div>
                 </div>
+
                 ${byCategory.length ? `
-                    <h4 class="mt-20">Scores par section</h4>
-                    <table>
-                        <thead><tr><th>Section</th><th>Score moyen</th></tr></thead>
-                        <tbody>
-                            ${byCategory.map(c => `<tr><td>${esc(c.category)}</td><td><span class="eval-score ${evalScoreClass(c.avg_score * 10)}">${parseFloat(c.avg_score).toFixed(1)}/10</span></td></tr>`).join('')}
-                        </tbody>
-                    </table>
-                ` : ''}
+                    <div class="eval-stats-sections">
+                        <div class="eval-stats-sections-header">
+                            <h4><i class="fas fa-layer-group"></i> Scores par section</h4>
+                        </div>
+                        ${byCategory.map(c => {
+                            const pct = parseFloat(c.avg_score) * 10;
+                            const level = scoreLevel(pct);
+                            return `
+                            <div class="eval-stats-section-item">
+                                <span class="eval-stats-section-name">${esc(c.category)}</span>
+                                <div class="eval-stats-section-bar">
+                                    <div class="eval-stats-section-bar-fill ${level}" style="width: ${pct}%"></div>
+                                </div>
+                                <span class="eval-stats-section-score ${level}">${parseFloat(c.avg_score).toFixed(1)}/10</span>
+                            </div>
+                        `}).join('')}
+                    </div>
+                ` : `
+                    <div class="eval-empty-state">
+                        <div class="empty-icon"><i class="fas fa-chart-bar"></i></div>
+                        <h3>Pas encore de statistiques</h3>
+                        <p>Les statistiques apparaîtront une fois des évaluations validées</p>
+                    </div>
+                `}
             </div>
         `;
     } catch (error) {
@@ -656,7 +766,7 @@ async function evalShowGridEditor() {
 
     const container = document.getElementById('page-content');
     container.innerHTML = `
-        <div class="card">
+        <div class="eval-editor-container"><div class="card">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-clipboard-list"></i> ${isEdit ? t('evaluations.edit_grid') : t('evaluations.new_grid')}</h3>
                 <div>
@@ -740,7 +850,7 @@ async function evalShowGridEditor() {
             <div id="eval-questions-list" class="audit-questions-container">
                 ${evalRenderQuestions()}
             </div>
-        </div>
+        </div></div>
     `;
 }
 
