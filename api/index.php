@@ -8047,64 +8047,52 @@ try {
                 } catch (Exception $e) {
                     $competitors = [];
                 }
-                
-                // Construire la liste des hotel_keys à requêter
-                $hotelKeys = [$xoteloKey];
+
+                // Construire la liste des clés UNIQUES à requêter
+                $uniqueKeys = []; // key => ['name' => ..., 'type' => ...]
+                $uniqueKeys[$xoteloKey] = ['name' => $hotel['name'], 'type' => 'own'];
                 foreach ($competitors as $comp) {
-                    if (!empty($comp['xotelo_hotel_key'])) {
-                        $hotelKeys[] = $comp['xotelo_hotel_key'];
+                    if (!empty($comp['xotelo_hotel_key']) && !isset($uniqueKeys[$comp['xotelo_hotel_key']])) {
+                        $uniqueKeys[$comp['xotelo_hotel_key']] = ['name' => $comp['competitor_name'], 'type' => 'competitor'];
                     }
                 }
-                
+
                 $ratesCount = 0;
                 $errors = [];
                 $apiCallsCount = 0;
-                
+
                 // Devise unique EUR
                 $currency = 'EUR';
-                
+
                 // Générer les dates à requêter (max 31 jours pour afficher un mois complet)
                 $startDate = new DateTime($dateFrom);
                 $endDate = new DateTime($dateTo);
                 $maxDays = 31;
                 $dayCount = 0;
                 $dates = [];
-                
+
                 $currentDate = clone $startDate;
                 while ($currentDate <= $endDate && $dayCount < $maxDays) {
                     $dates[] = $currentDate->format('Y-m-d');
                     $currentDate->modify('+1 day');
                     $dayCount++;
                 }
-                
-                // Supprimer les anciens tarifs CACHE pour cette période
-                // Le cache est toujours remplacé
+
+                // Supprimer l'ancien cache GLOBAL pour ces clés et cette période
+                $allKeysList = array_keys($uniqueKeys);
+                $keyPlaceholders = implode(',', array_fill(0, count($allKeysList), '?'));
                 try {
                     db()->execute(
-                        "DELETE FROM xotelo_rates_cache WHERE hotel_id = ? AND check_date BETWEEN ? AND ?",
-                        [$hotelId, $dateFrom, $dateTo]
+                        "DELETE FROM xotelo_rates_global WHERE xotelo_hotel_key IN ($keyPlaceholders) AND check_date BETWEEN ? AND ?",
+                        array_merge($allKeysList, [$dateFrom, $dateTo])
                     );
                 } catch (Exception $e) {}
-                
-                // Appeler l'API Xotelo pour chaque hôtel et chaque date (EUR uniquement)
-                foreach ($hotelKeys as $hotelKey) {
-                    $isOwn = ($hotelKey === $xoteloKey);
-                    $sourceName = $isOwn ? $hotel['name'] : null;
-                    
-                    if (!$isOwn) {
-                        foreach ($competitors as $comp) {
-                            if ($comp['xotelo_hotel_key'] === $hotelKey) {
-                                $sourceName = $comp['competitor_name'];
-                                break;
-                            }
-                        }
-                    }
-                    
+
+                // Appeler l'API Xotelo pour chaque clé unique et chaque date
+                foreach ($uniqueKeys as $hotelKey => $keyInfo) {
                     foreach ($dates as $checkDate) {
-                        // Calculer checkout = checkin + 1 jour
                         $checkOut = date('Y-m-d', strtotime($checkDate . ' +1 day'));
-                        
-                        // Appel API Xotelo (EUR uniquement)
+
                         $xoteloUrl = "https://data.xotelo.com/api/rates?" . http_build_query([
                             'hotel_key' => $hotelKey,
                             'chk_in' => $checkDate,
@@ -8112,7 +8100,7 @@ try {
                             'adults' => $guests,
                             'currency' => $currency
                         ]);
-                    
+
                         $ch = curl_init();
                         curl_setopt_array($ch, [
                             CURLOPT_URL => $xoteloUrl,
@@ -8123,13 +8111,13 @@ try {
                             CURLOPT_HTTPHEADER => ['Accept: application/json'],
                             CURLOPT_USERAGENT => 'ACL-Gestion/1.0'
                         ]);
-                        
+
                         $response = curl_exec($ch);
                         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
                         $curlError = curl_error($ch);
                         curl_close($ch);
                         $apiCallsCount++;
-                        
+
                         // Logger la requête
                         try {
                             db()->insert(
@@ -8137,70 +8125,44 @@ try {
                                 [$hotelId, $hotelKey, $checkDate, $checkOut, $httpCode, $curlError ?: null]
                             );
                         } catch (Exception $e) {}
-                        
+
                         if ($curlError) {
                             $errors[] = "Erreur cURL pour $hotelKey ($checkDate): $curlError";
                             continue;
                         }
-                        
+
                         if ($httpCode == 200 && $response) {
                             $xoteloData = json_decode($response, true);
-                            
+
                             if ($xoteloData === null) {
                                 $errors[] = "JSON invalide pour $hotelKey ($checkDate)";
                                 continue;
                             }
-                            
+
                             if (!empty($xoteloData['result']['rates'])) {
-                                
                                 foreach ($xoteloData['result']['rates'] as $rate) {
-                                    // Chaque rate contient: code, name, rate, tax
                                     $otaName = isset($rate['name']) ? $rate['name'] : (isset($rate['code']) ? $rate['code'] : 'unknown');
                                     $rateAmount = isset($rate['rate']) ? $rate['rate'] : 0;
                                     $tax = isset($rate['tax']) ? $rate['tax'] : 0;
                                     $totalRate = $rateAmount + $tax;
-                                    
+
                                     if ($totalRate <= 0) continue;
-                                    
-                                    // Insérer pour cette date
+
                                     try {
+                                        // Cache global
                                         db()->insert(
-                                            "INSERT INTO xotelo_rates_cache (hotel_id, source_type, source_hotel_key, source_name, check_date, guests, room_type, ota_name, rate_amount, currency, is_available, raw_data, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())",
-                                            [
-                                                $hotelId,
-                                                $isOwn ? 'own' : 'competitor',
-                                                $hotelKey,
-                                                $sourceName,
-                                                $checkDate,
-                                                $guests,
-                                                'Standard',
-                                                $otaName,
-                                                $totalRate,
-                                                $currency,
-                                                1,
-                                                json_encode($rate)
-                                            ]
+                                            "INSERT INTO xotelo_rates_global (xotelo_hotel_key, hotel_name, check_date, guests, room_type, ota_name, rate_amount, currency, is_available, raw_data, fetched_at) VALUES (?, ?, ?, ?, 'Standard', ?, ?, ?, 1, ?, NOW())",
+                                            [$hotelKey, $keyInfo['name'], $checkDate, $guests, $otaName, $totalRate, $currency, json_encode($rate)]
                                         );
-                                        
-                                        // Sauvegarder aussi dans l'historique (ignorer si table n'existe pas)
+
+                                        // Historique global
                                         try {
                                             db()->insert(
-                                                "INSERT INTO xotelo_rates_history (hotel_id, source_type, source_hotel_key, source_name, check_date, ota_name, rate_amount, currency, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
-                                                [
-                                                    $hotelId,
-                                                    $isOwn ? 'own' : 'competitor',
-                                                    $hotelKey,
-                                                    $sourceName,
-                                                    $checkDate,
-                                                    $otaName,
-                                                    $totalRate,
-                                                    $currency
-                                                ]
+                                                "INSERT INTO xotelo_rates_history_global (xotelo_hotel_key, hotel_name, check_date, ota_name, rate_amount, currency, fetched_at) VALUES (?, ?, ?, ?, ?, ?, NOW())",
+                                                [$hotelKey, $keyInfo['name'], $checkDate, $otaName, $totalRate, $currency]
                                             );
-                                        } catch (Exception $e) {
-                                            // Table n'existe peut-être pas encore, ignorer
-                                        }
-                                        
+                                        } catch (Exception $e) {}
+
                                         $ratesCount++;
                                     } catch (Exception $e) {
                                         $errors[] = "Insert error ($checkDate, $otaName): " . $e->getMessage();
@@ -8212,28 +8174,27 @@ try {
                         } elseif ($httpCode !== 200) {
                             $errors[] = "HTTP $httpCode pour $hotelKey ($checkDate)";
                         }
-                        
+
                         // Petite pause entre les appels API
                         usleep(50000); // 0.05 seconde
                     } // fin foreach dates
-                } // fin foreach hotelKeys
-                
+                } // fin foreach uniqueKeys
+
                 $result = ['success' => true, 'rates_count' => $ratesCount];
                 if (!empty($errors)) {
                     $result['warnings'] = $errors;
                 }
-                // Debug info
                 $result['debug'] = [
                     'hotel_key' => $xoteloKey,
                     'date_from' => $dateFrom,
                     'date_to' => $dateTo,
                     'dates_count' => count($dates),
                     'currency' => $currency,
-                    'keys_requested' => $hotelKeys,
+                    'unique_keys' => count($uniqueKeys),
                     'api_calls_made' => $apiCallsCount
                 ];
                 json_out($result);
-                
+
                 } catch (Exception $e) {
                     json_error('Erreur fetch-rates: ' . $e->getMessage());
                 } catch (Error $e) {
@@ -8241,97 +8202,96 @@ try {
                 }
             }
             
-            // Récupérer les tarifs en cache - GET /revenue/rates/{hotelId}
+            // Récupérer les tarifs en cache global - GET /revenue/rates/{hotelId}
             if ($method === 'GET' && $id === 'rates' && $action && is_numeric($action)) {
                 $user = require_auth();
                 $hotelId = (int)$action;
-                
+
                 // Vérifier accès
                 if (!in_array($user['role'], ['admin', 'groupe_manager'])) {
                     $assigned = db()->queryOne("SELECT 1 FROM user_hotels WHERE user_id = ? AND hotel_id = ?", [$user['id'], $hotelId]);
                     if (!$assigned) json_error('Accès non autorisé', 403);
                 }
-                
+
                 $dateFrom = isset($_GET['date_from']) ? $_GET['date_from'] : date('Y-m-d');
                 $dateTo = isset($_GET['date_to']) ? $_GET['date_to'] : date('Y-m-d', strtotime('+30 days'));
-                $guests = isset($_GET['guests']) ? $_GET['guests'] : null;
-                $ota = isset($_GET['ota']) ? $_GET['ota'] : null;
-                $roomType = isset($_GET['room_type']) ? $_GET['room_type'] : null;
                 $currency = isset($_GET['currency']) ? $_GET['currency'] : 'EUR';
-                
-                $where = "hotel_id = ? AND check_date BETWEEN ? AND ? AND currency = ?";
-                $params = [$hotelId, $dateFrom, $dateTo, $currency];
-                
-                if ($guests) {
-                    $where .= " AND guests = ?";
-                    $params[] = $guests;
-                }
-                if ($ota) {
-                    $where .= " AND ota_name LIKE ?";
-                    $params[] = "%$ota%";
-                }
-                if ($roomType) {
-                    $where .= " AND room_type LIKE ?";
-                    $params[] = "%$roomType%";
-                }
-                
+
                 try {
                     $rates = db()->query(
-                        "SELECT * FROM xotelo_rates_cache WHERE $where ORDER BY check_date, source_type DESC, rate_amount",
-                        $params
+                        "SELECT g.id,
+                                ? as hotel_id,
+                                CASE WHEN g.xotelo_hotel_key = h.xotelo_hotel_key THEN 'own' ELSE 'competitor' END as source_type,
+                                g.xotelo_hotel_key as source_hotel_key,
+                                CASE WHEN g.xotelo_hotel_key = h.xotelo_hotel_key THEN h.name ELSE COALESCE(hc.competitor_name, g.hotel_name) END as source_name,
+                                g.check_date, g.guests, g.room_type, g.ota_name,
+                                g.rate_amount, g.currency, g.is_available, g.raw_data, g.fetched_at
+                         FROM xotelo_rates_global g
+                         INNER JOIN hotels h ON h.id = ?
+                         LEFT JOIN hotel_competitors hc ON hc.xotelo_hotel_key = g.xotelo_hotel_key AND hc.hotel_id = h.id AND hc.is_active = 1
+                         WHERE (g.xotelo_hotel_key = h.xotelo_hotel_key OR hc.id IS NOT NULL)
+                         AND g.check_date BETWEEN ? AND ?
+                         AND g.currency = ?
+                         ORDER BY g.check_date, CASE WHEN g.xotelo_hotel_key = h.xotelo_hotel_key THEN 0 ELSE 1 END, g.rate_amount",
+                        [$hotelId, $hotelId, $dateFrom, $dateTo, $currency]
                     );
                 } catch (Exception $e) {
                     $rates = [];
                 }
-                
+
                 json_out(['success' => true, 'rates' => $rates, 'currency' => $currency]);
             }
             
-            // Récupérer l'historique des prix - GET /revenue/history/{hotelId}
+            // Récupérer l'historique des prix global - GET /revenue/history/{hotelId}
             if ($method === 'GET' && $id === 'history' && $action && is_numeric($action)) {
                 $user = require_auth();
                 $hotelId = (int)$action;
-                
+
                 // Vérifier accès
                 if (!in_array($user['role'], ['admin', 'groupe_manager'])) {
                     $assigned = db()->queryOne("SELECT 1 FROM user_hotels WHERE user_id = ? AND hotel_id = ?", [$user['id'], $hotelId]);
                     if (!$assigned) json_error('Accès non autorisé', 403);
                 }
-                
+
                 $checkDate = isset($_GET['check_date']) ? $_GET['check_date'] : date('Y-m-d', strtotime('+7 days'));
                 $currency = isset($_GET['currency']) ? $_GET['currency'] : 'EUR';
                 $sourceKey = isset($_GET['source_key']) ? $_GET['source_key'] : null;
                 $ota = isset($_GET['ota']) ? $_GET['ota'] : null;
-                
-                $where = "hotel_id = ? AND check_date = ? AND currency = ?";
-                $params = [$hotelId, $checkDate, $currency];
-                
+
+                $where = "(g.xotelo_hotel_key = h.xotelo_hotel_key OR hc.id IS NOT NULL) AND g.check_date = ? AND g.currency = ?";
+                $params = [$hotelId, $hotelId, $checkDate, $currency];
+
                 if ($sourceKey && $sourceKey !== 'all') {
                     if ($sourceKey === 'own') {
-                        $where .= " AND source_type = 'own'";
+                        $where .= " AND g.xotelo_hotel_key = h.xotelo_hotel_key";
                     } else {
-                        $where .= " AND source_hotel_key = ?";
+                        $where .= " AND g.xotelo_hotel_key = ?";
                         $params[] = $sourceKey;
                     }
                 }
-                
+
                 if ($ota) {
-                    $where .= " AND ota_name = ?";
+                    $where .= " AND g.ota_name = ?";
                     $params[] = $ota;
                 }
-                
+
                 try {
                     $history = db()->query(
-                        "SELECT source_type, source_hotel_key, source_name, ota_name, rate_amount, currency, fetched_at 
-                         FROM xotelo_rates_history 
-                         WHERE $where 
-                         ORDER BY fetched_at ASC",
+                        "SELECT CASE WHEN g.xotelo_hotel_key = h.xotelo_hotel_key THEN 'own' ELSE 'competitor' END as source_type,
+                                g.xotelo_hotel_key as source_hotel_key,
+                                CASE WHEN g.xotelo_hotel_key = h.xotelo_hotel_key THEN h.name ELSE COALESCE(hc.competitor_name, g.hotel_name) END as source_name,
+                                g.ota_name, g.rate_amount, g.currency, g.fetched_at
+                         FROM xotelo_rates_history_global g
+                         INNER JOIN hotels h ON h.id = ?
+                         LEFT JOIN hotel_competitors hc ON hc.xotelo_hotel_key = g.xotelo_hotel_key AND hc.hotel_id = h.id AND hc.is_active = 1
+                         WHERE $where
+                         ORDER BY g.fetched_at ASC",
                         $params
                     );
                 } catch (Exception $e) {
                     $history = [];
                 }
-                
+
                 // Grouper par source + OTA pour le graphique
                 $grouped = [];
                 foreach ($history as $h) {
@@ -8350,9 +8310,9 @@ try {
                         'rate' => (float)$h['rate_amount']
                     ];
                 }
-                
+
                 json_out([
-                    'success' => true, 
+                    'success' => true,
                     'check_date' => $checkDate,
                     'currency' => $currency,
                     'history' => array_values($grouped)
