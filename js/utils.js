@@ -211,12 +211,14 @@ function timeAgo(dateStr) {
 function toggleNotifications() {
     const dropdown = document.getElementById('notification-dropdown');
     notificationDropdownOpen = !notificationDropdownOpen;
-    
+
     if (notificationDropdownOpen) {
         dropdown.classList.remove('hidden');
+        dropdown.classList.add('active');
         loadNotifications();
     } else {
         dropdown.classList.add('hidden');
+        dropdown.classList.remove('active');
     }
 }
 
@@ -224,7 +226,9 @@ function toggleNotifications() {
 document.addEventListener('click', function(e) {
     const wrapper = document.querySelector('.notification-wrapper');
     if (wrapper && !wrapper.contains(e.target) && notificationDropdownOpen) {
-        document.getElementById('notification-dropdown').classList.add('hidden');
+        const dd = document.getElementById('notification-dropdown');
+        dd.classList.add('hidden');
+        dd.classList.remove('active');
         notificationDropdownOpen = false;
     }
 });
@@ -233,9 +237,11 @@ async function handleNotificationClick(notifId, link) {
     try {
         await API.markNotificationRead(notifId);
         loadNotifications();
-        
+
         if (link) {
-            document.getElementById('notification-dropdown').classList.add('hidden');
+            const dd = document.getElementById('notification-dropdown');
+            dd.classList.add('hidden');
+            dd.classList.remove('active');
             notificationDropdownOpen = false;
             navigateTo(link);
         }
