@@ -1,5 +1,6 @@
 /**
- * Settings Page - Gestion des permissions et modules (Admin only)
+ * Settings Page - Gestion des permissions, modules et notifications (Admin only)
+ * Interface à onglets
  */
 
 // Définition des modules du système
@@ -20,86 +21,58 @@ const SYSTEM_MODULES = {
 };
 
 const PERMISSION_LABELS = {
-    // Hôtels & Chambres
     'hotels.view': 'Voir les hôtels',
     'hotels.create': 'Créer un hôtel',
     'hotels.edit': 'Modifier un hôtel',
     'hotels.delete': 'Supprimer un hôtel',
     'rooms.manage': 'Gérer les chambres',
-    
-    // Utilisateurs
     'users.view': 'Voir les utilisateurs',
     'users.manage': 'Gérer les utilisateurs',
-    
-    // Gouvernante / Dispatch
     'dispatch.view': 'Voir le dispatch',
     'dispatch.create': 'Créer dispatch chambres',
     'dispatch.complete': 'Marquer chambre nettoyée',
     'dispatch.control': 'Contrôle qualité',
-    
-    // Blanchisserie
     'linen.view': 'Voir la blanchisserie',
     'linen.manage': 'Saisir collecte/réception',
     'linen.config': 'Configurer blanchisserie',
-    
-    // Congés
     'leaves.view': 'Voir les congés',
     'leaves.create': 'Créer demande congés',
     'leaves.validate': 'Valider/Refuser congés',
     'leaves.manage_all': 'Gérer tous les congés',
-    
-    // Maintenance
     'maintenance.view': 'Voir la maintenance',
     'maintenance.create': 'Créer ticket maintenance',
     'maintenance.manage': 'Gérer les tickets',
     'maintenance.comment': 'Commenter les tickets',
-    
-    // Tâches (Kanban)
     'tasks.view': 'Voir les tableaux tâches',
     'tasks.create': 'Créer tableaux/tâches',
     'tasks.manage': 'Gérer les tâches',
     'tasks.assign': 'Assigner des tâches',
-    
-    // Évaluations
     'evaluations.view': 'Accès module évaluations',
     'evaluations.view_team': 'Voir évaluations équipe',
     'evaluations.grids': 'Gérer les grilles',
     'evaluations.evaluate': 'Réaliser évaluations',
     'evaluations.view_own': 'Voir ses évaluations',
-    
-    // Audits
     'audit.view': 'Voir les audits',
     'audit.grids': 'Gérer les grilles d\'audit',
     'audit.execute': 'Réaliser des audits',
     'audit.view_results': 'Voir résultats audits',
-    
-    // Revenue Management
     'revenue.view': 'Voir veille tarifaire',
     'revenue.settings': 'Configurer concurrents',
     'revenue.fetch_rates': 'Actualiser tarifs',
-    
-    // Clôtures & Remises
     'closures.view': 'Voir le suivi caisse',
     'closures.create': 'Créer clôtures journalières',
     'closures.validate': 'Valider les clôtures',
     'closures.edit_all': 'Modifier toutes les données',
     'closures.add_remise': 'Ajouter remise banque',
     'closures.add_comment': 'Ajouter commentaires',
-    
-    // Messagerie
     'messages.access': 'Accès messagerie',
     'messages.broadcast': 'Envoyer à tous',
-    
-    // Notifications
     'notifications.receive': 'Recevoir notifications',
-    
-    // Dashboard & Rapports
+    'notifications.manage': 'Gérer les notifications',
     'dashboard.view': 'Voir dashboard',
     'dashboard.global': 'Dashboard multi-hôtels',
     'reports.access': 'Accès aux rapports',
     'reports.export': 'Exporter les données',
-    
-    // Administration
     'permissions.manage': 'Gérer les permissions'
 };
 
@@ -115,7 +88,7 @@ const PERMISSION_CATEGORIES = {
     'Audits': ['audit.view', 'audit.grids', 'audit.execute', 'audit.view_results'],
     'Revenue Management': ['revenue.view', 'revenue.settings', 'revenue.fetch_rates'],
     'Clôtures & Caisse': ['closures.view', 'closures.create', 'closures.validate', 'closures.edit_all', 'closures.add_remise', 'closures.add_comment'],
-    'Communication': ['messages.access', 'messages.broadcast', 'notifications.receive'],
+    'Communication': ['messages.access', 'messages.broadcast', 'notifications.receive', 'notifications.manage'],
     'Dashboard & Rapports': ['dashboard.view', 'dashboard.global', 'reports.access', 'reports.export'],
     'Administration': ['permissions.manage']
 };
@@ -163,7 +136,7 @@ const DEFAULT_PERMISSIONS = {
         'evaluations.view': true, 'evaluations.view_team': true, 'evaluations.grids': true, 'evaluations.evaluate': true, 'evaluations.view_own': true,
         'audit.view': true, 'audit.grids': true, 'audit.execute': true, 'audit.view_results': true,
         'closures.view': true, 'closures.create': true, 'closures.validate': true, 'closures.edit_all': true, 'closures.add_remise': true, 'closures.add_comment': true,
-        'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true,
+        'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': true,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
     },
@@ -178,7 +151,7 @@ const DEFAULT_PERMISSIONS = {
         'evaluations.view': true, 'evaluations.view_team': true, 'evaluations.grids': false, 'evaluations.evaluate': true, 'evaluations.view_own': true,
         'audit.view': true, 'audit.grids': false, 'audit.execute': true, 'audit.view_results': true,
         'closures.view': true, 'closures.create': true, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': true, 'closures.add_comment': true,
-        'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true,
+        'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': true,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
     },
@@ -193,7 +166,7 @@ const DEFAULT_PERMISSIONS = {
         'evaluations.view': false, 'evaluations.view_team': false, 'evaluations.grids': false, 'evaluations.evaluate': false, 'evaluations.view_own': true,
         'audit.view': true, 'audit.grids': false, 'audit.execute': false, 'audit.view_results': true,
         'closures.view': true, 'closures.create': false, 'closures.validate': true, 'closures.edit_all': true, 'closures.add_remise': true, 'closures.add_comment': true,
-        'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true,
+        'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
     },
@@ -208,7 +181,7 @@ const DEFAULT_PERMISSIONS = {
         'evaluations.view': true, 'evaluations.view_team': true, 'evaluations.grids': true, 'evaluations.evaluate': true, 'evaluations.view_own': true,
         'audit.view': false, 'audit.grids': false, 'audit.execute': false, 'audit.view_results': false,
         'closures.view': false, 'closures.create': false, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': false, 'closures.add_comment': false,
-        'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true,
+        'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
     },
@@ -223,7 +196,7 @@ const DEFAULT_PERMISSIONS = {
         'evaluations.view': false, 'evaluations.view_team': false, 'evaluations.grids': false, 'evaluations.evaluate': false, 'evaluations.view_own': true,
         'audit.view': true, 'audit.grids': false, 'audit.execute': true, 'audit.view_results': true,
         'closures.view': true, 'closures.create': true, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': true, 'closures.add_comment': true,
-        'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true,
+        'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
         'permissions.manage': false
     },
@@ -238,7 +211,7 @@ const DEFAULT_PERMISSIONS = {
         'evaluations.view': false, 'evaluations.view_team': false, 'evaluations.grids': false, 'evaluations.evaluate': false, 'evaluations.view_own': true,
         'audit.view': false, 'audit.grids': false, 'audit.execute': false, 'audit.view_results': false,
         'closures.view': true, 'closures.create': false, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': false, 'closures.add_comment': false,
-        'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true,
+        'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
         'permissions.manage': false
     }
@@ -246,13 +219,14 @@ const DEFAULT_PERMISSIONS = {
 
 let currentPermissions = {};
 let currentModules = {};
+let _settingsActiveTab = 'modules';
 
 async function loadSettings(container) {
     if (API.user.role !== 'admin') {
         container.innerHTML = '<div class="card"><p class="text-danger">' + t('settings.admin_only') + '</p></div>';
         return;
     }
-    
+
     showLoading(container);
 
     try {
@@ -260,23 +234,17 @@ async function loadSettings(container) {
             API.getAllPermissions(),
             API.getModulesConfig()
         ]);
-        
+
         currentPermissions = permResult.permissions || {};
         currentModules = modulesResult.modules || {};
-        
-        // Log pour debug
-        console.log('Loaded modules from API:', modulesResult);
-        console.log('currentModules:', currentModules);
-        
+
         // Initialiser modules par défaut (tous actifs) SEULEMENT si undefined
         for (const moduleId of Object.keys(SYSTEM_MODULES)) {
             if (currentModules[moduleId] === undefined) {
                 currentModules[moduleId] = true;
             }
         }
-        
-        console.log('currentModules after init:', currentModules);
-        
+
         // Initialiser permissions par défaut
         for (const role of Object.keys(DEFAULT_PERMISSIONS)) {
             if (!currentPermissions[role]) {
@@ -285,113 +253,182 @@ async function loadSettings(container) {
         }
 
         container.innerHTML = `
-            <!-- Section Modules -->
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-puzzle-piece"></i> Modules du système</h3>
-                </div>
-                <p class="text-muted mb-20">
-                    Activez ou désactivez les modules selon vos besoins. Les modules désactivés disparaîtront du menu pour tous les utilisateurs.
-                    <br><span class="text-warning"><i class="fas fa-lock"></i> Les modules essentiels (Dashboard, Hôtels, Utilisateurs, Paramètres) ne peuvent pas être désactivés.</span>
-                </p>
-                
-                <div class="modules-grid">
-                    ${renderModulesGrid()}
-                </div>
-                
-                <div class="mt-20">
-                    <button class="btn btn-primary" onclick="saveModulesConfig()">
-                        <i class="fas fa-save"></i> ${t('common.save')}
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Section Rôles -->
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-user-tag"></i> Rôles du système</h3>
-                </div>
-                <div class="roles-grid">
-                    ${Object.entries(ROLE_LABELS).map(([role, label]) => `
-                        <div class="role-card ${role === 'admin' ? 'role-admin' : ''}">
-                            <div class="role-icon"><i class="fas ${ROLE_ICONS[role]}"></i></div>
-                            <div class="role-info">
-                                <h4>${label}</h4>
-                                <p>${ROLE_DESCRIPTIONS[role] || ''}</p>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-            
-            <!-- Section Permissions -->
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-shield-alt"></i> ${t('settings.role_permissions')}</h3>
-                </div>
-                <p class="text-muted mb-20">
-                    Configurez les permissions pour chaque rôle. Cochez/décochez pour activer/désactiver une permission.
-                    <br><strong>Note:</strong> L'administrateur a toujours toutes les permissions.
-                </p>
-                
-                <div class="permissions-grid">
-                    ${renderPermissionsTable()}
-                </div>
-                
-                <div class="mt-20" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button class="btn btn-primary" onclick="saveAllPermissions()">
-                        <i class="fas fa-save"></i> ${t('common.save')}
-                    </button>
-                    <button class="btn btn-outline" onclick="resetToDefaults()">
-                        <i class="fas fa-undo"></i> Réinitialiser par défaut
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Section Légende -->
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-info-circle"></i> Légende des permissions</h3>
-                </div>
-                <div class="permissions-legend">
-                    ${Object.entries(PERMISSION_CATEGORIES).map(([cat, perms]) => `
-                        <div class="legend-category">
-                            <h4><i class="fas ${getCategoryIcon(cat)}"></i> ${cat}</h4>
-                            <ul>
-                                ${perms.map(p => `<li><code>${p}</code> - ${PERMISSION_LABELS[p]}</li>`).join('')}
-                            </ul>
-                        </div>
-                    `).join('')}
+            <div class="page-header">
+                <div>
+                    <h2><i class="fas fa-cog"></i> Paramètres</h2>
+                    <p class="text-muted">Configuration du système, permissions et notifications</p>
                 </div>
             </div>
 
-            <!-- Section Gestion des Notifications -->
-            <div id="settings-notifications-section"></div>
+            <div class="settings-tabs">
+                <button class="settings-tab active" data-tab="modules" onclick="switchSettingsTab('modules')">
+                    <i class="fas fa-puzzle-piece"></i> Modules
+                </button>
+                <button class="settings-tab" data-tab="permissions" onclick="switchSettingsTab('permissions')">
+                    <i class="fas fa-shield-alt"></i> Permissions
+                </button>
+                <button class="settings-tab" data-tab="notifications" onclick="switchSettingsTab('notifications')">
+                    <i class="fas fa-bell"></i> Notifications
+                </button>
+            </div>
+
+            <div id="settings-tab-content"></div>
         `;
 
-        // Charger le module de gestion des notifications
-        if (typeof loadNotificationManager === 'function') {
-            loadNotificationManager(document.getElementById('settings-notifications-section'));
-        }
+        injectSettingsStyles();
+        switchSettingsTab(_settingsActiveTab);
     } catch (error) {
         container.innerHTML = `<div class="card"><p class="text-danger">${t('common.error')}: ${error.message}</p></div>`;
     }
 }
 
+function switchSettingsTab(tab) {
+    _settingsActiveTab = tab;
+
+    // Mettre à jour les onglets actifs
+    document.querySelectorAll('.settings-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+
+    const content = document.getElementById('settings-tab-content');
+    if (!content) return;
+
+    switch (tab) {
+        case 'modules':
+            renderSettingsModules(content);
+            break;
+        case 'permissions':
+            renderSettingsPermissions(content);
+            break;
+        case 'notifications':
+            renderSettingsNotifications(content);
+            break;
+    }
+}
+
+// ============================================================
+// ONGLET MODULES
+// ============================================================
+
+function renderSettingsModules(content) {
+    content.innerHTML = `
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-puzzle-piece"></i> Modules du système</h3>
+            </div>
+            <p class="text-muted" style="padding:0 24px 8px">
+                Activez ou désactivez les modules selon vos besoins. Les modules désactivés disparaîtront du menu pour tous les utilisateurs.
+                <br><span class="text-warning"><i class="fas fa-lock"></i> Les modules essentiels ne peuvent pas être désactivés.</span>
+            </p>
+
+            <div class="modules-grid" style="padding:0 24px 24px">
+                ${renderModulesGrid()}
+            </div>
+
+            <div style="padding:0 24px 24px">
+                <button class="btn btn-primary" onclick="saveModulesConfig()">
+                    <i class="fas fa-save"></i> ${t('common.save')}
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================
+// ONGLET PERMISSIONS
+// ============================================================
+
+function renderSettingsPermissions(content) {
+    content.innerHTML = `
+        <!-- Rôles -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-user-tag"></i> Rôles du système</h3>
+            </div>
+            <div class="roles-grid" style="padding:0 24px 24px">
+                ${Object.entries(ROLE_LABELS).map(([role, label]) => `
+                    <div class="role-card ${role === 'admin' ? 'role-admin' : ''}">
+                        <div class="role-icon"><i class="fas ${ROLE_ICONS[role]}"></i></div>
+                        <div class="role-info">
+                            <h4>${label}</h4>
+                            <p>${ROLE_DESCRIPTIONS[role] || ''}</p>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+
+        <!-- Matrice des permissions -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-shield-alt"></i> ${t('settings.role_permissions')}</h3>
+            </div>
+            <p class="text-muted" style="padding:0 24px 8px">
+                Configurez les permissions pour chaque rôle. Cochez/décochez pour activer/désactiver une permission.
+                <br><strong>Note:</strong> L'administrateur a toujours toutes les permissions.
+            </p>
+
+            <div class="permissions-grid" style="padding:0 24px">
+                ${renderPermissionsTable()}
+            </div>
+
+            <div style="padding:16px 24px 24px; display:flex; gap:10px; flex-wrap:wrap">
+                <button class="btn btn-primary" onclick="saveAllPermissions()">
+                    <i class="fas fa-save"></i> ${t('common.save')}
+                </button>
+                <button class="btn btn-outline" onclick="resetToDefaults()">
+                    <i class="fas fa-undo"></i> Réinitialiser par défaut
+                </button>
+            </div>
+        </div>
+
+        <!-- Légende -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-info-circle"></i> Légende des permissions</h3>
+            </div>
+            <div class="permissions-legend" style="padding:0 24px 24px">
+                ${Object.entries(PERMISSION_CATEGORIES).map(([cat, perms]) => `
+                    <div class="legend-category">
+                        <h4><i class="fas ${getCategoryIcon(cat)}"></i> ${cat}</h4>
+                        <ul>
+                            ${perms.map(p => `<li><code>${p}</code> - ${PERMISSION_LABELS[p] || p}</li>`).join('')}
+                        </ul>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================
+// ONGLET NOTIFICATIONS
+// ============================================================
+
+function renderSettingsNotifications(content) {
+    if (typeof loadNotificationManager === 'function') {
+        loadNotificationManager(content);
+    } else {
+        content.innerHTML = '<div class="card"><p class="text-muted" style="padding:24px">Module de notifications non disponible.</p></div>';
+    }
+}
+
+// ============================================================
+// FONCTIONS MODULES
+// ============================================================
+
 function renderModulesGrid() {
     return Object.entries(SYSTEM_MODULES).map(([moduleId, module]) => {
-        // Vérifier si le module est actif (true par défaut si non défini)
         const moduleValue = currentModules[moduleId];
-        const isActive = moduleValue === true || moduleValue === undefined || moduleValue === 'true';
         const isInactive = moduleValue === false || moduleValue === 'false';
         const isCore = module.core === true;
-        
+
         return `
             <div class="module-card ${isInactive ? 'inactive' : 'active'} ${isCore ? 'core' : ''}">
                 <div class="module-toggle">
                     <label class="switch">
-                        <input type="checkbox" 
-                            ${!isInactive ? 'checked' : ''} 
+                        <input type="checkbox"
+                            ${!isInactive ? 'checked' : ''}
                             ${isCore ? 'disabled' : ''}
                             onchange="toggleModule('${moduleId}', this.checked)"
                             id="module-${moduleId}">
@@ -415,8 +452,7 @@ function renderModulesGrid() {
 
 function toggleModule(moduleId, enabled) {
     currentModules[moduleId] = enabled;
-    
-    // Mettre à jour visuellement la carte
+
     const card = document.querySelector(`#module-${moduleId}`).closest('.module-card');
     if (enabled) {
         card.classList.remove('inactive');
@@ -431,34 +467,21 @@ function toggleModule(moduleId, enabled) {
 
 async function saveModulesConfig() {
     try {
-        // Log pour debug
-        console.log('Saving modules config:', JSON.stringify(currentModules));
-        
         const result = await API.saveModulesConfig(currentModules);
-        console.log('Save result:', result);
-        
-        if (result.saved) {
-            console.log('Server confirmed saved:', result.saved);
-        }
-        
         toast(t('settings.saved'), 'success');
-        
-        // Synchroniser avec la variable globale de app.js
+
         if (typeof enabledModules !== 'undefined') {
             for (const key in currentModules) {
                 enabledModules[key] = currentModules[key];
             }
         }
-        
-        // Mettre à jour le menu immédiatement
+
         updateSidebarModulesFromSettings();
     } catch (error) {
-        console.error('Error saving modules:', error);
         toast(t('common.error') + ': ' + error.message, 'error');
     }
 }
 
-// Fonction locale pour mettre à jour la sidebar depuis settings
 function updateSidebarModulesFromSettings() {
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
         const page = item.dataset.page;
@@ -468,6 +491,10 @@ function updateSidebarModulesFromSettings() {
         }
     });
 }
+
+// ============================================================
+// FONCTIONS PERMISSIONS
+// ============================================================
 
 function getCategoryIcon(cat) {
     const icons = {
@@ -480,6 +507,7 @@ function getCategoryIcon(cat) {
         'Tâches (Kanban)': 'fa-tasks',
         'Évaluations': 'fa-clipboard-check',
         'Audits': 'fa-search',
+        'Revenue Management': 'fa-chart-line',
         'Communication': 'fa-envelope',
         'Dashboard & Rapports': 'fa-chart-bar',
         'Administration': 'fa-cog'
@@ -489,14 +517,14 @@ function getCategoryIcon(cat) {
 
 function renderPermissionsTable() {
     const roles = ['groupe_manager', 'hotel_manager', 'comptabilite', 'rh', 'receptionniste', 'employee'];
-    
+
     let rows = '';
     for (const [category, perms] of Object.entries(PERMISSION_CATEGORIES)) {
         rows += `<tr class="category-row"><td colspan="${roles.length + 2}"><i class="fas ${getCategoryIcon(category)}"></i> <strong>${category}</strong></td></tr>`;
         for (const perm of perms) {
             rows += `
                 <tr>
-                    <td class="perm-label">${PERMISSION_LABELS[perm]}</td>
+                    <td class="perm-label">${PERMISSION_LABELS[perm] || perm}</td>
                     <td class="text-center">
                         <input type="checkbox" checked disabled title="Admin a toujours cette permission">
                     </td>
@@ -505,8 +533,8 @@ function renderPermissionsTable() {
                         const isProtected = perm === 'permissions.manage';
                         return `
                             <td class="text-center">
-                                <input type="checkbox" 
-                                    ${checked ? 'checked' : ''} 
+                                <input type="checkbox"
+                                    ${checked ? 'checked' : ''}
                                     ${isProtected ? 'disabled title="Réservé à l\'admin"' : ''}
                                     onchange="togglePermission('${role}', '${perm}', this.checked)"
                                     id="perm-${role}-${perm.replace(/\./g, '-')}"
@@ -518,7 +546,7 @@ function renderPermissionsTable() {
             `;
         }
     }
-    
+
     return `
         <div class="table-responsive">
             <table class="permissions-table">
@@ -556,7 +584,7 @@ function togglePermission(role, permission, allowed) {
 
 async function saveAllPermissions() {
     const roles = ['groupe_manager', 'hotel_manager', 'comptabilite', 'rh', 'receptionniste', 'employee'];
-    
+
     try {
         for (const role of roles) {
             if (currentPermissions[role]) {
@@ -571,7 +599,7 @@ async function saveAllPermissions() {
 
 async function resetToDefaults() {
     if (!confirm('Réinitialiser toutes les permissions aux valeurs par défaut ?\n\nCette action va écraser vos modifications actuelles.')) return;
-    
+
     try {
         for (const [role, perms] of Object.entries(DEFAULT_PERMISSIONS)) {
             await API.updateRolePermissions(role, perms);
@@ -581,4 +609,65 @@ async function resetToDefaults() {
     } catch (error) {
         toast(t('common.error') + ': ' + error.message, 'error');
     }
+}
+
+// ============================================================
+// STYLES ONGLETS
+// ============================================================
+
+function injectSettingsStyles() {
+    if (document.getElementById('settings-tab-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'settings-tab-styles';
+    style.textContent = `
+        .settings-tabs {
+            display: flex;
+            gap: 0;
+            background: var(--gray-100, #f3f4f6);
+            border-radius: 12px;
+            padding: 4px;
+            margin-bottom: 24px;
+        }
+        .settings-tab {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border: none;
+            background: transparent;
+            color: var(--gray-600, #6b7280);
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .settings-tab:hover {
+            color: var(--gray-800, #1f2937);
+            background: var(--gray-200, #e5e7eb);
+        }
+        .settings-tab.active {
+            background: white;
+            color: var(--primary, #1E3A5F);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            font-weight: 600;
+        }
+        .settings-tab i {
+            font-size: 15px;
+        }
+        @media (max-width: 600px) {
+            .settings-tab span {
+                display: none;
+            }
+            .settings-tab {
+                padding: 12px 16px;
+            }
+            .settings-tab i {
+                font-size: 18px;
+            }
+        }
+    `;
+    document.head.appendChild(style);
 }
