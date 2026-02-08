@@ -1,0 +1,34 @@
+{
+  "name": "acl-gestion",
+  "version": "1.0.0",
+  "description": "ACL GESTION - Plateforme de gestion hoteliere multi-etablissements",
+  "scripts": {
+    "cap:sync": "npx cap sync",
+    "cap:open:ios": "npx cap open ios",
+    "cap:open:android": "npx cap open android",
+    "cap:build": "npx cap sync && npx cap copy"
+  },
+  "keywords": [
+    "hotel",
+    "management",
+    "capacitor",
+    "ios"
+  ],
+  "author": "ACL GESTION",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/camera": "^8.0.0",
+    "@capacitor/cli": "^8.0.2",
+    "@capacitor/core": "^8.0.2",
+    "@capacitor/haptics": "^8.0.0",
+    "@capacitor/ios": "^8.0.2",
+    "@capacitor/keyboard": "^8.0.0",
+    "@capacitor/push-notifications": "^8.0.0",
+    "@capacitor/splash-screen": "^8.0.0",
+    "@capacitor/status-bar": "^8.0.0"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.5"
+  }
+}
