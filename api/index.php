@@ -1263,6 +1263,171 @@ try {
                 ]);
             }
 
+            // ======== ADMIN: Historique des campagnes ========
+            // GET /notifications/admin/history
+            if ($method === 'GET' && $id === 'admin' && $action === 'history') {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin', 'groupe_manager', 'hotel_manager'])) json_error('Accès refusé', 403);
+
+                try {
+                    $campaigns = db()->query(
+                        "SELECT nc.*, u.first_name, u.last_name,
+                                CONCAT(u.first_name, ' ', u.last_name) as sender_name
+                         FROM notification_campaigns nc
+                         LEFT JOIN users u ON nc.sent_by = u.id
+                         ORDER BY nc.created_at DESC
+                         LIMIT 100"
+                    );
+
+                    $totalSent = db()->count("SELECT COUNT(*) FROM notification_campaigns");
+                    $sentToday = db()->count("SELECT COUNT(*) FROM notification_campaigns WHERE DATE(created_at) = CURDATE()");
+                    $sentWeek = db()->count("SELECT COUNT(*) FROM notification_campaigns WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
+                } catch (Exception $e) {
+                    $campaigns = [];
+                    $totalSent = 0;
+                    $sentToday = 0;
+                    $sentWeek = 0;
+                }
+
+                json_out([
+                    'success' => true,
+                    'campaigns' => $campaigns,
+                    'total_sent' => (int)$totalSent,
+                    'sent_today' => (int)$sentToday,
+                    'sent_week' => (int)$sentWeek
+                ]);
+            }
+
+            // ======== ADMIN: Envoyer une notification ========
+            // POST /notifications/admin/send
+            if ($method === 'POST' && $id === 'admin' && $action === 'send') {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin', 'groupe_manager', 'hotel_manager'])) json_error('Accès refusé', 403);
+
+                $data = get_input();
+                if (empty($data['title'])) json_error('Titre requis');
+
+                $targetType = $data['target_type'] ?? 'all';
+                $title = $data['title'];
+                $message = $data['message'] ?? '';
+                $type = $data['type'] ?? 'info';
+                if (!in_array($type, ['info', 'warning', 'danger', 'success'])) $type = 'info';
+
+                // Déterminer les destinataires
+                $userIds = [];
+                $targetDetail = '';
+
+                if ($targetType === 'all') {
+                    $allUsers = db()->query("SELECT id FROM users WHERE status = 'active'");
+                    $userIds = array_column($allUsers, 'id');
+                    $targetDetail = 'Tous';
+                } elseif ($targetType === 'hotel') {
+                    $hotelIds = $data['hotel_ids'] ?? [];
+                    if (empty($hotelIds)) json_error('Sélectionnez au moins un hôtel');
+                    $placeholders = implode(',', array_fill(0, count($hotelIds), '?'));
+                    $hotelUsers = db()->query(
+                        "SELECT DISTINCT u.id FROM users u
+                         JOIN user_hotels uh ON u.id = uh.user_id
+                         WHERE uh.hotel_id IN ($placeholders) AND u.status = 'active'",
+                        $hotelIds
+                    );
+                    $userIds = array_column($hotelUsers, 'id');
+                    $hotelNames = db()->query("SELECT name FROM hotels WHERE id IN ($placeholders)", $hotelIds);
+                    $targetDetail = implode(', ', array_column($hotelNames, 'name'));
+                } elseif ($targetType === 'role') {
+                    $roles = $data['roles'] ?? [];
+                    if (empty($roles)) json_error('Sélectionnez au moins un rôle');
+                    $placeholders = implode(',', array_fill(0, count($roles), '?'));
+                    $roleUsers = db()->query("SELECT id FROM users WHERE role IN ($placeholders) AND status = 'active'", $roles);
+                    $userIds = array_column($roleUsers, 'id');
+                    $targetDetail = implode(', ', $roles);
+                } elseif ($targetType === 'users') {
+                    $userIds = array_map('intval', $data['user_ids'] ?? []);
+                    if (empty($userIds)) json_error('Sélectionnez au moins un utilisateur');
+                    $targetDetail = count($userIds) . ' utilisateur(s)';
+                }
+
+                if (empty($userIds)) json_error('Aucun destinataire trouvé');
+
+                // Créer les notifications pour chaque utilisateur
+                $count = 0;
+                foreach ($userIds as $uid) {
+                    try {
+                        db()->insert(
+                            "INSERT INTO notifications (user_id, type, title, message, is_read, created_at) VALUES (?, ?, ?, ?, 0, NOW())",
+                            [$uid, $type, $title, $message]
+                        );
+                        $count++;
+                    } catch (Exception $e) {}
+                }
+
+                // Sauvegarder la campagne dans l'historique
+                try {
+                    db()->insert(
+                        "INSERT INTO notification_campaigns (sent_by, title, message, type, target_type, target_detail, recipients_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())",
+                        [$user['id'], $title, $message, $type, $targetType, $targetDetail, $count]
+                    );
+                } catch (Exception $e) {}
+
+                json_out(['success' => true, 'recipients_count' => $count]);
+            }
+
+            // ======== ADMIN: Renvoyer une campagne ========
+            // POST /notifications/admin/resend/{id}
+            if ($method === 'POST' && $id === 'admin' && $action === 'resend' && $subaction) {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin', 'groupe_manager', 'hotel_manager'])) json_error('Accès refusé', 403);
+
+                $campaign = db()->queryOne("SELECT * FROM notification_campaigns WHERE id = ?", [$subaction]);
+                if (!$campaign) json_error('Campagne introuvable', 404);
+
+                // Re-déterminer les destinataires
+                $userIds = [];
+                $targetType = $campaign['target_type'];
+
+                if ($targetType === 'all') {
+                    $allUsers = db()->query("SELECT id FROM users WHERE status = 'active'");
+                    $userIds = array_column($allUsers, 'id');
+                } elseif ($targetType === 'hotel') {
+                    // On renvoie à tous les utilisateurs de tous les hôtels gérables
+                    $allUsers = db()->query("SELECT id FROM users WHERE status = 'active'");
+                    $userIds = array_column($allUsers, 'id');
+                } elseif ($targetType === 'role') {
+                    $roles = explode(', ', $campaign['target_detail']);
+                    if (!empty($roles)) {
+                        $placeholders = implode(',', array_fill(0, count($roles), '?'));
+                        $roleUsers = db()->query("SELECT id FROM users WHERE role IN ($placeholders) AND status = 'active'", $roles);
+                        $userIds = array_column($roleUsers, 'id');
+                    }
+                } else {
+                    $allUsers = db()->query("SELECT id FROM users WHERE status = 'active'");
+                    $userIds = array_column($allUsers, 'id');
+                }
+
+                $count = 0;
+                foreach ($userIds as $uid) {
+                    try {
+                        db()->insert(
+                            "INSERT INTO notifications (user_id, type, title, message, is_read, created_at) VALUES (?, ?, ?, ?, 0, NOW())",
+                            [$uid, $campaign['type'], $campaign['title'], $campaign['message']]
+                        );
+                        $count++;
+                    } catch (Exception $e) {}
+                }
+
+                json_out(['success' => true, 'recipients_count' => $count]);
+            }
+
+            // ======== ADMIN: Supprimer une campagne ========
+            // DELETE /notifications/admin/campaigns/{id}
+            if ($method === 'DELETE' && $id === 'admin' && $action === 'campaigns' && $subaction) {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin', 'groupe_manager', 'hotel_manager'])) json_error('Accès refusé', 403);
+
+                db()->execute("DELETE FROM notification_campaigns WHERE id = ?", [$subaction]);
+                json_out(['success' => true]);
+            }
+
             break;
 
         // --- MODULES CONFIG ---
