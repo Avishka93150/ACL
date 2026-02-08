@@ -739,14 +739,32 @@ let bookingState = {
 
 // ============ API ============
 async function apiGet(url) {
+    console.log('[BOOKING API] GET', API_BASE + url);
     const res = await fetch(API_BASE + url);
-    if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Erreur serveur'); }
-    return res.json();
+    if (!res.ok) {
+        const errText = await res.text();
+        console.error('[BOOKING API] GET ERREUR', res.status, url, errText);
+        let errObj = {};
+        try { errObj = JSON.parse(errText); } catch(e) {}
+        throw new Error(errObj.error || errObj.message || 'Erreur serveur (HTTP ' + res.status + ')');
+    }
+    const data = await res.json();
+    console.log('[BOOKING API] GET OK', url, data);
+    return data;
 }
 async function apiPost(url, body) {
+    console.log('[BOOKING API] POST', API_BASE + url, body);
     const res = await fetch(API_BASE + url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Erreur serveur'); }
-    return res.json();
+    if (!res.ok) {
+        const errText = await res.text();
+        console.error('[BOOKING API] POST ERREUR', res.status, url, errText);
+        let errObj = {};
+        try { errObj = JSON.parse(errText); } catch(e) {}
+        throw new Error(errObj.error || errObj.message || 'Erreur serveur (HTTP ' + res.status + ')');
+    }
+    const data = await res.json();
+    console.log('[BOOKING API] POST OK', url, data);
+    return data;
 }
 
 // ============ LOAD HOTEL ============
@@ -973,6 +991,7 @@ async function doLookup() {
     const ref = document.getElementById('lookup_ref').value.trim();
     const name = document.getElementById('lookup_name').value.trim();
     const resultDiv = document.getElementById('lookup-result');
+    console.log('[BOOKING LOOKUP] Recherche:', { ref, name, hotelSlug });
 
     if (!ref && !name) {
         resultDiv.innerHTML = `<div class="alert alert-danger" style="margin-top:16px">${t('lookup_error_empty')}</div>`;
@@ -986,6 +1005,7 @@ async function doLookup() {
             booking_ref: ref,
             last_name: name
         });
+        console.log('[BOOKING LOOKUP] Réponse:', res);
 
         const local = res.local_booking;
         const pms = res.pms_result;
@@ -1029,6 +1049,7 @@ async function doLookup() {
         html += '</div>';
         resultDiv.innerHTML = html;
     } catch (err) {
+        console.error('[BOOKING LOOKUP] ERREUR:', err);
         resultDiv.innerHTML = `<div class="alert alert-danger" style="margin-top:16px">${esc(err.message)}</div>`;
     }
 }
@@ -1145,6 +1166,7 @@ function onDateChange() {
 
 async function searchAvailability() {
     const container = document.getElementById('rooms-container');
+    console.log('[BOOKING AVAIL] Recherche disponibilité:', { ...bookingState, hotelSlug });
     if (!bookingState.checkin || !bookingState.checkout) {
         container.innerHTML = `<div class="alert alert-danger" style="margin-top:16px">${t('select_dates')}</div>`;
         return;
@@ -1155,6 +1177,7 @@ async function searchAvailability() {
     try {
         const res = await apiGet(`/booking/${hotelSlug}/availability?checkin=${bookingState.checkin}&checkout=${bookingState.checkout}&nb_adult=${bookingState.nb_adult}&nb_child=${bookingState.nb_child}`);
         const rooms = res.rooms || [];
+        console.log('[BOOKING AVAIL] Chambres trouvées:', rooms.length, rooms);
         const nights = getNights();
 
         if (rooms.length === 0) {
@@ -1206,6 +1229,7 @@ async function searchAvailability() {
             </div>
         `;
     } catch (err) {
+        console.error('[BOOKING AVAIL] ERREUR:', err);
         container.innerHTML = `<div class="alert alert-danger" style="margin-top:20px">${esc(err.message)}</div>`;
     }
 }
@@ -1546,8 +1570,10 @@ async function processPayment() {
     errorDiv.style.display = 'none';
     payBtn.disabled = true;
     payBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${t('processing')}`;
+    console.log('[BOOKING PAYMENT] Début paiement, total:', grandTotal, 'room:', selectedRoom, 'state:', bookingState);
 
     try {
+        console.log('[BOOKING PAYMENT] Appel /reserve...');
         const reserveRes = await apiPost(`/booking/${hotelSlug}/reserve`, {
             checkin_date: bookingState.checkin,
             checkout_date: bookingState.checkout,
@@ -1568,10 +1594,12 @@ async function processPayment() {
             extras_amount: getExtrasTotal()
         });
 
+        console.log('[BOOKING PAYMENT] /reserve OK:', reserveRes);
         const clientSecret = reserveRes.client_secret;
         const bookingRef = reserveRes.booking_ref;
         const paymentIntentId = reserveRes.payment_intent_id;
 
+        console.log('[BOOKING PAYMENT] Confirmation Stripe, ref:', bookingRef);
         const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
             payment_method: {
                 card: cardElement,
@@ -1590,19 +1618,26 @@ async function processPayment() {
             }
         });
 
-        if (error) throw new Error(error.message);
+        if (error) {
+            console.error('[BOOKING PAYMENT] Stripe confirmCardPayment ERREUR:', error);
+            throw new Error(error.message);
+        }
 
+        console.log('[BOOKING PAYMENT] Stripe paymentIntent status:', paymentIntent.status);
         if (paymentIntent.status === 'succeeded') {
+            console.log('[BOOKING PAYMENT] Appel /confirm...');
             const confirmRes = await apiPost(`/booking/${hotelSlug}/confirm`, {
                 booking_ref: bookingRef,
                 payment_intent_id: paymentIntentId,
                 extras: selectedExtras.map(e => ({ ProductCode: e.ProductCode, Quantity: e.qty }))
             });
+            console.log('[BOOKING PAYMENT] /confirm OK:', confirmRes);
             renderSuccess(bookingRef, confirmRes.pms_synced);
         } else {
             throw new Error(`${t('payment_failed')} ${paymentIntent.status}`);
         }
     } catch (err) {
+        console.error('[BOOKING PAYMENT] ERREUR:', err);
         errorDiv.textContent = err.message;
         errorDiv.style.display = 'block';
         payBtn.disabled = false;

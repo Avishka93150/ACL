@@ -16,7 +16,7 @@ function json_out($data, $code = 200) {
 }
 
 function json_error($msg, $code = 400) {
-    json_out(['success' => false, 'message' => $msg], $code);
+    json_out(['success' => false, 'error' => $msg, 'message' => $msg], $code);
 }
 
 // Cache pour l'input brut (php://input ne peut être lu qu'une fois)
@@ -8742,108 +8742,154 @@ try {
 
             // GET /booking/{slug}/availability?checkin=YYYY-MM-DD&checkout=YYYY-MM-DD&nb_adult=2&nb_child=0
             if ($method === 'GET' && $id && $action === 'availability') {
-                $hotel = db()->queryOne(
-                    "SELECT * FROM hotels WHERE booking_slug = ? AND booking_enabled = 1 AND status = 'active'",
-                    [$id]
-                );
-                if (!$hotel) json_error('Hôtel non trouvé', 404);
+                error_log("[BOOKING AVAIL] Recherche disponibilité pour slug=$id");
+                try {
+                    $hotel = db()->queryOne(
+                        "SELECT * FROM hotels WHERE booking_slug = ? AND booking_enabled = 1 AND status = 'active'",
+                        [$id]
+                    );
+                    if (!$hotel) {
+                        error_log("[BOOKING AVAIL] Hôtel non trouvé pour slug=$id");
+                        json_error('Hôtel non trouvé', 404);
+                    }
 
-                $checkin = $_GET['checkin'] ?? '';
-                $checkout = $_GET['checkout'] ?? '';
-                $nbAdult = (int)($_GET['nb_adult'] ?? $_GET['guests'] ?? 1);
-                $nbChild = (int)($_GET['nb_child'] ?? 0);
+                    $checkin = $_GET['checkin'] ?? '';
+                    $checkout = $_GET['checkout'] ?? '';
+                    $nbAdult = (int)($_GET['nb_adult'] ?? $_GET['guests'] ?? 1);
+                    $nbChild = (int)($_GET['nb_child'] ?? 0);
+                    error_log("[BOOKING AVAIL] Params: checkin=$checkin, checkout=$checkout, adults=$nbAdult, children=$nbChild, hotel_id={$hotel['id']}, pms_type=" . ($hotel['pms_type'] ?? 'null'));
 
-                if (!$checkin || !$checkout) json_error('Dates requises');
-                if ($checkin >= $checkout) json_error('Date de départ doit être après la date d\'arrivée');
-                if (strtotime($checkin) < strtotime('today')) json_error('Date d\'arrivée ne peut pas être dans le passé');
+                    if (!$checkin || !$checkout) json_error('Dates requises');
+                    if ($checkin >= $checkout) json_error('Date de départ doit être après la date d\'arrivée');
+                    if (strtotime($checkin) < strtotime('today')) json_error('Date d\'arrivée ne peut pas être dans le passé');
 
-                // Appeler le PMS pour la disponibilité (API GeHo: POST /AvailRooms/)
-                $availability = pms_get_availability($hotel, $checkin, $checkout, $nbAdult, $nbChild);
-                json_out(['rooms' => $availability]);
+                    // Appeler le PMS pour la disponibilité (API GeHo: POST /AvailRooms/)
+                    $availability = pms_get_availability($hotel, $checkin, $checkout, $nbAdult, $nbChild);
+                    error_log("[BOOKING AVAIL] Résultat: " . count($availability) . " chambre(s) trouvée(s)");
+                    json_out(['rooms' => $availability]);
+                } catch (Exception $e) {
+                    error_log("[BOOKING AVAIL] EXCEPTION: " . $e->getMessage() . " | File: " . $e->getFile() . ":" . $e->getLine() . " | Trace: " . $e->getTraceAsString());
+                    json_error('Erreur serveur lors de la recherche de disponibilité: ' . $e->getMessage(), 500);
+                }
             }
 
             // POST /booking/{slug}/reserve - Créer une réservation + paiement Stripe
             if ($method === 'POST' && $id && $action === 'reserve') {
-                $hotel = db()->queryOne(
-                    "SELECT * FROM hotels WHERE booking_slug = ? AND booking_enabled = 1 AND status = 'active'",
-                    [$id]
-                );
-                if (!$hotel) json_error('Hôtel non trouvé', 404);
-                if (empty($hotel['stripe_secret_key'])) json_error('Paiement non configuré pour cet hôtel', 500);
+                error_log("[BOOKING RESERVE] Début réservation pour slug=$id");
+                try {
+                    $hotel = db()->queryOne(
+                        "SELECT * FROM hotels WHERE booking_slug = ? AND booking_enabled = 1 AND status = 'active'",
+                        [$id]
+                    );
+                    if (!$hotel) {
+                        error_log("[BOOKING RESERVE] Hôtel non trouvé pour slug=$id");
+                        json_error('Hôtel non trouvé', 404);
+                    }
+                    error_log("[BOOKING RESERVE] Hôtel trouvé: id={$hotel['id']}, name={$hotel['name']}");
 
-                $data = get_input();
+                    if (empty($hotel['stripe_secret_key'])) {
+                        error_log("[BOOKING RESERVE] Stripe non configuré pour hotel_id={$hotel['id']}");
+                        json_error('Paiement non configuré pour cet hôtel', 500);
+                    }
 
-                // Validation
-                $required = ['checkin_date', 'checkout_date', 'room_type', 'guest_last_name', 'guest_email', 'total_amount'];
-                foreach ($required as $field) {
-                    if (empty($data[$field])) json_error("Champ $field requis");
+                    $data = get_input();
+                    error_log("[BOOKING RESERVE] Input reçu: " . json_encode(array_diff_key($data, array_flip(['stripe_secret_key']))));
+
+                    // Validation
+                    $required = ['checkin_date', 'checkout_date', 'room_type', 'guest_last_name', 'guest_email', 'total_amount'];
+                    foreach ($required as $field) {
+                        if (empty($data[$field])) {
+                            error_log("[BOOKING RESERVE] Champ manquant: $field");
+                            json_error("Champ $field requis");
+                        }
+                    }
+
+                    if (!filter_var($data['guest_email'], FILTER_VALIDATE_EMAIL)) {
+                        error_log("[BOOKING RESERVE] Email invalide: {$data['guest_email']}");
+                        json_error('Email invalide');
+                    }
+
+                    // Générer une référence unique
+                    $ref = 'ACL-' . strtoupper(substr($hotel['booking_slug'], 0, 4)) . '-' . date('ymd') . '-' . strtoupper(substr(uniqid(), -5));
+                    error_log("[BOOKING RESERVE] Ref générée: $ref");
+
+                    // Créer le PaymentIntent Stripe
+                    $stripeSecret = $hotel['stripe_secret_key'];
+                    $amount = (int)round(floatval($data['total_amount']) * 100); // Stripe utilise les centimes
+                    error_log("[BOOKING RESERVE] Appel Stripe: montant={$amount} centimes ({$data['total_amount']} EUR)");
+
+                    $ch = curl_init('https://api.stripe.com/v1/payment_intents');
+                    curl_setopt_array($ch, [
+                        CURLOPT_POST => true,
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $stripeSecret],
+                        CURLOPT_POSTFIELDS => http_build_query([
+                            'amount' => $amount,
+                            'currency' => 'eur',
+                            'metadata[booking_ref]' => $ref,
+                            'metadata[hotel_id]' => $hotel['id'],
+                            'metadata[guest_email]' => $data['guest_email'],
+                            'receipt_email' => $data['guest_email'],
+                            'description' => "Réservation {$ref} - {$hotel['name']} - {$data['checkin_date']} au {$data['checkout_date']}"
+                        ])
+                    ]);
+                    $stripeRaw = curl_exec($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    $curlError = curl_error($ch);
+                    curl_close($ch);
+
+                    error_log("[BOOKING RESERVE] Stripe réponse HTTP=$httpCode, curl_error=" . ($curlError ?: 'aucune'));
+                    $stripeResponse = json_decode($stripeRaw, true);
+                    if ($stripeResponse === null) {
+                        error_log("[BOOKING RESERVE] Stripe réponse non-JSON: " . substr($stripeRaw, 0, 500));
+                    }
+
+                    if ($httpCode !== 200 || empty($stripeResponse['client_secret'])) {
+                        $stripeErr = $stripeResponse['error']['message'] ?? 'Erreur Stripe (HTTP ' . $httpCode . ')';
+                        error_log("[BOOKING RESERVE] Stripe ERREUR: $stripeErr | Réponse complète: " . substr($stripeRaw, 0, 1000));
+                        json_error('Erreur paiement: ' . $stripeErr, 500);
+                    }
+                    error_log("[BOOKING RESERVE] Stripe OK, payment_intent_id=" . $stripeResponse['id']);
+
+                    // Insérer la réservation en BDD avec champs étendus
+                    error_log("[BOOKING RESERVE] Insertion BDD pms_bookings...");
+                    $bookingId = db()->insert(
+                        "INSERT INTO pms_bookings (hotel_id, booking_ref, guest_first_name, guest_last_name, guest_email, guest_phone, civilite, address1, address2, city, postal_code, nb_adult, nb_child, checkin_date, checkout_date, room_type, guests_count, special_requests, total_amount, extras_amount, currency, stripe_payment_intent_id, payment_status, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EUR', ?, 'pending', 'pending', NOW())",
+                        [
+                            $hotel['id'],
+                            $ref,
+                            $data['guest_first_name'] ?? '',
+                            $data['guest_last_name'],
+                            $data['guest_email'],
+                            $data['guest_phone'] ?? '',
+                            $data['civilite'] ?? 'M.',
+                            $data['address1'] ?? '',
+                            $data['address2'] ?? '',
+                            $data['city'] ?? '',
+                            $data['postal_code'] ?? '',
+                            (int)($data['nb_adult'] ?? 1),
+                            (int)($data['nb_child'] ?? 0),
+                            $data['checkin_date'],
+                            $data['checkout_date'],
+                            $data['room_type'],
+                            (int)($data['nb_adult'] ?? 1) + (int)($data['nb_child'] ?? 0),
+                            $data['special_requests'] ?? '',
+                            $data['total_amount'],
+                            $data['extras_amount'] ?? 0
+                        ]
+                    );
+                    error_log("[BOOKING RESERVE] Insertion OK, booking_id=$bookingId");
+
+                    json_out([
+                        'booking_ref' => $ref,
+                        'booking_id' => $bookingId,
+                        'client_secret' => $stripeResponse['client_secret'],
+                        'payment_intent_id' => $stripeResponse['id']
+                    ]);
+                } catch (Exception $e) {
+                    error_log("[BOOKING RESERVE] EXCEPTION: " . $e->getMessage() . " | File: " . $e->getFile() . ":" . $e->getLine() . " | Trace: " . $e->getTraceAsString());
+                    json_error('Erreur serveur lors de la réservation: ' . $e->getMessage(), 500);
                 }
-
-                if (!filter_var($data['guest_email'], FILTER_VALIDATE_EMAIL)) json_error('Email invalide');
-
-                // Générer une référence unique
-                $ref = 'ACL-' . strtoupper(substr($hotel['booking_slug'], 0, 4)) . '-' . date('ymd') . '-' . strtoupper(substr(uniqid(), -5));
-
-                // Créer le PaymentIntent Stripe
-                $stripeSecret = $hotel['stripe_secret_key'];
-                $amount = (int)round(floatval($data['total_amount']) * 100); // Stripe utilise les centimes
-
-                $ch = curl_init('https://api.stripe.com/v1/payment_intents');
-                curl_setopt_array($ch, [
-                    CURLOPT_POST => true,
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $stripeSecret],
-                    CURLOPT_POSTFIELDS => http_build_query([
-                        'amount' => $amount,
-                        'currency' => 'eur',
-                        'metadata[booking_ref]' => $ref,
-                        'metadata[hotel_id]' => $hotel['id'],
-                        'metadata[guest_email]' => $data['guest_email'],
-                        'receipt_email' => $data['guest_email'],
-                        'description' => "Réservation {$ref} - {$hotel['name']} - {$data['checkin_date']} au {$data['checkout_date']}"
-                    ])
-                ]);
-                $stripeResponse = json_decode(curl_exec($ch), true);
-                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
-
-                if ($httpCode !== 200 || empty($stripeResponse['client_secret'])) {
-                    json_error('Erreur paiement: ' . ($stripeResponse['error']['message'] ?? 'Erreur Stripe'), 500);
-                }
-
-                // Insérer la réservation en BDD avec champs étendus
-                $bookingId = db()->insert(
-                    "INSERT INTO pms_bookings (hotel_id, booking_ref, guest_first_name, guest_last_name, guest_email, guest_phone, civilite, address1, address2, city, postal_code, nb_adult, nb_child, checkin_date, checkout_date, room_type, guests_count, special_requests, total_amount, extras_amount, currency, stripe_payment_intent_id, payment_status, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EUR', ?, 'pending', 'pending', NOW())",
-                    [
-                        $hotel['id'],
-                        $ref,
-                        $data['guest_first_name'] ?? '',
-                        $data['guest_last_name'],
-                        $data['guest_email'],
-                        $data['guest_phone'] ?? '',
-                        $data['civilite'] ?? 'M.',
-                        $data['address1'] ?? '',
-                        $data['address2'] ?? '',
-                        $data['city'] ?? '',
-                        $data['postal_code'] ?? '',
-                        (int)($data['nb_adult'] ?? 1),
-                        (int)($data['nb_child'] ?? 0),
-                        $data['checkin_date'],
-                        $data['checkout_date'],
-                        $data['room_type'],
-                        (int)($data['nb_adult'] ?? 1) + (int)($data['nb_child'] ?? 0),
-                        $data['special_requests'] ?? '',
-                        $data['total_amount'],
-                        $data['extras_amount'] ?? 0
-                    ]
-                );
-
-                json_out([
-                    'booking_ref' => $ref,
-                    'booking_id' => $bookingId,
-                    'client_secret' => $stripeResponse['client_secret'],
-                    'payment_intent_id' => $stripeResponse['id']
-                ]);
             }
 
             // POST /booking/{slug}/confirm - Confirmer après paiement Stripe réussi
@@ -8931,46 +8977,63 @@ try {
 
             // POST /booking/{slug}/lookup - Rechercher une réservation existante
             if ($method === 'POST' && $id && $action === 'lookup') {
-                $hotel = db()->queryOne(
-                    "SELECT * FROM hotels WHERE booking_slug = ? AND booking_enabled = 1 AND status = 'active'",
-                    [$id]
-                );
-                if (!$hotel) json_error('Hôtel non trouvé', 404);
+                error_log("[BOOKING LOOKUP] Début lookup pour slug=$id");
+                try {
+                    $hotel = db()->queryOne(
+                        "SELECT * FROM hotels WHERE booking_slug = ? AND booking_enabled = 1 AND status = 'active'",
+                        [$id]
+                    );
+                    if (!$hotel) {
+                        error_log("[BOOKING LOOKUP] Hôtel non trouvé pour slug=$id");
+                        json_error('Hôtel non trouvé', 404);
+                    }
+                    error_log("[BOOKING LOOKUP] Hôtel trouvé: id={$hotel['id']}, name={$hotel['name']}, pms_type=" . ($hotel['pms_type'] ?? 'null'));
 
-                $data = get_input();
+                    $data = get_input();
+                    error_log("[BOOKING LOOKUP] Input reçu: " . json_encode($data));
 
-                // Chercher d'abord dans notre BDD locale
-                $localBooking = null;
-                if (!empty($data['booking_ref'])) {
-                    $localBooking = db()->queryOne(
-                        "SELECT * FROM pms_bookings WHERE booking_ref = ? AND hotel_id = ?",
-                        [$data['booking_ref'], $hotel['id']]
-                    );
-                } elseif (!empty($data['last_name'])) {
-                    $localBooking = db()->queryOne(
-                        "SELECT * FROM pms_bookings WHERE guest_last_name = ? AND hotel_id = ? AND status IN ('confirmed', 'pending') ORDER BY created_at DESC",
-                        [$data['last_name'], $hotel['id']]
-                    );
-                } elseif (!empty($data['email'])) {
-                    $localBooking = db()->queryOne(
-                        "SELECT * FROM pms_bookings WHERE guest_email = ? AND hotel_id = ? AND status IN ('confirmed', 'pending') ORDER BY created_at DESC",
-                        [$data['email'], $hotel['id']]
-                    );
+                    // Chercher d'abord dans notre BDD locale
+                    $localBooking = null;
+                    if (!empty($data['booking_ref'])) {
+                        error_log("[BOOKING LOOKUP] Recherche par booking_ref: {$data['booking_ref']}");
+                        $localBooking = db()->queryOne(
+                            "SELECT * FROM pms_bookings WHERE booking_ref = ? AND hotel_id = ?",
+                            [$data['booking_ref'], $hotel['id']]
+                        );
+                    } elseif (!empty($data['last_name'])) {
+                        error_log("[BOOKING LOOKUP] Recherche par last_name: {$data['last_name']}");
+                        $localBooking = db()->queryOne(
+                            "SELECT * FROM pms_bookings WHERE guest_last_name = ? AND hotel_id = ? AND status IN ('confirmed', 'pending') ORDER BY created_at DESC",
+                            [$data['last_name'], $hotel['id']]
+                        );
+                    } elseif (!empty($data['email'])) {
+                        error_log("[BOOKING LOOKUP] Recherche par email: {$data['email']}");
+                        $localBooking = db()->queryOne(
+                            "SELECT * FROM pms_bookings WHERE guest_email = ? AND hotel_id = ? AND status IN ('confirmed', 'pending') ORDER BY created_at DESC",
+                            [$data['email'], $hotel['id']]
+                        );
+                    }
+                    error_log("[BOOKING LOOKUP] Résultat BDD locale: " . ($localBooking ? "trouvé (ref={$localBooking['booking_ref']})" : "non trouvé"));
+
+                    // Chercher aussi dans le PMS GeHo via POST /GetBooking/
+                    error_log("[BOOKING LOOKUP] Appel PMS pms_get_booking, pms_type=" . ($hotel['pms_type'] ?? 'null'));
+                    $pmsResult = pms_get_booking($hotel, [
+                        'noresa' => $data['noresa'] ?? ($localBooking['pms_booking_id'] ?? ''),
+                        'last_name' => $data['last_name'] ?? '',
+                        'email' => $data['email'] ?? '',
+                        'phone' => $data['phone'] ?? '',
+                        'exact' => '1'
+                    ]);
+                    error_log("[BOOKING LOOKUP] Résultat PMS: " . json_encode($pmsResult));
+
+                    json_out([
+                        'local_booking' => $localBooking,
+                        'pms_result' => $pmsResult
+                    ]);
+                } catch (Exception $e) {
+                    error_log("[BOOKING LOOKUP] EXCEPTION: " . $e->getMessage() . " | File: " . $e->getFile() . ":" . $e->getLine() . " | Trace: " . $e->getTraceAsString());
+                    json_error('Erreur serveur lors de la recherche: ' . $e->getMessage(), 500);
                 }
-
-                // Chercher aussi dans le PMS GeHo via POST /GetBooking/
-                $pmsResult = pms_get_booking($hotel, [
-                    'noresa' => $data['noresa'] ?? ($localBooking['pms_booking_id'] ?? ''),
-                    'last_name' => $data['last_name'] ?? '',
-                    'email' => $data['email'] ?? '',
-                    'phone' => $data['phone'] ?? '',
-                    'exact' => '1'
-                ]);
-
-                json_out([
-                    'local_booking' => $localBooking,
-                    'pms_result' => $pmsResult
-                ]);
             }
             break;
 
@@ -9160,9 +9223,14 @@ try {
  * Appel HTTP générique vers le PMS Geho
  */
 function geho_request($hotel, $endpoint, $method = 'GET', $body = null) {
+    error_log("[GEHO REQUEST] hotel_id={$hotel['id']}, endpoint=$endpoint, method=$method, mode=" . ($hotel['pms_connection_mode'] ?? 'direct'));
+
     // Mode relay : passer par la file d'attente au lieu d'un appel curl direct
     if (($hotel['pms_connection_mode'] ?? 'direct') === 'relay') {
-        return geho_request_relay($hotel, $endpoint, $method, $body);
+        error_log("[GEHO REQUEST] Mode relay activé");
+        $result = geho_request_relay($hotel, $endpoint, $method, $body);
+        error_log("[GEHO REQUEST] Relay result: " . json_encode(array_diff_key($result, ['raw' => 1])));
+        return $result;
     }
 
     // Mode direct : appel curl classique
@@ -9171,6 +9239,7 @@ function geho_request($hotel, $endpoint, $method = 'GET', $body = null) {
     $baseUrl = "http://{$ip}:{$port}";
 
     $url = rtrim($baseUrl, '/') . '/' . ltrim($endpoint, '/');
+    error_log("[GEHO REQUEST] URL: $url | Body: " . ($body ? json_encode($body) : 'null'));
 
     $ch = curl_init($url);
     curl_setopt_array($ch, [
@@ -9203,11 +9272,15 @@ function geho_request($hotel, $endpoint, $method = 'GET', $body = null) {
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $error = curl_error($ch);
+    $totalTime = curl_getinfo($ch, CURLINFO_TOTAL_TIME);
     curl_close($ch);
 
     if ($error) {
+        error_log("[GEHO REQUEST] CURL ERROR: $error (après {$totalTime}s)");
         return ['success' => false, 'error' => 'Connexion PMS échouée: ' . $error];
     }
+
+    error_log("[GEHO REQUEST] Réponse HTTP=$httpCode en {$totalTime}s | Body: " . substr($response, 0, 500));
 
     $decoded = json_decode($response, true);
     return [
