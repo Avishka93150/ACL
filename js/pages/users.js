@@ -73,12 +73,12 @@ async function loadUsers(container) {
                         </tr>
                         <tr class="${API.user.role === 'groupe_manager' ? 'table-highlight' : ''}">
                             <td><span class="badge badge-warning">Resp. Groupe</span></td>
-                            <td>Resp. Hôtel, Employés</td>
+                            <td>Resp. Hôtel, Comptabilité, RH, Réceptionnistes, Employés</td>
                             <td>Ses hôtels uniquement</td>
                         </tr>
                         <tr class="${API.user.role === 'hotel_manager' ? 'table-highlight' : ''}">
                             <td><span class="badge badge-primary">Resp. Hôtel</span></td>
-                            <td>Employés de ses hôtels</td>
+                            <td>Réceptionnistes, Employés de ses hôtels</td>
                             <td>Ses hôtels uniquement</td>
                         </tr>
                         <tr class="${API.user.role === 'employee' ? 'table-highlight' : ''}">
@@ -167,7 +167,7 @@ function getRoleDescription() {
     const role = API.user.role;
     if (role === 'admin') return 'En tant qu\'administrateur, vous pouvez gérer tous les utilisateurs.';
     if (role === 'groupe_manager') return 'Vous pouvez gérer les responsables d\'hôtels et employés de vos hôtels.';
-    if (role === 'hotel_manager') return 'Vous pouvez gérer les employés de vos hôtels.';
+    if (role === 'hotel_manager') return 'Vous pouvez gérer les réceptionnistes et employés de vos hôtels.';
     return 'Vous n\'avez pas de droits de gestion des utilisateurs.';
 }
 

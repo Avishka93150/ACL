@@ -5577,26 +5577,26 @@ try {
                          ORDER BY u.last_name, u.first_name"
                     );
                 } elseif ($user['role'] === 'groupe_manager') {
-                    // Groupe manager voit hotel_manager et employee
+                    // Groupe manager voit hotel_manager, comptabilite, rh, receptionniste et employee
                     $users = db()->query(
                         "SELECT u.id, u.email, u.first_name, u.last_name, u.phone, u.role, u.status, u.last_login, u.created_at,
                          GROUP_CONCAT(h.name SEPARATOR ', ') as hotels
                          FROM users u
                          LEFT JOIN user_hotels uh ON u.id = uh.user_id
                          LEFT JOIN hotels h ON uh.hotel_id = h.id
-                         WHERE u.role IN ('hotel_manager', 'employee')
+                         WHERE u.role IN ('hotel_manager', 'comptabilite', 'rh', 'receptionniste', 'employee')
                          GROUP BY u.id
                          ORDER BY u.last_name, u.first_name"
                     );
                 } else {
-                    // Hotel manager voit seulement les employés de ses hôtels
+                    // Hotel manager voit les réceptionnistes et employés de ses hôtels
                     $users = db()->query(
                         "SELECT u.id, u.email, u.first_name, u.last_name, u.phone, u.role, u.status, u.last_login, u.created_at,
                          GROUP_CONCAT(DISTINCT h.name SEPARATOR ', ') as hotels
                          FROM users u
                          INNER JOIN user_hotels uh ON u.id = uh.user_id
                          INNER JOIN hotels h ON uh.hotel_id = h.id
-                         WHERE u.role = 'employee' 
+                         WHERE u.role IN ('receptionniste', 'employee')
                          AND uh.hotel_id IN (SELECT hotel_id FROM user_hotels WHERE user_id = ?)
                          GROUP BY u.id
                          ORDER BY u.last_name, u.first_name",
