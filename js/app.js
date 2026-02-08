@@ -324,13 +324,17 @@ async function showApp() {
     document.getElementById('login-page').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     document.getElementById('footer-legal').style.display = 'block';
-    
+
     // Update user info
     document.getElementById('user-name').textContent = `${API.user.first_name} ${API.user.last_name}`;
     document.getElementById('user-role').textContent = LABELS.role[API.user.role] || API.user.role;
 
-    // Load user permissions first
-    await loadUserPermissions();
+    try {
+        // Load user permissions first
+        await loadUserPermissions();
+    } catch (e) {
+        console.error('Erreur chargement permissions:', e);
+    }
 
     // Hide menu items based on permissions (remplace l'ancien système data-roles)
     updateMenuByPermissions();
@@ -343,8 +347,12 @@ async function showApp() {
         }
     });
 
-    // Load modules config and hide disabled modules
-    await loadModulesConfig();
+    try {
+        // Load modules config and hide disabled modules
+        await loadModulesConfig();
+    } catch (e) {
+        console.error('Erreur chargement modules:', e);
+    }
 
     // Inject theme toggle + language selector in header
     injectHeaderControls();
@@ -368,6 +376,7 @@ async function showApp() {
         initChatbot();
     }
 
+    // Toujours naviguer vers le dashboard, même si une étape précédente échoue
     navigateTo('dashboard');
 }
 
