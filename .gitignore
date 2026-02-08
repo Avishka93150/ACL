@@ -25,3 +25,13 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Node
+node_modules/
+
+# Capacitor native builds (generated)
+ios/App/Pods/
+ios/App/App/public/
+ios/App/output/
+android/app/build/
+android/app/src/main/assets/public/
