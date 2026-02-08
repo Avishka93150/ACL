@@ -868,8 +868,8 @@ function notifyMaintenanceActivity($ticketId, $actor, $eventType, $extraMessage 
     // Envoyer les notifications en base à chaque destinataire
     foreach (array_keys($recipientIds) as $userId) {
         db()->insert(
-            "INSERT INTO notifications (user_id, type, title, message, link, created_at) VALUES (?, 'info', ?, ?, 'maintenance', NOW())",
-            [$userId, $notifTitle, substr($notifMessage, 0, 500)]
+            "INSERT INTO notifications (user_id, type, title, message, link, created_at) VALUES (?, 'info', ?, ?, ?, NOW())",
+            [$userId, $notifTitle, substr($notifMessage, 0, 500), 'maintenance:' . $ticketId]
         );
     }
 }

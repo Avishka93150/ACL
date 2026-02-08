@@ -649,11 +649,15 @@ async function longPoll() {
         const data = await response.json();
 
         if (data.has_updates) {
-            // Mettre a jour le badge de notifications
-            const badge = document.querySelector('.notification-count');
+            // Mettre a jour le badge de notifications (utiliser l'ID, pas la classe)
+            const badge = document.getElementById('notification-count');
             if (badge && data.unread_notifications !== undefined) {
-                badge.textContent = data.unread_notifications > 0 ? data.unread_notifications : '';
-                badge.style.display = data.unread_notifications > 0 ? 'flex' : 'none';
+                if (data.unread_notifications > 0) {
+                    badge.textContent = data.unread_notifications > 99 ? '99+' : data.unread_notifications;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
             }
 
             // Mettre a jour le badge de messages
@@ -661,11 +665,8 @@ async function longPoll() {
                 updateMessagesBadge();
             }
 
-            // Recharger la liste des notifications si le dropdown est ouvert
-            const dropdown = document.querySelector('.notification-dropdown.active');
-            if (dropdown) {
-                loadNotifications();
-            }
+            // Toujours recharger la liste des notifications (met à jour le dropdown)
+            loadNotifications();
 
             // Notification toast + push pour les nouvelles notifications
             if (data.notifications && data.notifications.length > 0) {
