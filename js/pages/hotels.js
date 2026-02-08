@@ -438,16 +438,55 @@ function renderTabPms(content, h) {
                         </select>
                     </div>
                     <div id="pms-fields-edit" style="${h.pms_type ? '' : 'display:none'}">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Adresse IP du serveur *</label>
-                                <input type="text" name="pms_ip" value="${esc(h.pms_ip || '')}" placeholder="Ex: 192.168.1.100">
-                            </div>
-                            <div class="form-group">
-                                <label>Port de communication *</label>
-                                <input type="number" name="pms_port" value="${h.pms_port || ''}" placeholder="Ex: 8080" min="1" max="65535">
+                        <div class="form-group">
+                            <label>Mode de connexion</label>
+                            <select name="pms_connection_mode" onchange="toggleConnectionMode(this.value)">
+                                <option value="direct" ${(h.pms_connection_mode || 'direct') === 'direct' ? 'selected' : ''}>Direct (GeHo accessible depuis le serveur)</option>
+                                <option value="relay" ${h.pms_connection_mode === 'relay' ? 'selected' : ''}>Relais (GeHo sur un PC local distant)</option>
+                            </select>
+                            <small class="form-help" style="display:block;margin-top:4px;color:#6B7280">
+                                <strong>Direct :</strong> Le serveur ACL contacte GeHo directement via IP.<br>
+                                <strong>Relais :</strong> Un agent sur le PC de l'hôtel fait le pont entre ACL et GeHo. Idéal quand GeHo est derrière un routeur/box internet.
+                            </small>
+                        </div>
+
+                        <div id="pms-direct-fields" style="${h.pms_connection_mode === 'relay' ? 'display:none' : ''}">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Adresse IP du serveur *</label>
+                                    <input type="text" name="pms_ip" value="${esc(h.pms_ip || '')}" placeholder="Ex: 192.168.1.100">
+                                </div>
+                                <div class="form-group">
+                                    <label>Port de communication *</label>
+                                    <input type="number" name="pms_port" value="${h.pms_port || ''}" placeholder="Ex: 8080" min="1" max="65535">
+                                </div>
                             </div>
                         </div>
+
+                        <div id="pms-relay-fields" style="${h.pms_connection_mode === 'relay' ? '' : 'display:none'}">
+                            <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:16px;margin-bottom:16px">
+                                <p style="font-weight:600;margin-bottom:8px"><i class="fas fa-info-circle" style="color:#2563EB"></i> Mode Relais - Comment ça marche ?</p>
+                                <ol style="font-size:13px;color:#374151;padding-left:20px;margin:0">
+                                    <li>Générez un token ci-dessous</li>
+                                    <li>Téléchargez le fichier <strong>pms-agent.php</strong> sur le PC où GeHo est installé</li>
+                                    <li>Configurez le token et l'IP locale de GeHo dans le fichier</li>
+                                    <li>Lancez l'agent : <code style="background:#E5E7EB;padding:2px 6px;border-radius:4px">php pms-agent.php</code></li>
+                                </ol>
+                            </div>
+                            <div class="form-group">
+                                <label>Token de l'agent relais</label>
+                                <div style="display:flex;gap:8px">
+                                    <input type="text" name="pms_relay_token" id="relay-token-field" value="${esc(h.pms_relay_token || '')}" readonly style="background:#F3F4F6;flex:1">
+                                    <button type="button" class="btn btn-sm btn-primary" onclick="generateRelayToken(${h.id})">
+                                        <i class="fas fa-key"></i> ${h.pms_relay_token ? 'Régénérer' : 'Générer'}
+                                    </button>
+                                    ${h.pms_relay_token ? `<button type="button" class="btn btn-sm btn-outline" onclick="copyRelayToken()"><i class="fas fa-copy"></i></button>` : ''}
+                                </div>
+                            </div>
+                            <div id="relay-status-container"></div>
+                            ${h.pms_relay_token ? `<button type="button" class="btn btn-sm btn-outline mb-10" onclick="checkRelayStatus(${h.id})"><i class="fas fa-satellite-dish"></i> Vérifier le statut de l'agent</button>` : ''}
+                        </div>
+
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Utilisateur PMS</label>
@@ -1354,6 +1393,55 @@ async function saveClosureConfig(hotelId) {
 function togglePmsFields(value, context) {
     const el = document.getElementById('pms-fields-' + context);
     if (el) el.style.display = value ? '' : 'none';
+}
+
+function toggleConnectionMode(mode) {
+    const direct = document.getElementById('pms-direct-fields');
+    const relay = document.getElementById('pms-relay-fields');
+    if (direct) direct.style.display = mode === 'relay' ? 'none' : '';
+    if (relay) relay.style.display = mode === 'relay' ? '' : 'none';
+}
+
+async function generateRelayToken(hotelId) {
+    if (!confirm('Générer un nouveau token ? L\'ancien token sera invalidé et l\'agent devra être reconfiguré.')) return;
+    try {
+        const res = await API.post('/pms-relay/generate-token', { hotel_id: hotelId });
+        const field = document.getElementById('relay-token-field');
+        if (field) field.value = res.token;
+        toast('Token généré avec succès. Copiez-le dans le fichier pms-agent.php.', 'success');
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+function copyRelayToken() {
+    const field = document.getElementById('relay-token-field');
+    if (field && field.value) {
+        navigator.clipboard.writeText(field.value);
+        toast('Token copié dans le presse-papier', 'success');
+    }
+}
+
+async function checkRelayStatus(hotelId) {
+    const container = document.getElementById('relay-status-container');
+    if (!container) return;
+    container.innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin"></i> Vérification...</span>';
+    try {
+        const res = await API.get(`/pms-relay/status?hotel_id=${hotelId}`);
+        if (res.agent_online) {
+            container.innerHTML = `<div style="background:#ECFDF5;border:1px solid #A7F3D0;border-radius:8px;padding:12px;margin-bottom:12px">
+                <span style="color:#059669;font-weight:600"><i class="fas fa-check-circle"></i> Agent connecté</span>
+                <span style="color:#6B7280;font-size:12px;margin-left:8px">Dernière activité : ${res.last_activity || '-'}</span>
+            </div>`;
+        } else {
+            container.innerHTML = `<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:12px;margin-bottom:12px">
+                <span style="color:#DC2626;font-weight:600"><i class="fas fa-times-circle"></i> Agent non connecté</span>
+                <p style="color:#6B7280;font-size:12px;margin-top:4px">Vérifiez que le script pms-agent.php est en cours d'exécution sur le PC de l'hôtel.${res.last_activity ? ' Dernière activité : ' + res.last_activity : ''}</p>
+            </div>`;
+        }
+    } catch (err) {
+        container.innerHTML = `<span class="text-danger"><i class="fas fa-times-circle"></i> ${esc(err.message)}</span>`;
+    }
 }
 
 async function testPmsConnection(hotelId) {
