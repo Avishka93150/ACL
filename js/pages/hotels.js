@@ -220,6 +220,9 @@ async function showEditHotelPage(id, tab) {
                 <button class="hotel-tab ${_editHotelTab === 'pms' ? 'active' : ''}" onclick="switchHotelTab('pms')">
                     <i class="fas fa-server"></i> PMS & Paiement
                 </button>
+                <button class="hotel-tab ${_editHotelTab === 'maintenance' ? 'active' : ''}" onclick="switchHotelTab('maintenance')">
+                    <i class="fas fa-wrench"></i> Maintenance
+                </button>
                 <button class="hotel-tab ${_editHotelTab === 'leaves' ? 'active' : ''}" onclick="switchHotelTab('leaves')">
                     <i class="fas fa-calendar-alt"></i> Congés
                 </button>
@@ -283,6 +286,7 @@ async function renderHotelTab(h, leaveConfig) {
         case 'general': renderTabGeneral(content, h); break;
         case 'booking': renderTabBooking(content, h); break;
         case 'pms': renderTabPms(content, h); break;
+        case 'maintenance': renderTabMaintenance(content, h); break;
         case 'leaves': renderTabLeaves(content, h, leaveConfig); break;
         case 'closures': renderTabClosures(content, h); break;
         case 'revenue': renderTabRevenue(content, h); break;
@@ -488,6 +492,102 @@ function renderTabPms(content, h) {
             </div>
         </div>
     `;
+}
+
+// ---- ONGLET MAINTENANCE (Alertes) ----
+async function renderTabMaintenance(content, h) {
+    content.innerHTML = '<div class="card"><div class="card-body" style="padding:24px"><div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Chargement...</div></div></div>';
+
+    let cfg = {};
+    try {
+        const res = await API.get(`hotels/${h.id}/maintenance-config`);
+        cfg = res.config || {};
+    } catch (e) {}
+
+    const notifyOnComment = cfg.notify_on_comment !== undefined ? (cfg.notify_on_comment == 1) : true;
+    const notifyOnStatusChange = cfg.notify_on_status_change !== undefined ? (cfg.notify_on_status_change == 1) : true;
+    const notifyOnResolution = cfg.notify_on_resolution !== undefined ? (cfg.notify_on_resolution == 1) : true;
+    const notifyCommenters = cfg.notify_commenters !== undefined ? (cfg.notify_commenters == 1) : true;
+    const notifyHotelManager = cfg.notify_hotel_manager !== undefined ? (cfg.notify_hotel_manager == 1) : true;
+    const notifyGroupeManager = cfg.notify_groupe_manager !== undefined ? (cfg.notify_groupe_manager == 1) : true;
+    const notifyAdmin = cfg.notify_admin !== undefined ? (cfg.notify_admin == 1) : true;
+
+    content.innerHTML = `
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-wrench"></i> Configuration des alertes maintenance</h3>
+            </div>
+            <div class="card-body" style="padding:24px">
+                <form onsubmit="saveMaintenanceConfig(event, ${h.id})">
+                    <p class="text-muted mb-20">Configurez quand et qui est notifié lors d'une activité sur les tickets de maintenance de cet hôtel.</p>
+
+                    <div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:10px;padding:20px;margin-bottom:24px">
+                        <h5 style="margin:0 0 15px 0"><i class="fas fa-bell"></i> Quand notifier ?</h5>
+                        <p class="text-muted" style="margin:0 0 12px 0;font-size:13px">Choisissez les événements qui déclenchent une notification.</p>
+                        <label class="checkbox-container" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer">
+                            <input type="checkbox" name="notify_on_comment" value="1" ${notifyOnComment ? 'checked' : ''}>
+                            <span><strong>Nouveau commentaire</strong> — Quand un commentaire est ajouté au ticket</span>
+                        </label>
+                        <label class="checkbox-container" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer">
+                            <input type="checkbox" name="notify_on_status_change" value="1" ${notifyOnStatusChange ? 'checked' : ''}>
+                            <span><strong>Prise en charge</strong> — Quand un responsable prend en charge le ticket</span>
+                        </label>
+                        <label class="checkbox-container" style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                            <input type="checkbox" name="notify_on_resolution" value="1" ${notifyOnResolution ? 'checked' : ''}>
+                            <span><strong>Résolution / Clôture</strong> — Quand le ticket est résolu</span>
+                        </label>
+                    </div>
+
+                    <div style="background:#DBEAFE;border:1px solid #93C5FD;border-radius:10px;padding:20px">
+                        <h5 style="margin:0 0 15px 0"><i class="fas fa-users"></i> Qui notifier ?</h5>
+                        <p class="text-muted" style="margin:0 0 12px 0;font-size:13px">Sélectionnez les personnes qui recevront les alertes. Le créateur du ticket et la personne assignée sont toujours notifiés.</p>
+                        <label class="checkbox-container" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer">
+                            <input type="checkbox" name="notify_commenters" value="1" ${notifyCommenters ? 'checked' : ''}>
+                            <span><strong>Commentateurs</strong> — Toute personne ayant commenté le ticket</span>
+                        </label>
+                        <label class="checkbox-container" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer">
+                            <input type="checkbox" name="notify_hotel_manager" value="1" ${notifyHotelManager ? 'checked' : ''}>
+                            <span><strong>Responsable Hôtel</strong> — Les hotel managers de cet hôtel</span>
+                        </label>
+                        <label class="checkbox-container" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer">
+                            <input type="checkbox" name="notify_groupe_manager" value="1" ${notifyGroupeManager ? 'checked' : ''}>
+                            <span><strong>Responsable Groupe</strong> — Les groupe managers</span>
+                        </label>
+                        <label class="checkbox-container" style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                            <input type="checkbox" name="notify_admin" value="1" ${notifyAdmin ? 'checked' : ''}>
+                            <span><strong>Administrateur</strong> — Tous les admins</span>
+                        </label>
+                    </div>
+
+                    <div style="text-align:right;margin-top:20px">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer la configuration</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+async function saveMaintenanceConfig(e, hotelId) {
+    e.preventDefault();
+    const form = e.target;
+
+    const config = {
+        notify_on_comment: form.querySelector('[name="notify_on_comment"]').checked ? 1 : 0,
+        notify_on_status_change: form.querySelector('[name="notify_on_status_change"]').checked ? 1 : 0,
+        notify_on_resolution: form.querySelector('[name="notify_on_resolution"]').checked ? 1 : 0,
+        notify_commenters: form.querySelector('[name="notify_commenters"]').checked ? 1 : 0,
+        notify_hotel_manager: form.querySelector('[name="notify_hotel_manager"]').checked ? 1 : 0,
+        notify_groupe_manager: form.querySelector('[name="notify_groupe_manager"]').checked ? 1 : 0,
+        notify_admin: form.querySelector('[name="notify_admin"]').checked ? 1 : 0
+    };
+
+    try {
+        await API.put(`hotels/${hotelId}/maintenance-config`, config);
+        toast('Configuration des alertes maintenance enregistrée', 'success');
+    } catch (err) {
+        toast(err.message, 'error');
+    }
 }
 
 // ---- ONGLET CONGES ----
