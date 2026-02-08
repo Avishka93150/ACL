@@ -2,12 +2,15 @@
  * Module Congés - Gestion complète avec workflow de validation
  */
 
-const TRIMESTRES = [
+// Valeurs par défaut - seront surchargées par la config hôtel
+let TRIMESTRES = [
     { id: 'T1', label: 'T1 (Jan-Mar)', start: '01-01', end: '03-31', deadline: '11-01', deadlineYear: -1 },
     { id: 'T2', label: 'T2 (Avr-Juin)', start: '04-01', end: '06-30', deadline: '02-01', deadlineYear: 0 },
     { id: 'T3', label: 'T3 (Juil-Sep)', start: '07-01', end: '09-30', deadline: '05-01', deadlineYear: 0 },
     { id: 'T4', label: 'T4 (Oct-Déc)', start: '10-01', end: '12-31', deadline: '08-01', deadlineYear: 0 }
 ];
+
+let _leaveMinDelay = 2; // mois - surchargé par config hôtel
 
 const LEAVE_TYPES = [
     { value: 'cp', label: t('leaves.paid_leave'), icon: 'umbrella-beach', color: '#3498db' },
@@ -22,6 +25,20 @@ async function loadLeaves(container) {
     try {
         const mgmtRes = await API.getManagementInfo();
         lvHotels = mgmtRes.manageable_hotels || [];
+
+        // Charger la config congés de l'hôtel courant
+        const currentHotelId = API.user.current_hotel_id || (lvHotels.length ? lvHotels[0].id : null);
+        if (currentHotelId) {
+            try {
+                const lcfg = await API.get(`hotels/${currentHotelId}/leave-config`);
+                const cfg = lcfg.config || {};
+                if (cfg.leave_min_delay !== undefined && cfg.leave_min_delay !== null) _leaveMinDelay = parseInt(cfg.leave_min_delay);
+                if (cfg.t1_deadline) TRIMESTRES[0].deadline = cfg.t1_deadline;
+                if (cfg.t2_deadline) TRIMESTRES[1].deadline = cfg.t2_deadline;
+                if (cfg.t3_deadline) TRIMESTRES[2].deadline = cfg.t3_deadline;
+                if (cfg.t4_deadline) TRIMESTRES[3].deadline = cfg.t4_deadline;
+            } catch (e) { /* utiliser les valeurs par défaut */ }
+        }
 
         const [leavesRes, pendingRes, hotelLeavesRes, hotelsRes] = await Promise.all([
             API.getLeaves(),
@@ -77,7 +94,7 @@ async function loadLeaves(container) {
                             `;
                         }).join('')}
                     </div>
-                    <p class="text-muted mt-10"><i class="fas fa-exclamation-triangle"></i> Délai standard: 2 mois avant la date de début</p>
+                    <p class="text-muted mt-10"><i class="fas fa-exclamation-triangle"></i> Délai standard: ${_leaveMinDelay} mois avant la date de début</p>
                 </div>
             </div>
 
@@ -855,7 +872,7 @@ function lvNewLeaveModal() {
             
             <div class="leave-info-box" id="leave-info-box">
                 <i class="fas fa-info-circle"></i>
-                <span>Pour les congés payés, un délai de 2 mois avant la date de début est recommandé.</span>
+                <span>Pour les congés payés, un délai de ${_leaveMinDelay} mois avant la date de début est recommandé.</span>
             </div>
             
             <div class="modal-footer">
@@ -891,7 +908,7 @@ function lvSelectLeaveType(type) {
     } else {
         justificatifSection.style.display = 'none';
         justificatifInput.required = false;
-        infoBox.innerHTML = '<i class="fas fa-info-circle"></i> <span>Pour les congés payés, un délai de 2 mois avant la date de début est recommandé.</span>';
+        infoBox.innerHTML = `<i class="fas fa-info-circle"></i> <span>Pour les congés payés, un délai de ${_leaveMinDelay} mois avant la date de début est recommandé.</span>`;
         infoBox.className = 'leave-info-box';
         
         // Restore min date for CP
@@ -981,9 +998,8 @@ function lvRemoveJustificatif(event) {
 }
 
 function lvGetMinDate() {
-    // 2 mois à partir d'aujourd'hui
     const date = new Date();
-    date.setMonth(date.getMonth() + 2);
+    date.setMonth(date.getMonth() + _leaveMinDelay);
     return date.toISOString().split('T')[0];
 }
 
@@ -1002,14 +1018,14 @@ async function lvCreateLeave(e) {
         }
     }
 
-    // Vérifier le délai de 2 mois pour les CP uniquement
-    if (leaveType === 'cp') {
+    // Vérifier le délai minimum pour les CP uniquement
+    if (leaveType === 'cp' && _leaveMinDelay > 0) {
         const startDate = new Date(formData.get('start_date'));
         const minDate = new Date();
-        minDate.setMonth(minDate.getMonth() + 2);
+        minDate.setMonth(minDate.getMonth() + _leaveMinDelay);
 
         if (startDate < minDate && !['admin', 'groupe_manager', 'hotel_manager'].includes(API.user.role)) {
-            toast('Délai de 2 mois non respecté pour les congés payés', 'error');
+            toast(`Délai de ${_leaveMinDelay} mois non respecté pour les congés payés`, 'error');
             return;
         }
     }
