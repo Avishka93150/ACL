@@ -389,8 +389,7 @@ function updateMenuByPermissions() {
         'hotels': 'hotels.view',
         'revenue': 'revenue.view',
         'settings': 'permissions.manage',
-        'reports': 'reports.access',
-        'notification-manager': 'notifications.manage'
+        'reports': 'reports.access'
     };
 
     document.querySelectorAll('.nav-item[data-page]').forEach(item => {
@@ -443,8 +442,7 @@ function navigateTo(page) {
         'hotels': 'hotels.view',
         'revenue': 'revenue.view',
         'settings': 'permissions.manage',
-        'reports': 'reports.access',
-        'notification-manager': 'notifications.manage'
+        'reports': 'reports.access'
     };
 
     const requiredPerm = pagePermissions[page];
@@ -479,8 +477,7 @@ function navigateTo(page) {
         rgpd: 'RGPD',
         messages: 'Messagerie',
         users: 'Utilisateurs',
-        settings: 'Paramètres',
-        'notification-manager': 'Gestion des Notifications'
+        settings: 'Paramètres'
     };
     document.getElementById('page-title').textContent = titles[page] || page;
 
@@ -507,7 +504,6 @@ function loadPage(page) {
         case 'messages': loadMessages(container); break;
         case 'users': loadUsers(container); break;
         case 'settings': loadSettings(container); break;
-        case 'notification-manager': loadNotificationManager(container); break;
         default: container.innerHTML = '<div class="card"><p>Page non trouvée</p></div>';
     }
 }

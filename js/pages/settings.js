@@ -364,7 +364,15 @@ async function loadSettings(container) {
                     `).join('')}
                 </div>
             </div>
+
+            <!-- Section Gestion des Notifications -->
+            <div id="settings-notifications-section"></div>
         `;
+
+        // Charger le module de gestion des notifications
+        if (typeof loadNotificationManager === 'function') {
+            loadNotificationManager(document.getElementById('settings-notifications-section'));
+        }
     } catch (error) {
         container.innerHTML = `<div class="card"><p class="text-danger">${t('common.error')}: ${error.message}</p></div>`;
     }
