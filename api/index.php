@@ -1758,7 +1758,7 @@ try {
                 }
 
                 $id = db()->insert(
-                    "INSERT INTO hotels (name, address, city, postal_code, phone, email, stars, total_floors, checkin_time, checkout_time, pms_type, pms_ip, pms_port, pms_api_key, pms_username, pms_password, stripe_public_key, stripe_secret_key, stripe_webhook_secret, booking_enabled, booking_slug, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())",
+                    "INSERT INTO hotels (name, address, city, postal_code, phone, email, stars, total_floors, checkin_time, checkout_time, category, pms_type, pms_ip, pms_port, pms_api_key, pms_username, pms_password, stripe_public_key, stripe_secret_key, stripe_webhook_secret, booking_enabled, booking_slug, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())",
                     [
                         $data['name'],
                         $data['address'] ?? '',
@@ -1770,6 +1770,7 @@ try {
                         $data['total_floors'] ?? 1,
                         $data['checkin_time'] ?? '15:00:00',
                         $data['checkout_time'] ?? '11:00:00',
+                        $data['category'] ?? null,
                         $data['pms_type'] ?? null,
                         $data['pms_ip'] ?? null,
                         !empty($data['pms_port']) ? (int)$data['pms_port'] : null,
@@ -1808,6 +1809,7 @@ try {
                 if (isset($data['checkin_time'])) { $sets[] = "checkin_time = ?"; $params[] = $data['checkin_time']; }
                 if (isset($data['checkout_time'])) { $sets[] = "checkout_time = ?"; $params[] = $data['checkout_time']; }
                 if (isset($data['status'])) { $sets[] = "status = ?"; $params[] = $data['status']; }
+                if (isset($data['category'])) { $sets[] = "category = ?"; $params[] = $data['category'] ?: null; }
 
                 // Xotelo hotel key
                 if (isset($data['xotelo_hotel_key'])) {
@@ -1848,6 +1850,58 @@ try {
                 json_out(['success' => true]);
             }
             
+            // GET /hotels/{id}/leave-config - Configuration congés de l'hôtel
+            if ($method === 'GET' && $id && is_numeric($id) && $action === 'leave-config') {
+                require_auth();
+                try {
+                    $config = db()->queryOne("SELECT * FROM hotel_leave_config WHERE hotel_id = ?", [$id]);
+                } catch (Exception $e) {
+                    $config = null;
+                }
+                json_out(['success' => true, 'config' => $config ?: new stdClass()]);
+            }
+
+            // PUT /hotels/{id}/leave-config - Sauvegarder configuration congés
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'leave-config') {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin', 'groupe_manager'])) json_error('Permission refusée', 403);
+
+                $data = get_input();
+                $existing = null;
+                try {
+                    $existing = db()->queryOne("SELECT id FROM hotel_leave_config WHERE hotel_id = ?", [$id]);
+                } catch (Exception $e) {}
+
+                if ($existing) {
+                    db()->execute(
+                        "UPDATE hotel_leave_config SET leave_min_delay = ?, default_annual_days = ?, t1_deadline = ?, t2_deadline = ?, t3_deadline = ?, t4_deadline = ?, updated_at = NOW() WHERE hotel_id = ?",
+                        [
+                            (int)($data['leave_min_delay'] ?? 2),
+                            (int)($data['default_annual_days'] ?? 25),
+                            $data['t1_deadline'] ?? '11-01',
+                            $data['t2_deadline'] ?? '02-01',
+                            $data['t3_deadline'] ?? '05-01',
+                            $data['t4_deadline'] ?? '08-01',
+                            $id
+                        ]
+                    );
+                } else {
+                    db()->insert(
+                        "INSERT INTO hotel_leave_config (hotel_id, leave_min_delay, default_annual_days, t1_deadline, t2_deadline, t3_deadline, t4_deadline, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
+                        [
+                            $id,
+                            (int)($data['leave_min_delay'] ?? 2),
+                            (int)($data['default_annual_days'] ?? 25),
+                            $data['t1_deadline'] ?? '11-01',
+                            $data['t2_deadline'] ?? '02-01',
+                            $data['t3_deadline'] ?? '05-01',
+                            $data['t4_deadline'] ?? '08-01'
+                        ]
+                    );
+                }
+                json_out(['success' => true]);
+            }
+
             // GET /hotels/check-slug?slug=xxx&exclude_id=Y - Vérifier unicité du slug
             if ($method === 'GET' && $id === 'check-slug') {
                 require_auth();
@@ -4299,12 +4353,28 @@ try {
                 $quarter = 'T' . ceil($start->format('n') / 3);
                 $year = $start->format('Y');
                 
-                // Vérifier le délai de 2 mois UNIQUEMENT pour les congés payés
+                // Vérifier le délai minimum UNIQUEMENT pour les congés payés
                 if ($leaveType === 'cp' && !in_array($user['role'], ['admin', 'groupe_manager', 'hotel_manager'])) {
-                    $minDate = new DateTime();
-                    $minDate->modify('+2 months');
-                    if ($start < $minDate) {
-                        json_error('Les congés payés doivent être posés au minimum 2 mois à l\'avance');
+                    // Charger la config congés de l'hôtel (si disponible)
+                    $leaveMinDelay = 2; // défaut: 2 mois
+                    $hotelId = $data['hotel_id'] ?? null;
+                    if (!$hotelId && !empty($user['hotel_ids'])) {
+                        $hotelId = $user['hotel_ids'][0];
+                    }
+                    if ($hotelId) {
+                        try {
+                            $lcfg = db()->queryOne("SELECT leave_min_delay FROM hotel_leave_config WHERE hotel_id = ?", [$hotelId]);
+                            if ($lcfg && $lcfg['leave_min_delay'] !== null) {
+                                $leaveMinDelay = (int)$lcfg['leave_min_delay'];
+                            }
+                        } catch (Exception $e) {}
+                    }
+                    if ($leaveMinDelay > 0) {
+                        $minDate = new DateTime();
+                        $minDate->modify("+{$leaveMinDelay} months");
+                        if ($start < $minDate) {
+                            json_error("Les congés payés doivent être posés au minimum {$leaveMinDelay} mois à l'avance");
+                        }
                     }
                 }
                 
@@ -4602,12 +4672,26 @@ try {
                     json_error('Trimestre requis (T1, T2, T3 ou T4)');
                 }
                 
+                // Charger les deadlines configurées pour l'hôtel (sinon valeurs par défaut)
+                $t1d = '11-01'; $t2d = '02-01'; $t3d = '05-01'; $t4d = '08-01';
+                if ($hotelId) {
+                    try {
+                        $lcfg = db()->queryOne("SELECT t1_deadline, t2_deadline, t3_deadline, t4_deadline FROM hotel_leave_config WHERE hotel_id = ?", [$hotelId]);
+                        if ($lcfg) {
+                            if (!empty($lcfg['t1_deadline'])) $t1d = $lcfg['t1_deadline'];
+                            if (!empty($lcfg['t2_deadline'])) $t2d = $lcfg['t2_deadline'];
+                            if (!empty($lcfg['t3_deadline'])) $t3d = $lcfg['t3_deadline'];
+                            if (!empty($lcfg['t4_deadline'])) $t4d = $lcfg['t4_deadline'];
+                        }
+                    } catch (Exception $e) {}
+                }
+
                 // Définir les dates du trimestre et la deadline
                 $quarterDates = [
-                    'T1' => ['start' => "$year-01-01", 'end' => "$year-03-31", 'deadline' => ($year - 1) . "-11-01"],
-                    'T2' => ['start' => "$year-04-01", 'end' => "$year-06-30", 'deadline' => "$year-02-01"],
-                    'T3' => ['start' => "$year-07-01", 'end' => "$year-09-30", 'deadline' => "$year-05-01"],
-                    'T4' => ['start' => "$year-10-01", 'end' => "$year-12-31", 'deadline' => "$year-08-01"]
+                    'T1' => ['start' => "$year-01-01", 'end' => "$year-03-31", 'deadline' => ($year - 1) . "-$t1d"],
+                    'T2' => ['start' => "$year-04-01", 'end' => "$year-06-30", 'deadline' => "$year-$t2d"],
+                    'T3' => ['start' => "$year-07-01", 'end' => "$year-09-30", 'deadline' => "$year-$t3d"],
+                    'T4' => ['start' => "$year-10-01", 'end' => "$year-12-31", 'deadline' => "$year-$t4d"]
                 ];
                 
                 $qInfo = $quarterDates[$quarter];

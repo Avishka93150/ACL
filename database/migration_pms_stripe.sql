@@ -79,3 +79,26 @@ ALTER TABLE pms_bookings ADD COLUMN nb_adult TINYINT UNSIGNED DEFAULT 1 COMMENT 
 ALTER TABLE pms_bookings ADD COLUMN nb_child TINYINT UNSIGNED DEFAULT 0 COMMENT 'Nombre enfants';
 ALTER TABLE pms_bookings ADD COLUMN extras_amount DECIMAL(10,2) DEFAULT 0 COMMENT 'Montant extras/produits';
 ALTER TABLE pms_bookings ADD COLUMN extras_json TEXT DEFAULT NULL COMMENT 'Détail extras sélectionnés (JSON)';
+
+-- =============================================
+-- Migration: Catégorie hôtel + Config congés par hôtel
+-- =============================================
+
+-- Catégorie d'hôtel
+ALTER TABLE hotels ADD COLUMN category VARCHAR(50) DEFAULT NULL COMMENT 'Catégorie: urban, resort, business, boutique, budget, luxury, apart, residence';
+
+-- Table de configuration des congés par hôtel
+CREATE TABLE IF NOT EXISTS hotel_leave_config (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    hotel_id INT UNSIGNED NOT NULL,
+    leave_min_delay INT UNSIGNED DEFAULT 2 COMMENT 'Délai minimum en mois pour poser un CP',
+    default_annual_days INT UNSIGNED DEFAULT 25 COMMENT 'Solde annuel de CP par défaut',
+    t1_deadline VARCHAR(5) DEFAULT '11-01' COMMENT 'Date limite dépôt T1 (MM-DD)',
+    t2_deadline VARCHAR(5) DEFAULT '02-01' COMMENT 'Date limite dépôt T2 (MM-DD)',
+    t3_deadline VARCHAR(5) DEFAULT '05-01' COMMENT 'Date limite dépôt T3 (MM-DD)',
+    t4_deadline VARCHAR(5) DEFAULT '08-01' COMMENT 'Date limite dépôt T4 (MM-DD)',
+    created_at DATETIME,
+    updated_at DATETIME,
+    UNIQUE KEY unique_hotel (hotel_id),
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
