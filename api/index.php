@@ -8945,6 +8945,11 @@ try {
                         "SELECT * FROM pms_bookings WHERE booking_ref = ? AND hotel_id = ?",
                         [$data['booking_ref'], $hotel['id']]
                     );
+                } elseif (!empty($data['last_name'])) {
+                    $localBooking = db()->queryOne(
+                        "SELECT * FROM pms_bookings WHERE guest_last_name = ? AND hotel_id = ? AND status IN ('confirmed', 'pending') ORDER BY created_at DESC",
+                        [$data['last_name'], $hotel['id']]
+                    );
                 } elseif (!empty($data['email'])) {
                     $localBooking = db()->queryOne(
                         "SELECT * FROM pms_bookings WHERE guest_email = ? AND hotel_id = ? AND status IN ('confirmed', 'pending') ORDER BY created_at DESC",
