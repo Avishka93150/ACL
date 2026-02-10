@@ -8520,7 +8520,7 @@ try {
                 $ota = isset($_GET['ota']) ? $_GET['ota'] : null;
 
                 $where = "(g.xotelo_hotel_key = h.xotelo_hotel_key OR hc.id IS NOT NULL) AND g.check_date = ? AND g.currency = ?";
-                $params = [$hotelId, $hotelId, $checkDate, $currency];
+                $params = [$hotelId, $checkDate, $currency];
 
                 if ($sourceKey && $sourceKey !== 'all') {
                     if ($sourceKey === 'own') {
