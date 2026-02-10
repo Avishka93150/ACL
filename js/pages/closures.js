@@ -873,7 +873,7 @@ async function renderCashTracking(container, month, year) {
             
             <div class="card">
                 <div class="card-header">
-                    <h4><i class="fas fa-table"></i> Suivi Caisse - ${getMonthName(month)} ${year}</h4>
+                    <h4><i class="fas fa-table"></i> Suivi Espèces - ${getMonthName(month)} ${year}</h4>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -918,7 +918,7 @@ async function renderCashTracking(container, month, year) {
                                         ${row.has_closure ? `onclick="goToClosureEdit('${row.date}')" title="Cliquer pour ${canEdit ? 'modifier' : 'voir'} la clôture"` : ''}>
                                         <td class="date-cell">${formatDateShort(row.date)}</td>
                                         <td class="amount-cell ${enc > 0 ? 'text-success' : ''}">${enc > 0 ? '+' + formatMoney(enc) : '-'}</td>
-                                        <td class="amount-cell ${rem > 0 ? 'text-warning' : ''}">${rem > 0 ? '-' + formatMoney(rem) : '-'}</td>
+                                        <td class="amount-cell ${rem > 0 ? 'text-warning' : ''}">${rem > 0 ? `<a href="javascript:void(0)" class="remise-link" onclick="event.stopPropagation(); showRemiseDetail('${row.date}')" title="Cliquer pour voir le détail de la remise">-${formatMoney(rem)}</a>` : '-'}</td>
                                         <td class="amount-cell ${dep > 0 ? 'text-danger' : ''}">${dep > 0 ? '-' + formatMoney(dep) : '-'}</td>
                                         <td class="amount-cell">${totalDecaisse > 0 ? '-' + formatMoney(totalDecaisse) : '-'}</td>
                                         <td class="amount-cell ${reste >= 0 ? 'text-success' : 'text-danger'}">${hasData ? formatMoney(reste) : '-'}</td>
@@ -949,6 +949,51 @@ async function renderCashTracking(container, month, year) {
 // Rediriger vers la clôture pour modification
 function goToClosureEdit(date) {
     closureOpenDailyForm(date);
+}
+
+// Afficher le détail d'une remise banque dans une modale
+async function showRemiseDetail(date) {
+    try {
+        const res = await API.get(`/closures/cash-tracking-row?hotel_id=${closureSelectedHotel}&date=${date}`);
+        const row = res.row || {};
+        const remise = parseFloat(row.remise_banque) || 0;
+        const justificatif = row.remise_justificatif || null;
+        const commentaire = row.commentaire || '';
+
+        openModal('Détail Remise Banque', `
+            <div class="remise-detail-modal">
+                <div class="remise-detail-row">
+                    <span class="remise-detail-label"><i class="fas fa-calendar"></i> Date</span>
+                    <span class="remise-detail-value">${formatDateLong(date)}</span>
+                </div>
+                <div class="remise-detail-row">
+                    <span class="remise-detail-label"><i class="fas fa-euro-sign"></i> Montant remis</span>
+                    <span class="remise-detail-value remise-amount">${formatMoney(remise)}</span>
+                </div>
+                ${commentaire ? `
+                    <div class="remise-detail-row">
+                        <span class="remise-detail-label"><i class="fas fa-comment"></i> Commentaire</span>
+                        <span class="remise-detail-value">${esc(commentaire)}</span>
+                    </div>
+                ` : ''}
+                <div class="remise-detail-row">
+                    <span class="remise-detail-label"><i class="fas fa-file-pdf text-danger"></i> Preuve de dépôt</span>
+                    <span class="remise-detail-value">
+                        ${justificatif ? `
+                            <a href="${esc(justificatif)}" target="_blank" class="btn btn-sm btn-primary">
+                                <i class="fas fa-external-link-alt"></i> Voir le justificatif
+                            </a>
+                        ` : '<span class="text-muted">Aucun justificatif</span>'}
+                    </span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Fermer</button>
+            </div>
+        `);
+    } catch (e) {
+        toast('Erreur lors du chargement du détail', 'error');
+    }
 }
 
 async function refreshCashTracking() {
@@ -1225,52 +1270,141 @@ function formatMoney(amount) {
 function showBankDepositModal() {
     const today = new Date().toISOString().split('T')[0];
     openModal(t('closures.deposit'), `
-        <form onsubmit="saveBankDeposit(event)">
+        <form id="bank-deposit-form" onsubmit="saveBankDeposit(event)" enctype="multipart/form-data">
             <div class="form-group">
                 <label><i class="fas fa-calendar"></i> ${t('closures.deposit_date')} *</label>
-                <input type="date" name="deposit_date" value="${today}" required class="form-control">
+                <input type="date" name="date" value="${today}" required class="form-control">
             </div>
             <div class="form-group">
                 <label><i class="fas fa-euro-sign"></i> ${t('closures.deposit_amount')} *</label>
                 <div class="input-group">
-                    <input type="number" name="amount" step="0.01" min="0.01" required class="form-control" placeholder="0.00">
+                    <input type="number" name="montant" step="0.01" min="0.01" required class="form-control" placeholder="0.00">
                     <span class="input-group-text">€</span>
                 </div>
             </div>
             <div class="form-group">
-                <label><i class="fas fa-file-alt"></i> ${t('closures.deposit_ref')}</label>
-                <input type="text" name="reference" class="form-control" placeholder="Ex: BOR-2025-001">
+                <label><i class="fas fa-file-pdf text-danger"></i> Preuve de dépôt (PDF) * <span class="badge badge-danger">Obligatoire</span></label>
+                <div class="deposit-upload-zone" id="deposit-upload-zone"
+                     onclick="document.getElementById('deposit-justificatif').click()"
+                     ondragover="event.preventDefault(); this.classList.add('drag-over')"
+                     ondragleave="this.classList.remove('drag-over')"
+                     ondrop="handleDepositDrop(event)">
+                    <div class="dropzone-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                    <div class="dropzone-text">
+                        <span class="dropzone-main">Glissez votre preuve de dépôt ici</span>
+                        <span class="dropzone-sub">ou cliquez pour sélectionner</span>
+                    </div>
+                    <div class="dropzone-formats">PDF uniquement (max 10Mo)</div>
+                </div>
+                <input type="file" id="deposit-justificatif" name="justificatif" accept=".pdf" required
+                       class="file-input-hidden" onchange="updateDepositFilePreview(this)">
+                <div id="deposit-file-selected" style="display: none;" class="deposit-file-preview">
+                    <div class="selected-file">
+                        <i class="fas fa-file-pdf text-danger"></i>
+                        <span id="deposit-file-name"></span>
+                    </div>
+                    <button type="button" class="btn-remove-file" onclick="removeDepositFile()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
             </div>
             <div class="form-group">
                 <label><i class="fas fa-comment"></i> ${t('closures.notes')}</label>
-                <textarea name="notes" rows="2" class="form-control" placeholder="Notes optionnelles..."></textarea>
+                <textarea name="commentaire" rows="2" class="form-control" placeholder="Notes optionnelles..."></textarea>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline" onclick="closeModal()">${t('common.cancel')}</button>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> ${t('common.save')}</button>
+                <button type="submit" class="btn btn-primary" id="deposit-submit-btn"><i class="fas fa-check"></i> ${t('common.save')}</button>
             </div>
         </form>
     `);
 }
 
+function handleDepositDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    document.getElementById('deposit-upload-zone')?.classList.remove('drag-over');
+    const files = event.dataTransfer.files;
+    if (files.length > 0) {
+        const file = files[0];
+        if (!file.name.toLowerCase().endsWith('.pdf')) {
+            toast('Seuls les fichiers PDF sont acceptés', 'error');
+            return;
+        }
+        const input = document.getElementById('deposit-justificatif');
+        if (input) {
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            input.files = dataTransfer.files;
+            updateDepositFilePreview(input);
+        }
+    }
+}
+
+function updateDepositFilePreview(input) {
+    const uploadZone = document.getElementById('deposit-upload-zone');
+    const selectedDiv = document.getElementById('deposit-file-selected');
+    const fileNameSpan = document.getElementById('deposit-file-name');
+
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        if (!file.name.toLowerCase().endsWith('.pdf')) {
+            toast('Seuls les fichiers PDF sont acceptés', 'error');
+            input.value = '';
+            return;
+        }
+        if (uploadZone) uploadZone.style.display = 'none';
+        if (selectedDiv) selectedDiv.style.display = 'flex';
+        if (fileNameSpan) fileNameSpan.textContent = `${file.name} (${formatFileSize(file.size)})`;
+    }
+}
+
+function removeDepositFile() {
+    const input = document.getElementById('deposit-justificatif');
+    const uploadZone = document.getElementById('deposit-upload-zone');
+    const selectedDiv = document.getElementById('deposit-file-selected');
+
+    if (input) input.value = '';
+    if (uploadZone) uploadZone.style.display = '';
+    if (selectedDiv) selectedDiv.style.display = 'none';
+}
+
 async function saveBankDeposit(e) {
     e.preventDefault();
-    const form = e.target;
-    const data = {
-        hotel_id: closureSelectedHotel,
-        deposit_date: form.deposit_date.value,
-        amount: parseFloat(form.amount.value),
-        reference: form.reference.value,
-        notes: form.notes.value
-    };
-    
+    const form = document.getElementById('bank-deposit-form');
+    if (!form) return;
+
+    const justificatif = form.querySelector('[name="justificatif"]')?.files[0];
+    if (!justificatif) {
+        toast('La preuve de dépôt (PDF) est obligatoire', 'error');
+        return;
+    }
+
+    if (!justificatif.name.toLowerCase().endsWith('.pdf')) {
+        toast('Seuls les fichiers PDF sont acceptés comme preuve de dépôt', 'error');
+        return;
+    }
+
+    const formData = new FormData(form);
+    formData.append('hotel_id', closureSelectedHotel);
+
+    const submitBtn = document.getElementById('deposit-submit-btn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
+    }
+
     try {
-        await API.post('/closures/bank-deposits', data);
+        await API.postForm('closures/remise-banque', formData);
         toast(t('closures.created'), 'success');
         closeModal();
         refreshCashTracking();
     } catch (error) {
         toast(error.message, 'error');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-check"></i> ' + t('common.save');
+        }
     }
 }
 

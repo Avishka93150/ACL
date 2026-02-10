@@ -4914,6 +4914,99 @@ input:checked + .slider:before {
 /* Summary card orange */
 .summary-card .summary-icon.orange { background: linear-gradient(135deg, #f39c12 0%, #d68910 100%); }
 
+/* Remise banque link in cash table */
+.remise-link {
+    color: #e67e22;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    border-bottom: 1px dashed #e67e22;
+    transition: all 0.2s ease;
+    font-family: 'Courier New', monospace;
+}
+.remise-link:hover {
+    color: #d35400;
+    border-bottom-color: #d35400;
+    border-bottom-style: solid;
+}
+
+/* Remise detail modal */
+.remise-detail-modal {
+    padding: 10px 0;
+}
+.remise-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+.remise-detail-row:last-child {
+    border-bottom: none;
+}
+.remise-detail-label {
+    font-weight: 500;
+    color: #555;
+}
+.remise-detail-label i {
+    width: 20px;
+    margin-right: 8px;
+}
+.remise-detail-value {
+    font-weight: 500;
+}
+.remise-detail-value.remise-amount {
+    font-size: 1.2rem;
+    color: #e67e22;
+    font-weight: 700;
+}
+
+/* Bank deposit upload zone in modal */
+.deposit-upload-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    border: 2px dashed #bdc3c7;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: #fafafa;
+    min-height: 100px;
+}
+.deposit-upload-zone:hover {
+    border-color: #e74c3c;
+    background: #fff5f5;
+}
+.deposit-upload-zone.drag-over {
+    border-color: #e74c3c;
+    background: #ffeaea;
+}
+.deposit-upload-zone .dropzone-icon {
+    font-size: 2rem;
+    color: #bdc3c7;
+    margin-bottom: 10px;
+}
+.deposit-upload-zone:hover .dropzone-icon {
+    color: #e74c3c;
+}
+.deposit-file-preview {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    background: #f0fff4;
+    border: 1px solid #27ae60;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+.deposit-file-preview .selected-file {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+}
 
 /* ==================== DOCUMENT UPLOAD CARDS ==================== */
 .documents-upload-grid {
