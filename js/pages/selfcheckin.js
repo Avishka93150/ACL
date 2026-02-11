@@ -124,7 +124,7 @@ async function scRenderReservations(content) {
 
         _scReservations = resData.reservations || [];
         _scLockers = lockersData.lockers || [];
-        _scRooms = roomsData.rooms || [];
+        _scRooms = (roomsData.hotel && roomsData.hotel.rooms) || roomsData.rooms || [];
 
         content.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
@@ -206,9 +206,9 @@ function scFilterReservations() {
                             <td>${r.checkin_date ? formatDate(r.checkin_date) : '-'}</td>
                             <td>${r.room_number ? '<i class="fas fa-bed"></i> ' + esc(r.room_number) : '-'}</td>
                             <td>${r.locker_number ? '<i class="fas fa-lock"></i> ' + esc(r.locker_number) + (r.locker_code ? ' <small style="color:var(--gray-400)">(' + esc(r.locker_code) + ')</small>' : '') : '-'}</td>
-                            <td>${formatCurrency(r.total_amount || 0)}</td>
-                            <td>${r.deposit_amount > 0 ? formatCurrency(r.deposit_amount) : '-'}</td>
-                            <td><strong>${formatCurrency(r.remaining_amount || 0)}</strong></td>
+                            <td>${formatMoney(r.total_amount || 0)}</td>
+                            <td>${r.deposit_amount > 0 ? formatMoney(r.deposit_amount) : '-'}</td>
+                            <td><strong>${formatMoney(r.remaining_amount || 0)}</strong></td>
                             <td>${scStatusBadge(r.status, r.payment_status)}</td>
                             <td>
                                 <div style="display:flex;gap:4px">
@@ -625,9 +625,9 @@ async function scRenderPricing(content) {
 
             <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:12px;margin-bottom:16px">
                 <strong>Valeurs par défaut :</strong>
-                Nuit : <strong>${formatCurrency(defaults.default_night_price || 0)}</strong> |
-                Petit-déj : <strong>${formatCurrency(defaults.default_breakfast_price || 0)}</strong>/pers |
-                Taxe séjour : <strong>${formatCurrency(defaults.default_tourist_tax || 0)}</strong>/adulte |
+                Nuit : <strong>${formatMoney(defaults.default_night_price || 0)}</strong> |
+                Petit-déj : <strong>${formatMoney(defaults.default_breakfast_price || 0)}</strong>/pers |
+                Taxe séjour : <strong>${formatMoney(defaults.default_tourist_tax || 0)}</strong>/adulte |
                 PDJ : ${defaults.breakfast_start || '07:00'} - ${defaults.breakfast_end || '10:30'}
             </div>
 
@@ -660,9 +660,9 @@ async function scRenderPricing(content) {
                                 <tr style="${isToday ? 'background:#FFFBEB;font-weight:500' : isWeekend ? 'background:#F8FAFC' : ''}">
                                     <td>${isToday ? '<strong>Aujourd\'hui</strong>' : formatDate(dateStr)}</td>
                                     <td><span style="${isWeekend ? 'color:#DC2626;font-weight:600' : ''}">${dayName}</span></td>
-                                    <td>${p ? '<strong>' + formatCurrency(p.night_price) + '</strong>' : '<span class="text-muted">' + formatCurrency(defaults.default_night_price || 0) + '</span>'}</td>
-                                    <td>${p ? formatCurrency(p.breakfast_price) : '<span class="text-muted">' + formatCurrency(defaults.default_breakfast_price || 0) + '</span>'}</td>
-                                    <td>${p ? formatCurrency(p.tourist_tax) : '<span class="text-muted">' + formatCurrency(defaults.default_tourist_tax || 0) + '</span>'}</td>
+                                    <td>${p ? '<strong>' + formatMoney(p.night_price) + '</strong>' : '<span class="text-muted">' + formatMoney(defaults.default_night_price || 0) + '</span>'}</td>
+                                    <td>${p ? formatMoney(p.breakfast_price) : '<span class="text-muted">' + formatMoney(defaults.default_breakfast_price || 0) + '</span>'}</td>
+                                    <td>${p ? formatMoney(p.tourist_tax) : '<span class="text-muted">' + formatMoney(defaults.default_tourist_tax || 0) + '</span>'}</td>
                                     <td>${p ? (p.breakfast_start || '-') + ' - ' + (p.breakfast_end || '-') : '<span class="text-muted">défaut</span>'}</td>
                                     <td>${p && p.notes ? '<small>' + esc(p.notes) + '</small>' : ''}</td>
                                     <td>
