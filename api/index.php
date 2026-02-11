@@ -9366,6 +9366,7 @@ try {
                         [$data['locker_id'], $hotelId]
                     );
                     if (!$locker) json_error('Casier non trouvé');
+                    if ($locker['status'] !== 'available') json_error('Ce casier n\'est pas disponible');
                     $lockerId = $locker['id'];
                     $lockerNumber = $locker['locker_number'];
                     // Code : utiliser celui fourni dans la requête, sinon le code courant du casier
@@ -9407,6 +9408,11 @@ try {
                     'created_by' => $user['id']
                 ]);
 
+                // Marquer le casier comme assigné
+                if ($lockerId) {
+                    db()->execute("UPDATE hotel_lockers SET status = 'assigned', updated_at = NOW() WHERE id = ?", [$lockerId]);
+                }
+
                 json_out(['id' => $insertId, 'reservation_number' => $resNumber, 'message' => 'Réservation créée'], 201);
             }
 
@@ -9446,12 +9452,16 @@ try {
                             "SELECT * FROM hotel_lockers WHERE id = ? AND hotel_id = ?",
                             [$data['locker_id'], $reservation['hotel_id']]
                         );
-                        if ($locker) {
-                            $fields[] = "locker_id = ?"; $params[] = $locker['id'];
-                            $fields[] = "locker_number = ?"; $params[] = $locker['locker_number'];
-                            // Code : utiliser celui fourni ou le code courant du casier
-                            $fields[] = "locker_code = ?"; $params[] = !empty($data['locker_code']) ? $data['locker_code'] : $locker['locker_code'];
+                        if (!$locker) json_error('Casier non trouvé');
+                        if ($locker['status'] !== 'available' && $locker['id'] != $reservation['locker_id']) {
+                            json_error('Ce casier n\'est pas disponible');
                         }
+                        $fields[] = "locker_id = ?"; $params[] = $locker['id'];
+                        $fields[] = "locker_number = ?"; $params[] = $locker['locker_number'];
+                        // Code : utiliser celui fourni ou le code courant du casier
+                        $fields[] = "locker_code = ?"; $params[] = !empty($data['locker_code']) ? $data['locker_code'] : $locker['locker_code'];
+                        // Marquer le nouveau casier comme assigné
+                        db()->execute("UPDATE hotel_lockers SET status = 'assigned', updated_at = NOW() WHERE id = ?", [$locker['id']]);
                     } else {
                         $fields[] = "locker_id = ?"; $params[] = null;
                         $fields[] = "locker_number = ?"; $params[] = null;
@@ -9460,6 +9470,13 @@ try {
                 } elseif (isset($data['locker_code'])) {
                     // Mise à jour du code seul (sans changer de casier)
                     $fields[] = "locker_code = ?"; $params[] = $data['locker_code'];
+                }
+
+                // Libérer le casier si la réservation passe en statut terminal
+                if (isset($data['status']) && in_array($data['status'], ['cancelled', 'checked_out', 'no_show'])) {
+                    if ($reservation['locker_id']) {
+                        db()->execute("UPDATE hotel_lockers SET status = 'available', updated_at = NOW() WHERE id = ?", [$reservation['locker_id']]);
+                    }
                 }
 
                 // Recalculer le reste à payer

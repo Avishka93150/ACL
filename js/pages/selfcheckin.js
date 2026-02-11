@@ -357,7 +357,9 @@ function scShowCreateReservation(type) {
                     <select name="locker_id" required onchange="scOnLockerChange(this)">
                         <option value="">-- Sélectionner --</option>
                         ${availableLockers.map(l => `<option value="${l.id}" data-code="${esc(l.locker_code)}">${l.locker_number}</option>`).join('')}
+                        ${_scLockers.filter(l => l.status !== 'available').map(l => `<option value="${l.id}" disabled data-code="${esc(l.locker_code)}">${l.locker_number} (${l.status === 'assigned' ? 'assigné' : 'maintenance'})</option>`).join('')}
                     </select>
+                    ${_scLockers.length === 0 ? '<small class="form-help" style="color:var(--danger)">Aucun casier configuré. Configurez-les dans Hôtels > Self Check-in.</small>' : availableLockers.length === 0 ? '<small class="form-help" style="color:var(--warning)">Tous les casiers sont occupés. Libérez un casier en annulant ou complétant une réservation existante.</small>' : ''}
                 </div>
             </div>
             <div class="form-group">
@@ -525,6 +527,7 @@ async function scEditReservation(id) {
                         <select name="locker_id" onchange="scOnLockerChange(this)">
                             <option value="">-- Aucun --</option>
                             ${availableLockers.map(l => `<option value="${l.id}" data-code="${esc(l.locker_code)}" ${l.id == reservation.locker_id ? 'selected' : ''}>${l.locker_number}</option>`).join('')}
+                            ${_scLockers.filter(l => l.status !== 'available' && l.id != reservation.locker_id).map(l => `<option value="${l.id}" disabled data-code="${esc(l.locker_code)}">${l.locker_number} (${l.status === 'assigned' ? 'assigné' : 'maintenance'})</option>`).join('')}
                         </select>
                     </div>
                 </div>
