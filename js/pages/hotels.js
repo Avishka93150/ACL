@@ -429,15 +429,35 @@ function renderTabBooking(content, h) {
 }
 
 // ---- ONGLET SELF CHECK-IN ----
-function renderTabSelfcheckin(content, h) {
+async function renderTabSelfcheckin(content, h) {
+    content.innerHTML = '<div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>';
+
+    // Charger les casiers et les horaires PDJ
+    let lockers = [];
+    let bfSchedules = [];
+    try {
+        const [lockersRes, bfRes] = await Promise.all([
+            API.get(`lockers?hotel_id=${h.id}`),
+            API.get(`hotels/${h.id}/breakfast-schedules`)
+        ]);
+        lockers = lockersRes.lockers || [];
+        bfSchedules = bfRes.schedules || [];
+    } catch (e) {}
+
+    // Indexer les horaires par jour de semaine
+    const bfByDay = {};
+    bfSchedules.forEach(s => { bfByDay[s.day_of_week] = s; });
+    const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+
     content.innerHTML = `
+        <!-- Tarifs par défaut -->
         <div class="card mb-20">
             <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-door-open"></i> Configuration Self Check-in</h3>
+                <h3 class="card-title"><i class="fas fa-euro-sign"></i> Tarifs par défaut</h3>
             </div>
             <div class="card-body" style="padding:24px">
                 <form onsubmit="updateHotel(event, ${h.id})">
-                    <p class="text-muted mb-15">Tarifs par défaut et horaires du petit-déjeuner. Ces valeurs seront utilisées si aucun tarif spécifique n'est défini pour une date donnée.</p>
+                    <p class="text-muted mb-15">Tarifs par défaut utilisés si aucun tarif spécifique n'est défini pour une date donnée.</p>
 
                     <div class="form-row">
                         <div class="form-group">
@@ -473,17 +493,6 @@ function renderTabSelfcheckin(content, h) {
                         </div>
                     </div>
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Heure début petit-déjeuner</label>
-                            <input type="time" name="breakfast_start" value="${h.breakfast_start || '07:00'}">
-                        </div>
-                        <div class="form-group">
-                            <label>Heure fin petit-déjeuner</label>
-                            <input type="time" name="breakfast_end" value="${h.breakfast_end || '10:30'}">
-                        </div>
-                    </div>
-
                     <div style="text-align:right;margin-top:20px">
                         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
                     </div>
@@ -491,6 +500,103 @@ function renderTabSelfcheckin(content, h) {
             </div>
         </div>
 
+        <!-- Horaires petit-déjeuner par jour de la semaine -->
+        <div class="card mb-20">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-coffee"></i> Horaires petit-déjeuner par jour</h3>
+            </div>
+            <div class="card-body" style="padding:24px">
+                <form onsubmit="saveBreakfastSchedules(event, ${h.id})">
+                    <p class="text-muted mb-15">Configurez les horaires du petit-déjeuner pour chaque jour de la semaine. Décochez un jour si le petit-déjeuner n'est pas servi.</p>
+
+                    <div class="table-responsive">
+                        <table class="table" style="margin-bottom:16px">
+                            <thead>
+                                <tr>
+                                    <th>Jour</th>
+                                    <th style="width:100px">Servi</th>
+                                    <th>Heure début</th>
+                                    <th>Heure fin</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${[1,2,3,4,5,6,0].map(dow => {
+                                    const sched = bfByDay[dow];
+                                    const enabled = sched ? sched.enabled == 1 : true;
+                                    const start = sched ? sched.breakfast_start?.substring(0,5) : (h.breakfast_start || '07:00').substring(0,5);
+                                    const end = sched ? sched.breakfast_end?.substring(0,5) : (h.breakfast_end || '10:30').substring(0,5);
+                                    const isWeekend = dow === 0 || dow === 6;
+                                    return `
+                                        <tr style="${isWeekend ? 'background:#FFF7ED' : ''}">
+                                            <td><strong${isWeekend ? ' style="color:#EA580C"' : ''}>${dayNames[dow]}</strong></td>
+                                            <td><input type="checkbox" name="bf_enabled_${dow}" ${enabled ? 'checked' : ''}></td>
+                                            <td><input type="time" name="bf_start_${dow}" value="${start}" style="width:130px"></td>
+                                            <td><input type="time" name="bf_end_${dow}" value="${end}" style="width:130px"></td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div style="text-align:right">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer les horaires</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Gestion des casiers -->
+        <div class="card mb-20">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-lock"></i> Casiers</h3>
+                <button class="btn btn-primary btn-sm" onclick="showHotelCreateLocker(${h.id})"><i class="fas fa-plus"></i> Nouveau casier</button>
+            </div>
+            <div class="card-body" style="padding:24px">
+                <p class="text-muted mb-15">Configurez les casiers de votre établissement. Le numéro de casier est permanent, le code peut être modifié quotidiennement. L'association chambre-casier se fait lors de la création de chaque réservation.</p>
+                <div id="hotel-lockers-list">
+                    ${lockers.length === 0 ? `
+                        <div class="empty-state" style="padding:30px">
+                            <i class="fas fa-lock" style="font-size:36px;color:var(--gray-300);margin-bottom:12px"></i>
+                            <p>Aucun casier configuré</p>
+                            <small class="text-muted">Ajoutez des casiers pour le self check-in</small>
+                        </div>
+                    ` : `
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
+                            ${lockers.map(l => {
+                                const statusColors = {
+                                    'available': { color: '#16A34A', bg: '#F0FDF4', label: 'Disponible', icon: 'check-circle' },
+                                    'assigned': { color: '#2563EB', bg: '#EFF6FF', label: 'Assign\u00e9', icon: 'user-check' },
+                                    'maintenance': { color: '#DC2626', bg: '#FEF2F2', label: 'Maintenance', icon: 'tools' }
+                                };
+                                const s = statusColors[l.status] || statusColors['available'];
+                                return `
+                                    <div class="card" style="padding:0;border-left:4px solid ${s.color};overflow:hidden;margin:0">
+                                        <div style="padding:14px">
+                                            <div style="display:flex;justify-content:space-between;align-items:start">
+                                                <div>
+                                                    <h4 style="margin:0;font-size:16px"><i class="fas fa-lock" style="color:${s.color}"></i> Casier ${esc(l.locker_number)}</h4>
+                                                    <p style="margin:4px 0 0;font-size:13px;color:var(--gray-500)">Code : <strong>${esc(l.locker_code)}</strong></p>
+                                                </div>
+                                                <span style="padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;background:${s.bg};color:${s.color}">
+                                                    <i class="fas fa-${s.icon}"></i> ${s.label}
+                                                </span>
+                                            </div>
+                                            ${l.notes ? `<p style="margin:6px 0 0;font-size:12px;color:var(--gray-400)">${esc(l.notes)}</p>` : ''}
+                                            <div style="margin-top:10px;display:flex;gap:6px">
+                                                <button class="btn btn-sm btn-outline" onclick="showHotelEditLocker(${h.id}, ${l.id})"><i class="fas fa-edit"></i></button>
+                                                <button class="btn btn-sm btn-danger" onclick="deleteHotelLocker(${h.id}, ${l.id})"><i class="fas fa-trash"></i></button>
+                                            </div>
+                                        </div>
+                                    </div>`;
+                            }).join('')}
+                        </div>
+                    `}
+                </div>
+            </div>
+        </div>
+
+        <!-- Stripe -->
         <div class="card">
             <div class="card-header">
                 <h3 class="card-title"><i class="fab fa-stripe"></i> Stripe (Paiement en ligne)</h3>
@@ -513,6 +619,134 @@ function renderTabSelfcheckin(content, h) {
             </div>
         </div>
     `;
+}
+
+// ---- Sauvegarder horaires PDJ par jour de la semaine ----
+async function saveBreakfastSchedules(e, hotelId) {
+    e.preventDefault();
+    const form = e.target;
+    const days = [];
+
+    [1,2,3,4,5,6,0].forEach(dow => {
+        days.push({
+            day_of_week: dow,
+            breakfast_start: form.querySelector(`[name="bf_start_${dow}"]`).value || '07:00',
+            breakfast_end: form.querySelector(`[name="bf_end_${dow}"]`).value || '10:30',
+            enabled: form.querySelector(`[name="bf_enabled_${dow}"]`).checked ? 1 : 0
+        });
+    });
+
+    try {
+        await API.put(`hotels/${hotelId}/breakfast-schedules`, { days });
+        toast('Horaires petit-déjeuner enregistrés', 'success');
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+// ---- CRUD Casiers côté hôtel ----
+function showHotelCreateLocker(hotelId) {
+    openModal('Nouveau casier', `
+        <form onsubmit="saveHotelLocker(event, ${hotelId})">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Numéro du casier *</label>
+                    <input type="text" name="locker_number" required placeholder="Ex: 1, A1, ...">
+                    <small class="form-help">Le numéro est permanent et identifie physiquement le casier</small>
+                </div>
+                <div class="form-group">
+                    <label>Code d'accès actuel *</label>
+                    <input type="text" name="locker_code" required placeholder="Ex: 1234, AB12, ...">
+                    <small class="form-help">Code pouvant être changé quotidiennement</small>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea name="notes" rows="2" placeholder="Notes optionnelles..."></textarea>
+            </div>
+            <div style="text-align:right;margin-top:20px">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Créer</button>
+            </div>
+        </form>
+    `);
+}
+
+async function saveHotelLocker(e, hotelId) {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    data.hotel_id = hotelId;
+    try {
+        await API.post('lockers', data);
+        toast('Casier créé', 'success');
+        closeModal();
+        renderHotelTab(_editHotelData, null);
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function showHotelEditLocker(hotelId, lockerId) {
+    try {
+        const locker = await API.get(`lockers/${lockerId}`);
+        openModal('Modifier le casier', `
+            <form onsubmit="updateHotelLocker(event, ${hotelId}, ${lockerId})">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Numéro du casier *</label>
+                        <input type="text" name="locker_number" value="${esc(locker.locker_number)}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Code d'accès actuel *</label>
+                        <input type="text" name="locker_code" value="${esc(locker.locker_code)}" required>
+                        <small class="form-help">Modifiez ce code quotidiennement</small>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Statut</label>
+                    <select name="status">
+                        <option value="available" ${locker.status === 'available' ? 'selected' : ''}>Disponible</option>
+                        <option value="assigned" ${locker.status === 'assigned' ? 'selected' : ''}>Assigné</option>
+                        <option value="maintenance" ${locker.status === 'maintenance' ? 'selected' : ''}>Maintenance</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea name="notes" rows="2">${esc(locker.notes || '')}</textarea>
+                </div>
+                <div style="text-align:right;margin-top:20px">
+                    <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
+                </div>
+            </form>
+        `);
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function updateHotelLocker(e, hotelId, lockerId) {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    try {
+        await API.put(`lockers/${lockerId}`, data);
+        toast('Casier mis à jour', 'success');
+        closeModal();
+        renderHotelTab(_editHotelData, null);
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function deleteHotelLocker(hotelId, lockerId) {
+    if (!confirm('Supprimer ce casier ?')) return;
+    try {
+        await API.delete(`lockers/${lockerId}`);
+        toast('Casier supprimé', 'success');
+        renderHotelTab(_editHotelData, null);
+    } catch (err) {
+        toast(err.message, 'error');
+    }
 }
 
 // ---- ONGLET MAINTENANCE (Alertes) ----

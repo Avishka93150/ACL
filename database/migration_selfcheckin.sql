@@ -21,9 +21,8 @@ ALTER TABLE hotels ADD COLUMN night_cutoff_hour TINYINT UNSIGNED DEFAULT 7 COMME
 CREATE TABLE IF NOT EXISTS hotel_lockers (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     hotel_id INT UNSIGNED NOT NULL,
-    locker_number VARCHAR(20) NOT NULL COMMENT 'Numéro du casier',
-    locker_code VARCHAR(50) NOT NULL COMMENT 'Code d''accès au casier',
-    room_id INT UNSIGNED DEFAULT NULL COMMENT 'Chambre associée',
+    locker_number VARCHAR(20) NOT NULL COMMENT 'Numéro du casier (permanent)',
+    locker_code VARCHAR(50) NOT NULL COMMENT 'Code d''accès actuel (modifiable quotidiennement)',
     status ENUM('available','assigned','maintenance') DEFAULT 'available',
     notes TEXT DEFAULT NULL,
     created_at DATETIME,
@@ -31,12 +30,24 @@ CREATE TABLE IF NOT EXISTS hotel_lockers (
     UNIQUE KEY unique_locker (hotel_id, locker_number),
     INDEX idx_hotel (hotel_id),
     INDEX idx_status (status),
-    INDEX idx_room (room_id),
-    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE,
-    FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE SET NULL
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 3. Table des tarifs journaliers
+-- 3. Table des horaires petit-déjeuner par jour de la semaine
+-- ---------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS hotel_breakfast_schedules (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    hotel_id INT UNSIGNED NOT NULL,
+    day_of_week TINYINT UNSIGNED NOT NULL COMMENT '0=Dimanche, 1=Lundi, ..., 6=Samedi',
+    breakfast_start TIME NOT NULL DEFAULT '07:00:00',
+    breakfast_end TIME NOT NULL DEFAULT '10:30:00',
+    enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Petit-déjeuner servi ce jour',
+    UNIQUE KEY unique_hotel_day (hotel_id, day_of_week),
+    INDEX idx_hotel (hotel_id),
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 4. Table des tarifs journaliers
 -- --------------------------------
 CREATE TABLE IF NOT EXISTS selfcheckin_pricing (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

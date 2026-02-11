@@ -2132,7 +2132,17 @@ try {
                     if ($existing) json_error('Ce slug de réservation est déjà utilisé');
                     $sets[] = "booking_slug = ?"; $params[] = $data['booking_slug'];
                 }
-                
+
+                // Self check-in fields
+                if (isset($data['selfcheckin_enabled'])) { $sets[] = "selfcheckin_enabled = ?"; $params[] = !empty($data['selfcheckin_enabled']) ? 1 : 0; }
+                if (isset($data['walkin_enabled'])) { $sets[] = "walkin_enabled = ?"; $params[] = !empty($data['walkin_enabled']) ? 1 : 0; }
+                if (isset($data['default_night_price'])) { $sets[] = "default_night_price = ?"; $params[] = (float)$data['default_night_price']; }
+                if (isset($data['default_breakfast_price'])) { $sets[] = "default_breakfast_price = ?"; $params[] = (float)$data['default_breakfast_price']; }
+                if (isset($data['default_tourist_tax'])) { $sets[] = "default_tourist_tax = ?"; $params[] = (float)$data['default_tourist_tax']; }
+                if (isset($data['breakfast_start'])) { $sets[] = "breakfast_start = ?"; $params[] = $data['breakfast_start']; }
+                if (isset($data['breakfast_end'])) { $sets[] = "breakfast_end = ?"; $params[] = $data['breakfast_end']; }
+                if (isset($data['night_cutoff_hour'])) { $sets[] = "night_cutoff_hour = ?"; $params[] = (int)$data['night_cutoff_hour']; }
+
                 if (!empty($sets)) {
                     $sets[] = "updated_at = NOW()";
                     $params[] = $id;
@@ -2146,6 +2156,56 @@ try {
                 json_out(['success' => true]);
             }
             
+            // GET /hotels/{id}/breakfast-schedules - Horaires petit-déjeuner par jour de la semaine
+            if ($method === 'GET' && $id && is_numeric($id) && $action === 'breakfast-schedules') {
+                require_auth();
+                $schedules = [];
+                try {
+                    $schedules = db()->query("SELECT * FROM hotel_breakfast_schedules WHERE hotel_id = ? ORDER BY day_of_week", [$id]);
+                } catch (Exception $e) {}
+                json_out(['success' => true, 'schedules' => $schedules]);
+            }
+
+            // PUT /hotels/{id}/breakfast-schedules - Sauvegarder horaires petit-déjeuner par jour
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'breakfast-schedules') {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin', 'groupe_manager', 'hotel_manager'])) json_error('Permission refusée', 403);
+
+                $data = get_input();
+                $days = $data['days'] ?? [];
+                if (!is_array($days)) json_error('Format invalide : days doit être un tableau');
+
+                foreach ($days as $day) {
+                    $dow = (int)($day['day_of_week'] ?? -1);
+                    if ($dow < 0 || $dow > 6) continue;
+
+                    $start = $day['breakfast_start'] ?? '07:00:00';
+                    $end = $day['breakfast_end'] ?? '10:30:00';
+                    $enabled = isset($day['enabled']) ? (int)$day['enabled'] : 1;
+
+                    $existing = db()->queryOne(
+                        "SELECT id FROM hotel_breakfast_schedules WHERE hotel_id = ? AND day_of_week = ?",
+                        [$id, $dow]
+                    );
+
+                    if ($existing) {
+                        db()->execute(
+                            "UPDATE hotel_breakfast_schedules SET breakfast_start = ?, breakfast_end = ?, enabled = ? WHERE id = ?",
+                            [$start, $end, $enabled, $existing['id']]
+                        );
+                    } else {
+                        db()->insert('hotel_breakfast_schedules', [
+                            'hotel_id' => (int)$id,
+                            'day_of_week' => $dow,
+                            'breakfast_start' => $start,
+                            'breakfast_end' => $end,
+                            'enabled' => $enabled
+                        ]);
+                    }
+                }
+                json_out(['success' => true, 'message' => 'Horaires petit-déjeuner enregistrés']);
+            }
+
             // GET /hotels/{id}/leave-config - Configuration congés de l'hôtel
             if ($method === 'GET' && $id && is_numeric($id) && $action === 'leave-config') {
                 require_auth();
@@ -8745,6 +8805,19 @@ try {
                     [$hotel['id'], $effectiveDate]
                 );
 
+                // Horaires PDJ : priorité = tarif jour > planning semaine > défaut hôtel
+                $dow = (int)(new DateTime($effectiveDate))->format('w');
+                $weekSchedule = null;
+                try {
+                    $weekSchedule = db()->queryOne(
+                        "SELECT * FROM hotel_breakfast_schedules WHERE hotel_id = ? AND day_of_week = ?",
+                        [$hotel['id'], $dow]
+                    );
+                } catch (Exception $e) {}
+
+                $bfStart = $pricing['breakfast_start'] ?? ($weekSchedule['breakfast_start'] ?? $hotel['breakfast_start']);
+                $bfEnd = $pricing['breakfast_end'] ?? ($weekSchedule['breakfast_end'] ?? $hotel['breakfast_end']);
+
                 json_out([
                     'hotel' => [
                         'id' => $hotel['id'],
@@ -8757,8 +8830,8 @@ try {
                         'logo_url' => $hotel['logo_url'],
                         'stripe_public_key' => $hotel['stripe_public_key'],
                         'walkin_enabled' => (bool)$hotel['walkin_enabled'],
-                        'breakfast_start' => $pricing['breakfast_start'] ?? $hotel['breakfast_start'],
-                        'breakfast_end' => $pricing['breakfast_end'] ?? $hotel['breakfast_end'],
+                        'breakfast_start' => $bfStart,
+                        'breakfast_end' => $bfEnd,
                     ],
                     'pricing' => [
                         'date' => $effectiveDate,
@@ -8826,7 +8899,9 @@ try {
                         'unit_price' => (float)($pricing['breakfast_price'] ?? $hotel['default_breakfast_price']),
                         'start' => $pricing['breakfast_start'] ?? $hotel['breakfast_start'],
                         'end' => $pricing['breakfast_end'] ?? $hotel['breakfast_end'],
-                    ]
+                    ],
+                    'locker_number' => $reservation['locker_number'],
+                    'locker_code' => $reservation['locker_code']
                 ]);
             }
 
@@ -9042,6 +9117,11 @@ try {
                     [$hotel['id'], $effectiveDate]
                 );
 
+                // Horaires PDJ : priorité = tarif jour > planning semaine > défaut hôtel
+                $dow = (int)(new DateTime($effectiveDate))->format('w');
+                $weekSched = null;
+                try { $weekSched = db()->queryOne("SELECT * FROM hotel_breakfast_schedules WHERE hotel_id = ? AND day_of_week = ?", [$hotel['id'], $dow]); } catch (Exception $e) {}
+
                 json_out([
                     'rooms' => $slots,
                     'pricing' => [
@@ -9049,8 +9129,8 @@ try {
                         'night_price' => (float)($pricing['night_price'] ?? $hotel['default_night_price']),
                         'breakfast_price' => (float)($pricing['breakfast_price'] ?? $hotel['default_breakfast_price']),
                         'tourist_tax' => (float)($pricing['tourist_tax'] ?? $hotel['default_tourist_tax']),
-                        'breakfast_start' => $pricing['breakfast_start'] ?? $hotel['breakfast_start'],
-                        'breakfast_end' => $pricing['breakfast_end'] ?? $hotel['breakfast_end'],
+                        'breakfast_start' => $pricing['breakfast_start'] ?? ($weekSched['breakfast_start'] ?? $hotel['breakfast_start']),
+                        'breakfast_end' => $pricing['breakfast_end'] ?? ($weekSched['breakfast_end'] ?? $hotel['breakfast_end']),
                     ]
                 ]);
             }
@@ -9288,7 +9368,8 @@ try {
                     if (!$locker) json_error('Casier non trouvé');
                     $lockerId = $locker['id'];
                     $lockerNumber = $locker['locker_number'];
-                    $lockerCode = $locker['locker_code'];
+                    // Code : utiliser celui fourni dans la requête, sinon le code courant du casier
+                    $lockerCode = !empty($data['locker_code']) ? $data['locker_code'] : $locker['locker_code'];
                 }
 
                 // Calculer le reste à payer
@@ -9368,13 +9449,17 @@ try {
                         if ($locker) {
                             $fields[] = "locker_id = ?"; $params[] = $locker['id'];
                             $fields[] = "locker_number = ?"; $params[] = $locker['locker_number'];
-                            $fields[] = "locker_code = ?"; $params[] = $locker['locker_code'];
+                            // Code : utiliser celui fourni ou le code courant du casier
+                            $fields[] = "locker_code = ?"; $params[] = !empty($data['locker_code']) ? $data['locker_code'] : $locker['locker_code'];
                         }
                     } else {
                         $fields[] = "locker_id = ?"; $params[] = null;
                         $fields[] = "locker_number = ?"; $params[] = null;
                         $fields[] = "locker_code = ?"; $params[] = null;
                     }
+                } elseif (isset($data['locker_code'])) {
+                    // Mise à jour du code seul (sans changer de casier)
+                    $fields[] = "locker_code = ?"; $params[] = $data['locker_code'];
                 }
 
                 // Recalculer le reste à payer
@@ -9426,10 +9511,7 @@ try {
                 if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
 
                 $lockers = db()->query(
-                    "SELECT l.*, r.room_number as linked_room_number
-                     FROM hotel_lockers l
-                     LEFT JOIN rooms r ON l.room_id = r.id
-                     WHERE l.hotel_id = ? ORDER BY CAST(l.locker_number AS UNSIGNED), l.locker_number",
+                    "SELECT * FROM hotel_lockers WHERE hotel_id = ? ORDER BY CAST(locker_number AS UNSIGNED), locker_number",
                     [$hotelId]
                 );
                 json_out(['lockers' => $lockers]);
@@ -9462,7 +9544,6 @@ try {
                     'hotel_id' => (int)$data['hotel_id'],
                     'locker_number' => $data['locker_number'],
                     'locker_code' => $data['locker_code'],
-                    'room_id' => $data['room_id'] ?: null,
                     'status' => $data['status'] ?? 'available',
                     'notes' => $data['notes'] ?? null,
                     'created_at' => date('Y-m-d H:i:s')
@@ -9481,7 +9562,7 @@ try {
                 $fields = [];
                 $params = [];
 
-                foreach (['locker_number', 'locker_code', 'room_id', 'status', 'notes'] as $field) {
+                foreach (['locker_number', 'locker_code', 'status', 'notes'] as $field) {
                     if (isset($data[$field])) {
                         $fields[] = "$field = ?";
                         $params[] = $data[$field] ?: null;
