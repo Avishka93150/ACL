@@ -481,6 +481,7 @@ function sendLeavesReminder() {
  *   - Tokens expirés
  *   - Anciennes alertes (> 90 jours)
  *   - Anciens dispatches (> 365 jours)
+ *   - Pièces d'identité self check-in (> 7 jours, RGPD)
  */
 function cleanupOldData() {
     // Supprimer les anciennes alertes (> 90 jours)
@@ -509,6 +510,31 @@ function cleanupOldData() {
         echo "  Logs API Xotelo supprimés (> 30 jours)\n";
     } catch (Exception $e) {
         // Table n'existe peut-être pas
+    }
+
+    // Supprimer les pièces d'identité self check-in (> 7 jours) - RGPD
+    try {
+        $oldDocs = db()->query(
+            "SELECT id, id_document_path FROM selfcheckin_reservations
+             WHERE id_document_path IS NOT NULL
+               AND id_document_path != ''
+               AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)"
+        );
+        $deletedFiles = 0;
+        foreach ($oldDocs as $doc) {
+            $filePath = __DIR__ . '/../' . $doc['id_document_path'];
+            if (file_exists($filePath)) {
+                unlink($filePath);
+                $deletedFiles++;
+            }
+            db()->execute(
+                "UPDATE selfcheckin_reservations SET id_document_path = NULL WHERE id = ?",
+                [$doc['id']]
+            );
+        }
+        echo "  Pièces d'identité supprimées : $deletedFiles fichier(s) (> 7 jours, RGPD)\n";
+    } catch (Exception $e) {
+        echo "  Erreur suppression pièces d'identité : " . $e->getMessage() . "\n";
     }
 }
 

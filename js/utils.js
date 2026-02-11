@@ -94,7 +94,7 @@ const LABELS = {
         nettoyage: 'Nettoyage', autre: 'Autre' 
     },
     cleaning: { blanc: 'À blanc', recouche: 'Recouche' },
-    room_type: { standard: 'Standard', superieure: 'Supérieure', suite: 'Suite', familiale: 'Familiale', pmr: 'PMR' },
+    room_type: { standard: 'Standard', superieure: 'Supérieure', suite: 'Suite', triple: 'Triple', quadruple: 'Quadruple', familiale: 'Familiale', pmr: 'PMR' },
     role: { 
         admin: 'Administrateur', 
         groupe_manager: 'Resp. Groupe', 
