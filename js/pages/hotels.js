@@ -217,8 +217,8 @@ async function showEditHotelPage(id, tab) {
                 <button class="hotel-tab ${_editHotelTab === 'booking' ? 'active' : ''}" onclick="switchHotelTab('booking')">
                     <i class="fas fa-globe"></i> Réservation
                 </button>
-                <button class="hotel-tab ${_editHotelTab === 'pms' ? 'active' : ''}" onclick="switchHotelTab('pms')">
-                    <i class="fas fa-server"></i> PMS & Paiement
+                <button class="hotel-tab ${_editHotelTab === 'selfcheckin' ? 'active' : ''}" onclick="switchHotelTab('selfcheckin')">
+                    <i class="fas fa-door-open"></i> Self Check-in
                 </button>
                 <button class="hotel-tab ${_editHotelTab === 'maintenance' ? 'active' : ''}" onclick="switchHotelTab('maintenance')">
                     <i class="fas fa-wrench"></i> Maintenance
@@ -285,7 +285,7 @@ async function renderHotelTab(h, leaveConfig) {
     switch (_editHotelTab) {
         case 'general': renderTabGeneral(content, h); break;
         case 'booking': renderTabBooking(content, h); break;
-        case 'pms': renderTabPms(content, h); break;
+        case 'selfcheckin': renderTabSelfcheckin(content, h); break;
         case 'maintenance': renderTabMaintenance(content, h); break;
         case 'leaves': renderTabLeaves(content, h, leaveConfig); break;
         case 'closures': renderTabClosures(content, h); break;
@@ -381,14 +381,22 @@ function renderTabBooking(content, h) {
     content.innerHTML = `
         <div class="card">
             <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-globe"></i> Réservation en ligne</h3>
+                <h3 class="card-title"><i class="fas fa-globe"></i> Réservation en ligne & Self Check-in</h3>
             </div>
             <div class="card-body" style="padding:24px">
                 <form onsubmit="updateHotel(event, ${h.id})">
                     <div class="form-group">
                         <label>
-                            <input type="checkbox" name="booking_enabled" value="1" ${h.booking_enabled == 1 ? 'checked' : ''}> Activer la réservation en ligne
+                            <input type="checkbox" name="selfcheckin_enabled" value="1" ${h.selfcheckin_enabled == 1 ? 'checked' : ''}> Activer le self check-in
                         </label>
+                        <small class="form-help" style="display:block;margin-top:4px">Permet aux clients de faire leur check-in via la borne/site web</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="walkin_enabled" value="1" ${h.walkin_enabled == 1 ? 'checked' : ''}> Autoriser les walk-in (sans réservation)
+                        </label>
+                        <small class="form-help" style="display:block;margin-top:4px">Permet aux clients sans réservation de réserver une chambre disponible sur place</small>
                     </div>
 
                     <div class="form-group">
@@ -402,13 +410,13 @@ function renderTabBooking(content, h) {
                     </div>
 
                     <div class="form-group" id="booking-url-group" style="${h.booking_slug ? '' : 'display:none'}">
-                        <label><i class="fas fa-link"></i> Lien de réservation</label>
+                        <label><i class="fas fa-link"></i> Lien self check-in client</label>
                         <div style="display:flex;gap:8px;align-items:center">
                             <input type="text" readonly value="${h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : ''}" style="flex:1;padding:8px 12px;border:1px solid #93C5FD;border-radius:6px;font-size:13px;background:#F0F9FF;color:#1E40AF" id="booking-url-field">
                             <button type="button" class="btn btn-sm btn-outline" onclick="copyBookingUrl()" title="Copier"><i class="fas fa-copy"></i></button>
                             <a href="${h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : '#'}" target="_blank" class="btn btn-sm btn-primary" id="booking-url-open" title="Ouvrir"><i class="fas fa-external-link-alt"></i></a>
                         </div>
-                        <small class="form-help">Partagez ce lien avec vos clients</small>
+                        <small class="form-help">Partagez ce lien avec vos clients ou affichez-le sur une borne</small>
                     </div>
 
                     <div style="text-align:right;margin-top:20px">
@@ -420,88 +428,62 @@ function renderTabBooking(content, h) {
     `;
 }
 
-// ---- ONGLET PMS & PAIEMENT ----
-function renderTabPms(content, h) {
+// ---- ONGLET SELF CHECK-IN ----
+function renderTabSelfcheckin(content, h) {
     content.innerHTML = `
         <div class="card mb-20">
             <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-server"></i> PMS (Property Management System)</h3>
+                <h3 class="card-title"><i class="fas fa-door-open"></i> Configuration Self Check-in</h3>
             </div>
             <div class="card-body" style="padding:24px">
                 <form onsubmit="updateHotel(event, ${h.id})">
-                    <p class="text-muted mb-15">Connectez votre logiciel de gestion hôtelière</p>
-                    <div class="form-group">
-                        <label>Type de PMS</label>
-                        <select name="pms_type" onchange="togglePmsFields(this.value, 'edit')">
-                            <option value="">Aucun PMS</option>
-                            <option value="geho" ${h.pms_type === 'geho' ? 'selected' : ''}>Geho</option>
-                        </select>
-                    </div>
-                    <div id="pms-fields-edit" style="${h.pms_type ? '' : 'display:none'}">
+                    <p class="text-muted mb-15">Tarifs par défaut et horaires du petit-déjeuner. Ces valeurs seront utilisées si aucun tarif spécifique n'est défini pour une date donnée.</p>
+
+                    <div class="form-row">
                         <div class="form-group">
-                            <label>Mode de connexion</label>
-                            <select name="pms_connection_mode" onchange="toggleConnectionMode(this.value)">
-                                <option value="direct" ${(h.pms_connection_mode || 'direct') === 'direct' ? 'selected' : ''}>Direct (GeHo accessible depuis le serveur)</option>
-                                <option value="relay" ${h.pms_connection_mode === 'relay' ? 'selected' : ''}>Relais (GeHo sur un PC local distant)</option>
-                            </select>
-                            <small class="form-help" style="display:block;margin-top:4px;color:#6B7280">
-                                <strong>Direct :</strong> Le serveur ACL contacte GeHo directement via IP.<br>
-                                <strong>Relais :</strong> Un agent sur le PC de l'hôtel fait le pont entre ACL et GeHo. Idéal quand GeHo est derrière un routeur/box internet.
-                            </small>
-                        </div>
-
-                        <div id="pms-direct-fields" style="${h.pms_connection_mode === 'relay' ? 'display:none' : ''}">
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>Adresse IP du serveur *</label>
-                                    <input type="text" name="pms_ip" value="${esc(h.pms_ip || '')}" placeholder="Ex: 192.168.1.100">
-                                </div>
-                                <div class="form-group">
-                                    <label>Port de communication *</label>
-                                    <input type="number" name="pms_port" value="${h.pms_port || ''}" placeholder="Ex: 8080" min="1" max="65535">
-                                </div>
+                            <label>Prix de la nuit par défaut</label>
+                            <div style="position:relative">
+                                <input type="number" name="default_night_price" value="${h.default_night_price || '0'}" step="0.01" min="0" style="padding-right:30px">
+                                <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:#6B7280">EUR</span>
                             </div>
                         </div>
-
-                        <div id="pms-relay-fields" style="${h.pms_connection_mode === 'relay' ? '' : 'display:none'}">
-                            <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:16px;margin-bottom:16px">
-                                <p style="font-weight:600;margin-bottom:8px"><i class="fas fa-info-circle" style="color:#2563EB"></i> Mode Relais - Comment ça marche ?</p>
-                                <ol style="font-size:13px;color:#374151;padding-left:20px;margin:0">
-                                    <li>Générez un token ci-dessous</li>
-                                    <li>Téléchargez le fichier <strong>pms-agent.php</strong> sur le PC où GeHo est installé</li>
-                                    <li>Configurez le token et l'IP locale de GeHo dans le fichier</li>
-                                    <li>Lancez l'agent : <code style="background:#E5E7EB;padding:2px 6px;border-radius:4px">php pms-agent.php</code></li>
-                                </ol>
-                            </div>
-                            <div class="form-group">
-                                <label>Token de l'agent relais</label>
-                                <div style="display:flex;gap:8px">
-                                    <input type="text" name="pms_relay_token" id="relay-token-field" value="${esc(h.pms_relay_token || '')}" readonly style="background:#F3F4F6;flex:1">
-                                    <button type="button" class="btn btn-sm btn-primary" onclick="generateRelayToken(${h.id})">
-                                        <i class="fas fa-key"></i> ${h.pms_relay_token ? 'Régénérer' : 'Générer'}
-                                    </button>
-                                    ${h.pms_relay_token ? `<button type="button" class="btn btn-sm btn-outline" onclick="copyRelayToken()"><i class="fas fa-copy"></i></button>` : ''}
-                                </div>
-                            </div>
-                            <div id="relay-status-container"></div>
-                            ${h.pms_relay_token ? `<button type="button" class="btn btn-sm btn-outline mb-10" onclick="checkRelayStatus(${h.id})"><i class="fas fa-satellite-dish"></i> Vérifier le statut de l'agent</button>` : ''}
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Utilisateur PMS</label>
-                                <input type="text" name="pms_username" value="${esc(h.pms_username || '')}" placeholder="Optionnel">
-                            </div>
-                            <div class="form-group">
-                                <label>Mot de passe PMS</label>
-                                <input type="password" name="pms_password" value="${esc(h.pms_password || '')}" placeholder="Optionnel">
+                        <div class="form-group">
+                            <label>Prix petit-déjeuner par défaut (par personne)</label>
+                            <div style="position:relative">
+                                <input type="number" name="default_breakfast_price" value="${h.default_breakfast_price || '0'}" step="0.01" min="0" style="padding-right:30px">
+                                <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:#6B7280">EUR</span>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-sm btn-outline mb-10" onclick="testPmsConnection(${h.id})">
-                            <i class="fas fa-plug"></i> Tester la connexion
-                        </button>
-                        <div id="pms-test-result"></div>
                     </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Taxe de séjour par défaut (par adulte/nuit)</label>
+                            <div style="position:relative">
+                                <input type="number" name="default_tourist_tax" value="${h.default_tourist_tax || '0'}" step="0.01" min="0" style="padding-right:30px">
+                                <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:#6B7280">EUR</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Heure limite nuit (arrivée après minuit)</label>
+                            <select name="night_cutoff_hour">
+                                ${[5,6,7,8].map(h2 => `<option value="${h2}" ${(h.night_cutoff_hour || 7) == h2 ? 'selected' : ''}>${h2}h00</option>`).join('')}
+                            </select>
+                            <small class="form-help">Un client arrivant entre minuit et cette heure sera facturé au tarif de la veille</small>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Heure début petit-déjeuner</label>
+                            <input type="time" name="breakfast_start" value="${h.breakfast_start || '07:00'}">
+                        </div>
+                        <div class="form-group">
+                            <label>Heure fin petit-déjeuner</label>
+                            <input type="time" name="breakfast_end" value="${h.breakfast_end || '10:30'}">
+                        </div>
+                    </div>
+
                     <div style="text-align:right;margin-top:20px">
                         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
                     </div>
@@ -515,7 +497,7 @@ function renderTabPms(content, h) {
             </div>
             <div class="card-body" style="padding:24px">
                 <form onsubmit="updateHotel(event, ${h.id})">
-                    <p class="text-muted mb-15">Clés API Stripe pour le paiement des réservations en ligne</p>
+                    <p class="text-muted mb-15">Clés API Stripe pour le paiement lors du self check-in</p>
                     <div class="form-group">
                         <label>Clé publique (pk_live_... ou pk_test_...)</label>
                         <input type="text" name="stripe_public_key" value="${esc(h.stripe_public_key || '')}" placeholder="pk_live_xxxxx">
@@ -1388,79 +1370,7 @@ async function saveClosureConfig(hotelId) {
     }
 }
 
-// ==================== PMS & BOOKING HELPERS ====================
-
-function togglePmsFields(value, context) {
-    const el = document.getElementById('pms-fields-' + context);
-    if (el) el.style.display = value ? '' : 'none';
-}
-
-function toggleConnectionMode(mode) {
-    const direct = document.getElementById('pms-direct-fields');
-    const relay = document.getElementById('pms-relay-fields');
-    if (direct) direct.style.display = mode === 'relay' ? 'none' : '';
-    if (relay) relay.style.display = mode === 'relay' ? '' : 'none';
-}
-
-async function generateRelayToken(hotelId) {
-    if (!confirm('Générer un nouveau token ? L\'ancien token sera invalidé et l\'agent devra être reconfiguré.')) return;
-    try {
-        const res = await API.post('/pms-relay/generate-token', { hotel_id: hotelId });
-        const field = document.getElementById('relay-token-field');
-        if (field) field.value = res.token;
-        toast('Token généré avec succès. Copiez-le dans le fichier pms-agent.php.', 'success');
-    } catch (err) {
-        toast(err.message, 'error');
-    }
-}
-
-function copyRelayToken() {
-    const field = document.getElementById('relay-token-field');
-    if (field && field.value) {
-        navigator.clipboard.writeText(field.value);
-        toast('Token copié dans le presse-papier', 'success');
-    }
-}
-
-async function checkRelayStatus(hotelId) {
-    const container = document.getElementById('relay-status-container');
-    if (!container) return;
-    container.innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin"></i> Vérification...</span>';
-    try {
-        const res = await API.get(`/pms-relay/status?hotel_id=${hotelId}`);
-        if (res.agent_online) {
-            container.innerHTML = `<div style="background:#ECFDF5;border:1px solid #A7F3D0;border-radius:8px;padding:12px;margin-bottom:12px">
-                <span style="color:#059669;font-weight:600"><i class="fas fa-check-circle"></i> Agent connecté</span>
-                <span style="color:#6B7280;font-size:12px;margin-left:8px">Dernière activité : ${res.last_activity || '-'}</span>
-            </div>`;
-        } else {
-            container.innerHTML = `<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:12px;margin-bottom:12px">
-                <span style="color:#DC2626;font-weight:600"><i class="fas fa-times-circle"></i> Agent non connecté</span>
-                <p style="color:#6B7280;font-size:12px;margin-top:4px">Vérifiez que le script pms-agent.php est en cours d'exécution sur le PC de l'hôtel.${res.last_activity ? ' Dernière activité : ' + res.last_activity : ''}</p>
-            </div>`;
-        }
-    } catch (err) {
-        container.innerHTML = `<span class="text-danger"><i class="fas fa-times-circle"></i> ${esc(err.message)}</span>`;
-    }
-}
-
-async function testPmsConnection(hotelId) {
-    const resultDiv = document.getElementById('pms-test-result');
-    if (resultDiv) resultDiv.innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin"></i> Test en cours...</span>';
-
-    try {
-        const res = await API.post('/pms/test-connection', { hotel_id: hotelId });
-        if (resultDiv) {
-            if (res.connected) {
-                resultDiv.innerHTML = '<span class="text-success"><i class="fas fa-check-circle"></i> Connexion réussie</span>';
-            } else {
-                resultDiv.innerHTML = `<span class="text-danger"><i class="fas fa-times-circle"></i> ${esc(res.message || 'Connexion échouée')}</span>`;
-            }
-        }
-    } catch (err) {
-        if (resultDiv) resultDiv.innerHTML = `<span class="text-danger"><i class="fas fa-times-circle"></i> ${esc(err.message)}</span>`;
-    }
-}
+// ==================== BOOKING HELPERS ====================
 
 function copyBookingUrl() {
     const field = document.getElementById('booking-url-field');
