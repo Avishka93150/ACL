@@ -25,7 +25,7 @@ async function loadSelfcheckin(container) {
             <div class="page-header">
                 <div>
                     <h2><i class="fas fa-door-open"></i> Self Check-in</h2>
-                    <p>Gestion des réservations, casiers et tarifs</p>
+                    <p>Gestion des réservations et tarifs</p>
                 </div>
                 <div class="header-actions-group">
                     ${_scHotels.length > 1 ? `
@@ -40,9 +40,6 @@ async function loadSelfcheckin(container) {
             <div class="tabs-container" style="display:flex;gap:0;border-bottom:2px solid var(--gray-200);margin-bottom:20px">
                 <button class="tab-btn ${_scTab === 'reservations' ? 'active' : ''}" data-tab="reservations" onclick="scSwitchTab('reservations')">
                     <i class="fas fa-clipboard-list"></i> Réservations
-                </button>
-                <button class="tab-btn ${_scTab === 'lockers' ? 'active' : ''}" data-tab="lockers" onclick="scSwitchTab('lockers')">
-                    <i class="fas fa-lock"></i> Casiers
                 </button>
                 <button class="tab-btn ${_scTab === 'pricing' ? 'active' : ''}" data-tab="pricing" onclick="scSwitchTab('pricing')">
                     <i class="fas fa-euro-sign"></i> Tarifs journaliers
@@ -109,7 +106,6 @@ async function scRenderTab() {
 
     switch (_scTab) {
         case 'reservations': await scRenderReservations(content); break;
-        case 'lockers': await scRenderLockers(content); break;
         case 'pricing': await scRenderPricing(content); break;
     }
 }
@@ -209,7 +205,7 @@ function scFilterReservations() {
                             <td>${r.guest_last_name ? esc((r.guest_first_name || '') + ' ' + r.guest_last_name) : '<em class="text-muted">Non renseigné</em>'}</td>
                             <td>${r.checkin_date ? formatDate(r.checkin_date) : '-'}</td>
                             <td>${r.room_number ? '<i class="fas fa-bed"></i> ' + esc(r.room_number) : '-'}</td>
-                            <td>${r.locker_number ? '<i class="fas fa-lock"></i> ' + esc(r.locker_number) : '-'}</td>
+                            <td>${r.locker_number ? '<i class="fas fa-lock"></i> ' + esc(r.locker_number) + (r.locker_code ? ' <small style="color:var(--gray-400)">(' + esc(r.locker_code) + ')</small>' : '') : '-'}</td>
                             <td>${formatCurrency(r.total_amount || 0)}</td>
                             <td>${r.deposit_amount > 0 ? formatCurrency(r.deposit_amount) : '-'}</td>
                             <td><strong>${formatCurrency(r.remaining_amount || 0)}</strong></td>
@@ -346,7 +342,7 @@ function scShowCreateReservation(type) {
             `}
 
             <hr style="margin:16px 0">
-            <h4 style="margin-bottom:12px"><i class="fas fa-lock"></i> Casier & Chambre</h4>
+            <h4 style="margin-bottom:12px"><i class="fas fa-lock"></i> Chambre, Casier & Code</h4>
 
             <div class="form-row">
                 <div class="form-group">
@@ -358,11 +354,16 @@ function scShowCreateReservation(type) {
                 </div>
                 <div class="form-group">
                     <label>Casier *</label>
-                    <select name="locker_id" required>
+                    <select name="locker_id" required onchange="scOnLockerChange(this)">
                         <option value="">-- Sélectionner --</option>
-                        ${availableLockers.map(l => `<option value="${l.id}">${l.locker_number}${l.linked_room_number ? ' (Ch. ' + l.linked_room_number + ')' : ''}</option>`).join('')}
+                        ${availableLockers.map(l => `<option value="${l.id}" data-code="${esc(l.locker_code)}">${l.locker_number}</option>`).join('')}
                     </select>
                 </div>
+            </div>
+            <div class="form-group">
+                <label>Code du casier *</label>
+                <input type="text" name="locker_code" required placeholder="Code d'accès du jour">
+                <small class="form-help">Le code change quotidiennement. Il est pré-rempli depuis la configuration du casier.</small>
             </div>
 
             <div style="text-align:right;margin-top:20px">
@@ -382,6 +383,14 @@ function scCalcTotal() {
     const total = accom + tax + breakfast;
     const totalField = document.getElementById('sc-total-amount');
     if (totalField) totalField.value = total.toFixed(2);
+}
+
+function scOnLockerChange(select) {
+    const opt = select.selectedOptions[0];
+    const codeField = document.querySelector('[name="locker_code"]');
+    if (opt && codeField && opt.dataset.code) {
+        codeField.value = opt.dataset.code;
+    }
 }
 
 async function scSaveReservation(e) {
@@ -501,7 +510,7 @@ async function scEditReservation(id) {
                 </div>
 
                 <hr style="margin:16px 0">
-                <h4><i class="fas fa-lock"></i> Casier & Chambre</h4>
+                <h4><i class="fas fa-lock"></i> Chambre, Casier & Code</h4>
 
                 <div class="form-row">
                     <div class="form-group">
@@ -513,11 +522,16 @@ async function scEditReservation(id) {
                     </div>
                     <div class="form-group">
                         <label>Casier</label>
-                        <select name="locker_id">
+                        <select name="locker_id" onchange="scOnLockerChange(this)">
                             <option value="">-- Aucun --</option>
-                            ${availableLockers.map(l => `<option value="${l.id}" ${l.id == reservation.locker_id ? 'selected' : ''}>${l.locker_number}</option>`).join('')}
+                            ${availableLockers.map(l => `<option value="${l.id}" data-code="${esc(l.locker_code)}" ${l.id == reservation.locker_id ? 'selected' : ''}>${l.locker_number}</option>`).join('')}
                         </select>
                     </div>
+                </div>
+                <div class="form-group">
+                    <label>Code du casier</label>
+                    <input type="text" name="locker_code" value="${esc(reservation.locker_code || '')}" placeholder="Code d'accès du jour">
+                    <small class="form-help">Le code change quotidiennement</small>
                 </div>
 
                 <div class="form-group">
@@ -579,195 +593,7 @@ async function scDeleteReservation(id) {
     }
 }
 
-// ==================== ONGLET CASIERS ====================
-
-async function scRenderLockers(content) {
-    content.innerHTML = '<div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>';
-
-    try {
-        const [lockersData, roomsData] = await Promise.all([
-            API.get(`lockers?hotel_id=${_scHotelId}`),
-            API.get(`hotels/${_scHotelId}`)
-        ]);
-
-        _scLockers = lockersData.lockers || [];
-        _scRooms = roomsData.rooms || [];
-
-        content.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <p class="text-muted">Configurez les casiers de votre établissement. Chaque casier contient la clé d'une chambre.</p>
-                <button class="btn btn-primary" onclick="scShowCreateLocker()">
-                    <i class="fas fa-plus"></i> Nouveau casier
-                </button>
-            </div>
-            <div id="sc-lockers-list"></div>
-        `;
-
-        scRenderLockersList();
-    } catch (err) {
-        content.innerHTML = `<div class="alert alert-danger">${esc(err.message)}</div>`;
-    }
-}
-
-function scRenderLockersList() {
-    const list = document.getElementById('sc-lockers-list');
-    if (!list) return;
-
-    if (_scLockers.length === 0) {
-        list.innerHTML = '<div class="empty-state" style="padding:40px"><i class="fas fa-lock" style="font-size:36px;color:var(--gray-300);margin-bottom:12px"></i><p>Aucun casier configuré</p><small class="text-muted">Ajoutez des casiers pour le self check-in</small></div>';
-        return;
-    }
-
-    list.innerHTML = `
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">
-            ${_scLockers.map(l => {
-                const statusColors = {
-                    'available': { bg: '#F0FDF4', border: '#BBF7D0', color: '#16A34A', label: 'Disponible', icon: 'check-circle' },
-                    'assigned': { bg: '#EFF6FF', border: '#BFDBFE', color: '#2563EB', label: 'Assigné', icon: 'user-check' },
-                    'maintenance': { bg: '#FEF2F2', border: '#FECACA', color: '#DC2626', label: 'Maintenance', icon: 'tools' }
-                };
-                const s = statusColors[l.status] || statusColors['available'];
-
-                return `
-                <div class="card" style="padding:0;border-left:4px solid ${s.color};overflow:hidden">
-                    <div style="padding:16px">
-                        <div style="display:flex;justify-content:space-between;align-items:start">
-                            <div>
-                                <h4 style="margin:0;font-size:18px"><i class="fas fa-lock" style="color:${s.color}"></i> Casier ${esc(l.locker_number)}</h4>
-                                <p style="margin:4px 0 0;font-size:13px;color:var(--gray-500)">Code : <strong>${esc(l.locker_code)}</strong></p>
-                            </div>
-                            <span style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:${s.bg};color:${s.color}">
-                                <i class="fas fa-${s.icon}"></i> ${s.label}
-                            </span>
-                        </div>
-                        ${l.linked_room_number ? `<p style="margin:8px 0 0;font-size:13px"><i class="fas fa-bed"></i> Chambre ${esc(l.linked_room_number)}</p>` : ''}
-                        ${l.notes ? `<p style="margin:4px 0 0;font-size:12px;color:var(--gray-400)">${esc(l.notes)}</p>` : ''}
-                        <div style="margin-top:12px;display:flex;gap:8px">
-                            <button class="btn btn-sm btn-outline" onclick="scEditLocker(${l.id})"><i class="fas fa-edit"></i> Modifier</button>
-                            <button class="btn btn-sm btn-danger" onclick="scDeleteLocker(${l.id})"><i class="fas fa-trash"></i></button>
-                        </div>
-                    </div>
-                </div>`;
-            }).join('')}
-        </div>
-    `;
-}
-
-function scShowCreateLocker() {
-    const activeRooms = _scRooms.filter(r => r.status === 'active');
-
-    openModal('Nouveau casier', `
-        <form onsubmit="scSaveLocker(event)">
-            <input type="hidden" name="hotel_id" value="${_scHotelId}">
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Numéro du casier *</label>
-                    <input type="text" name="locker_number" required placeholder="Ex: 1, A1, ...">
-                </div>
-                <div class="form-group">
-                    <label>Code d'accès *</label>
-                    <input type="text" name="locker_code" required placeholder="Ex: 1234, AB12, ...">
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Chambre associée</label>
-                <select name="room_id">
-                    <option value="">-- Aucune --</option>
-                    ${activeRooms.map(r => `<option value="${r.id}">${r.room_number} (${r.room_type})</option>`).join('')}
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Notes</label>
-                <textarea name="notes" rows="2" placeholder="Notes optionnelles..."></textarea>
-            </div>
-            <div style="text-align:right;margin-top:20px">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Créer</button>
-            </div>
-        </form>
-    `);
-}
-
-async function scSaveLocker(e) {
-    e.preventDefault();
-    const data = Object.fromEntries(new FormData(e.target));
-    try {
-        await API.post('lockers', data);
-        toast('Casier créé', 'success');
-        closeModal();
-        scRenderTab();
-    } catch (err) {
-        toast(err.message, 'error');
-    }
-}
-
-async function scEditLocker(id) {
-    const locker = _scLockers.find(l => l.id == id);
-    if (!locker) return;
-    const activeRooms = _scRooms.filter(r => r.status === 'active');
-
-    openModal('Modifier le casier', `
-        <form onsubmit="scUpdateLocker(event, ${id})">
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Numéro du casier *</label>
-                    <input type="text" name="locker_number" value="${esc(locker.locker_number)}" required>
-                </div>
-                <div class="form-group">
-                    <label>Code d'accès *</label>
-                    <input type="text" name="locker_code" value="${esc(locker.locker_code)}" required>
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Chambre associée</label>
-                <select name="room_id">
-                    <option value="">-- Aucune --</option>
-                    ${activeRooms.map(r => `<option value="${r.id}" ${r.id == locker.room_id ? 'selected' : ''}>${r.room_number} (${r.room_type})</option>`).join('')}
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Statut</label>
-                <select name="status">
-                    <option value="available" ${locker.status === 'available' ? 'selected' : ''}>Disponible</option>
-                    <option value="assigned" ${locker.status === 'assigned' ? 'selected' : ''}>Assigné</option>
-                    <option value="maintenance" ${locker.status === 'maintenance' ? 'selected' : ''}>Maintenance</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Notes</label>
-                <textarea name="notes" rows="2">${esc(locker.notes || '')}</textarea>
-            </div>
-            <div style="text-align:right;margin-top:20px">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
-            </div>
-        </form>
-    `);
-}
-
-async function scUpdateLocker(e, id) {
-    e.preventDefault();
-    const data = Object.fromEntries(new FormData(e.target));
-    try {
-        await API.put(`lockers/${id}`, data);
-        toast('Casier mis à jour', 'success');
-        closeModal();
-        scRenderTab();
-    } catch (err) {
-        toast(err.message, 'error');
-    }
-}
-
-async function scDeleteLocker(id) {
-    if (!confirm('Supprimer ce casier ?')) return;
-    try {
-        await API.delete(`lockers/${id}`);
-        toast('Casier supprimé', 'success');
-        scRenderTab();
-    } catch (err) {
-        toast(err.message, 'error');
-    }
-}
+// Note: La gestion des casiers a été déplacée vers la page Hôtel (onglet Self Check-in)
 
 // ==================== ONGLET TARIFS ====================
 
