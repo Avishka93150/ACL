@@ -124,7 +124,7 @@ async function scRenderReservations(content) {
 
         _scReservations = resData.reservations || [];
         _scLockers = lockersData.lockers || [];
-        _scRooms = roomsData.rooms || [];
+        _scRooms = (roomsData.hotel && roomsData.hotel.rooms) || roomsData.rooms || [];
 
         content.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
