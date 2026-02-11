@@ -8710,20 +8710,41 @@ try {
             }
             break;
 
-        // ==================== RÉSERVATION PUBLIQUE (PMS) ====================
-        case 'booking':
-            // Endpoints PUBLICS - pas d'auth requise (page de réservation client)
 
-            // GET /booking/{slug} - Infos hôtel publiques pour la page de réservation
+        // ==================== SELF CHECK-IN (PUBLIC) ====================
+        case 'booking':
+            // Endpoints PUBLICS - pas d'auth requise (page self check-in client)
+
+            // Helper: date effective (jour précédent si entre minuit et l'heure limite)
+            $getEffectiveDate = function($hotel) {
+                $cutoff = (int)($hotel['night_cutoff_hour'] ?? 7);
+                $now = new DateTime('now', new DateTimeZone('Europe/Paris'));
+                $hour = (int)$now->format('H');
+                if ($hour >= 0 && $hour < $cutoff) {
+                    $now->modify('-1 day');
+                }
+                return $now->format('Y-m-d');
+            };
+
+            // GET /booking/{slug} - Infos hôtel publiques pour le self check-in
             if ($method === 'GET' && $id && !$action) {
                 $hotel = db()->queryOne(
-                    "SELECT id, name, address, city, stars, checkin_time, checkout_time, pms_type, booking_slug, stripe_public_key, logo_url
-                     FROM hotels WHERE booking_slug = ? AND booking_enabled = 1 AND status = 'active'",
+                    "SELECT id, name, address, city, stars, checkin_time, checkout_time, booking_slug,
+                            stripe_public_key, logo_url, selfcheckin_enabled, walkin_enabled,
+                            default_night_price, default_breakfast_price, default_tourist_tax,
+                            breakfast_start, breakfast_end, night_cutoff_hour
+                     FROM hotels WHERE booking_slug = ? AND selfcheckin_enabled = 1 AND status = 'active'",
                     [$id]
                 );
-                if (!$hotel) json_error('Hôtel non trouvé ou réservation en ligne désactivée', 404);
+                if (!$hotel) json_error('Hôtel non trouvé ou self check-in désactivé', 404);
 
-                // Ne pas exposer les clés sensibles, juste la clé publique Stripe
+                // Tarif du jour (date effective)
+                $effectiveDate = $getEffectiveDate($hotel);
+                $pricing = db()->queryOne(
+                    "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
+                    [$hotel['id'], $effectiveDate]
+                );
+
                 json_out([
                     'hotel' => [
                         'id' => $hotel['id'],
@@ -8733,856 +8754,940 @@ try {
                         'stars' => $hotel['stars'],
                         'checkin_time' => $hotel['checkin_time'],
                         'checkout_time' => $hotel['checkout_time'],
-                        'pms_type' => $hotel['pms_type'],
                         'logo_url' => $hotel['logo_url'],
-                        'stripe_public_key' => $hotel['stripe_public_key']
+                        'stripe_public_key' => $hotel['stripe_public_key'],
+                        'walkin_enabled' => (bool)$hotel['walkin_enabled'],
+                        'breakfast_start' => $pricing['breakfast_start'] ?? $hotel['breakfast_start'],
+                        'breakfast_end' => $pricing['breakfast_end'] ?? $hotel['breakfast_end'],
+                    ],
+                    'pricing' => [
+                        'date' => $effectiveDate,
+                        'night_price' => (float)($pricing['night_price'] ?? $hotel['default_night_price']),
+                        'breakfast_price' => (float)($pricing['breakfast_price'] ?? $hotel['default_breakfast_price']),
+                        'tourist_tax' => (float)($pricing['tourist_tax'] ?? $hotel['default_tourist_tax']),
                     ]
                 ]);
             }
 
-            // GET /booking/{slug}/availability?checkin=YYYY-MM-DD&checkout=YYYY-MM-DD&nb_adult=2&nb_child=0
-            if ($method === 'GET' && $id && $action === 'availability') {
-                error_log("[BOOKING AVAIL] Recherche disponibilité pour slug=$id");
-                try {
-                    $hotel = db()->queryOne(
-                        "SELECT * FROM hotels WHERE booking_slug = ? AND booking_enabled = 1 AND status = 'active'",
-                        [$id]
-                    );
-                    if (!$hotel) {
-                        error_log("[BOOKING AVAIL] Hôtel non trouvé pour slug=$id");
-                        json_error('Hôtel non trouvé', 404);
-                    }
-
-                    $checkin = $_GET['checkin'] ?? '';
-                    $checkout = $_GET['checkout'] ?? '';
-                    $nbAdult = (int)($_GET['nb_adult'] ?? $_GET['guests'] ?? 1);
-                    $nbChild = (int)($_GET['nb_child'] ?? 0);
-                    error_log("[BOOKING AVAIL] Params: checkin=$checkin, checkout=$checkout, adults=$nbAdult, children=$nbChild, hotel_id={$hotel['id']}, pms_type=" . ($hotel['pms_type'] ?? 'null'));
-
-                    if (!$checkin || !$checkout) json_error('Dates requises');
-                    if ($checkin >= $checkout) json_error('Date de départ doit être après la date d\'arrivée');
-                    if (strtotime($checkin) < strtotime('today')) json_error('Date d\'arrivée ne peut pas être dans le passé');
-
-                    // Appeler le PMS pour la disponibilité (API GeHo: POST /AvailRooms/)
-                    $availability = pms_get_availability($hotel, $checkin, $checkout, $nbAdult, $nbChild);
-                    error_log("[BOOKING AVAIL] Résultat: " . count($availability) . " chambre(s) trouvée(s)");
-                    json_out(['rooms' => $availability]);
-                } catch (Exception $e) {
-                    error_log("[BOOKING AVAIL] EXCEPTION: " . $e->getMessage() . " | File: " . $e->getFile() . ":" . $e->getLine() . " | Trace: " . $e->getTraceAsString());
-                    json_error('Erreur serveur lors de la recherche de disponibilité: ' . $e->getMessage(), 500);
-                }
-            }
-
-            // POST /booking/{slug}/reserve - Créer une réservation + paiement Stripe
-            if ($method === 'POST' && $id && $action === 'reserve') {
-                error_log("[BOOKING RESERVE] Début réservation pour slug=$id");
-                try {
-                    $hotel = db()->queryOne(
-                        "SELECT * FROM hotels WHERE booking_slug = ? AND booking_enabled = 1 AND status = 'active'",
-                        [$id]
-                    );
-                    if (!$hotel) {
-                        error_log("[BOOKING RESERVE] Hôtel non trouvé pour slug=$id");
-                        json_error('Hôtel non trouvé', 404);
-                    }
-                    error_log("[BOOKING RESERVE] Hôtel trouvé: id={$hotel['id']}, name={$hotel['name']}");
-
-                    if (empty($hotel['stripe_secret_key'])) {
-                        error_log("[BOOKING RESERVE] Stripe non configuré pour hotel_id={$hotel['id']}");
-                        json_error('Paiement non configuré pour cet hôtel', 500);
-                    }
-
-                    $data = get_input();
-                    error_log("[BOOKING RESERVE] Input reçu: " . json_encode(array_diff_key($data, array_flip(['stripe_secret_key']))));
-
-                    // Validation
-                    $required = ['checkin_date', 'checkout_date', 'room_type', 'guest_last_name', 'guest_email', 'total_amount'];
-                    foreach ($required as $field) {
-                        if (empty($data[$field])) {
-                            error_log("[BOOKING RESERVE] Champ manquant: $field");
-                            json_error("Champ $field requis");
-                        }
-                    }
-
-                    if (!filter_var($data['guest_email'], FILTER_VALIDATE_EMAIL)) {
-                        error_log("[BOOKING RESERVE] Email invalide: {$data['guest_email']}");
-                        json_error('Email invalide');
-                    }
-
-                    // Générer une référence unique
-                    $ref = 'ACL-' . strtoupper(substr($hotel['booking_slug'], 0, 4)) . '-' . date('ymd') . '-' . strtoupper(substr(uniqid(), -5));
-                    error_log("[BOOKING RESERVE] Ref générée: $ref");
-
-                    // Créer le PaymentIntent Stripe
-                    $stripeSecret = $hotel['stripe_secret_key'];
-                    $amount = (int)round(floatval($data['total_amount']) * 100); // Stripe utilise les centimes
-                    error_log("[BOOKING RESERVE] Appel Stripe: montant={$amount} centimes ({$data['total_amount']} EUR)");
-
-                    $ch = curl_init('https://api.stripe.com/v1/payment_intents');
-                    curl_setopt_array($ch, [
-                        CURLOPT_POST => true,
-                        CURLOPT_RETURNTRANSFER => true,
-                        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $stripeSecret],
-                        CURLOPT_POSTFIELDS => http_build_query([
-                            'amount' => $amount,
-                            'currency' => 'eur',
-                            'metadata[booking_ref]' => $ref,
-                            'metadata[hotel_id]' => $hotel['id'],
-                            'metadata[guest_email]' => $data['guest_email'],
-                            'receipt_email' => $data['guest_email'],
-                            'description' => "Réservation {$ref} - {$hotel['name']} - {$data['checkin_date']} au {$data['checkout_date']}"
-                        ])
-                    ]);
-                    $stripeRaw = curl_exec($ch);
-                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                    $curlError = curl_error($ch);
-                    curl_close($ch);
-
-                    error_log("[BOOKING RESERVE] Stripe réponse HTTP=$httpCode, curl_error=" . ($curlError ?: 'aucune'));
-                    $stripeResponse = json_decode($stripeRaw, true);
-                    if ($stripeResponse === null) {
-                        error_log("[BOOKING RESERVE] Stripe réponse non-JSON: " . substr($stripeRaw, 0, 500));
-                    }
-
-                    if ($httpCode !== 200 || empty($stripeResponse['client_secret'])) {
-                        $stripeErr = $stripeResponse['error']['message'] ?? 'Erreur Stripe (HTTP ' . $httpCode . ')';
-                        error_log("[BOOKING RESERVE] Stripe ERREUR: $stripeErr | Réponse complète: " . substr($stripeRaw, 0, 1000));
-                        json_error('Erreur paiement: ' . $stripeErr, 500);
-                    }
-                    error_log("[BOOKING RESERVE] Stripe OK, payment_intent_id=" . $stripeResponse['id']);
-
-                    // Insérer la réservation en BDD avec champs étendus
-                    error_log("[BOOKING RESERVE] Insertion BDD pms_bookings...");
-                    $bookingId = db()->insert(
-                        "INSERT INTO pms_bookings (hotel_id, booking_ref, guest_first_name, guest_last_name, guest_email, guest_phone, civilite, address1, address2, city, postal_code, nb_adult, nb_child, checkin_date, checkout_date, room_type, guests_count, special_requests, total_amount, extras_amount, currency, stripe_payment_intent_id, payment_status, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EUR', ?, 'pending', 'pending', NOW())",
-                        [
-                            $hotel['id'],
-                            $ref,
-                            $data['guest_first_name'] ?? '',
-                            $data['guest_last_name'],
-                            $data['guest_email'],
-                            $data['guest_phone'] ?? '',
-                            $data['civilite'] ?? 'M.',
-                            $data['address1'] ?? '',
-                            $data['address2'] ?? '',
-                            $data['city'] ?? '',
-                            $data['postal_code'] ?? '',
-                            (int)($data['nb_adult'] ?? 1),
-                            (int)($data['nb_child'] ?? 0),
-                            $data['checkin_date'],
-                            $data['checkout_date'],
-                            $data['room_type'],
-                            (int)($data['nb_adult'] ?? 1) + (int)($data['nb_child'] ?? 0),
-                            $data['special_requests'] ?? '',
-                            $data['total_amount'],
-                            $data['extras_amount'] ?? 0
-                        ]
-                    );
-                    error_log("[BOOKING RESERVE] Insertion OK, booking_id=$bookingId");
-
-                    json_out([
-                        'booking_ref' => $ref,
-                        'booking_id' => $bookingId,
-                        'client_secret' => $stripeResponse['client_secret'],
-                        'payment_intent_id' => $stripeResponse['id']
-                    ]);
-                } catch (Exception $e) {
-                    error_log("[BOOKING RESERVE] EXCEPTION: " . $e->getMessage() . " | File: " . $e->getFile() . ":" . $e->getLine() . " | Trace: " . $e->getTraceAsString());
-                    json_error('Erreur serveur lors de la réservation: ' . $e->getMessage(), 500);
-                }
-            }
-
-            // POST /booking/{slug}/confirm - Confirmer après paiement Stripe réussi
-            if ($method === 'POST' && $id && $action === 'confirm') {
-                $data = get_input();
-                if (empty($data['booking_ref']) || empty($data['payment_intent_id'])) json_error('Données manquantes');
-
-                $booking = db()->queryOne("SELECT b.*, h.* FROM pms_bookings b JOIN hotels h ON b.hotel_id = h.id WHERE b.booking_ref = ? AND h.booking_slug = ?", [$data['booking_ref'], $id]);
-                if (!$booking) json_error('Réservation non trouvée', 404);
-
-                // Vérifier le paiement auprès de Stripe
-                $ch = curl_init('https://api.stripe.com/v1/payment_intents/' . $data['payment_intent_id']);
-                curl_setopt_array($ch, [
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $booking['stripe_secret_key']]
-                ]);
-                $piResponse = json_decode(curl_exec($ch), true);
-                curl_close($ch);
-
-                if (empty($piResponse['status']) || $piResponse['status'] !== 'succeeded') {
-                    db()->execute("UPDATE pms_bookings SET payment_status = 'failed', updated_at = NOW() WHERE booking_ref = ?", [$data['booking_ref']]);
-                    json_error('Paiement non confirmé');
-                }
-
-                // Mettre à jour le statut
-                $chargeId = $piResponse['latest_charge'] ?? null;
-                db()->execute(
-                    "UPDATE pms_bookings SET payment_status = 'paid', status = 'confirmed', stripe_charge_id = ?, updated_at = NOW() WHERE booking_ref = ?",
-                    [$chargeId, $data['booking_ref']]
-                );
-
-                // Synchroniser avec le PMS GeHo (POST /CreateBooking/)
-                $syncResult = pms_create_reservation($booking);
-                $pmsNoResa = null;
-                if ($syncResult['success']) {
-                    $pmsNoResa = $syncResult['pms_id'];
-                    db()->execute(
-                        "UPDATE pms_bookings SET pms_synced = 1, pms_booking_id = ?, updated_at = NOW() WHERE booking_ref = ?",
-                        [$pmsNoResa ?? '', $data['booking_ref']]
-                    );
-
-                    // Si des extras ont été sélectionnés, les ajouter via POST /AddProduct/
-                    if (!empty($data['extras']) && $pmsNoResa) {
-                        $prodList = [];
-                        foreach ($data['extras'] as $extra) {
-                            $prodList[] = [
-                                'ProdCode' => $extra['ProductCode'],
-                                'Quantity' => (int)($extra['Quantity'] ?? 1),
-                                'StartDate' => $booking['checkin_date'],
-                                'NbNight' => (int)((strtotime($booking['checkout_date']) - strtotime($booking['checkin_date'])) / 86400)
-                            ];
-                        }
-                        pms_add_products($hotel, $pmsNoResa, $prodList);
-                    }
-                } else {
-                    db()->execute(
-                        "UPDATE pms_bookings SET pms_sync_error = ?, updated_at = NOW() WHERE booking_ref = ?",
-                        [$syncResult['error'] ?? 'Erreur sync PMS', $data['booking_ref']]
-                    );
-                }
-
-                json_out([
-                    'success' => true,
-                    'booking_ref' => $data['booking_ref'],
-                    'status' => 'confirmed',
-                    'pms_synced' => $syncResult['success'],
-                    'pms_noresa' => $pmsNoResa
-                ]);
-            }
-
-            // POST /booking/{slug}/products - Récupérer les extras disponibles (via PMS)
-            if ($method === 'POST' && $id && $action === 'products') {
+            // POST /booking/{slug}/lookup - Rechercher une réservation par nom ou numéro
+            if ($method === 'POST' && $id && $action === 'lookup') {
                 $hotel = db()->queryOne(
-                    "SELECT * FROM hotels WHERE booking_slug = ? AND booking_enabled = 1 AND status = 'active'",
+                    "SELECT * FROM hotels WHERE booking_slug = ? AND selfcheckin_enabled = 1 AND status = 'active'",
                     [$id]
                 );
                 if (!$hotel) json_error('Hôtel non trouvé', 404);
 
                 $data = get_input();
-                if (empty($data['noresa'])) json_error('noresa requis');
+                $reservation = null;
 
-                $result = pms_get_products($hotel, $data['noresa']);
-                json_out($result);
-            }
-
-            // POST /booking/{slug}/lookup - Rechercher une réservation existante
-            if ($method === 'POST' && $id && $action === 'lookup') {
-                error_log("[BOOKING LOOKUP] Début lookup pour slug=$id");
-                try {
-                    $hotel = db()->queryOne(
-                        "SELECT * FROM hotels WHERE booking_slug = ? AND booking_enabled = 1 AND status = 'active'",
-                        [$id]
+                if (!empty($data['reservation_number'])) {
+                    $reservation = db()->queryOne(
+                        "SELECT * FROM selfcheckin_reservations WHERE reservation_number = ? AND hotel_id = ? AND type = 'pre_booked' AND status IN ('pending', 'confirmed')",
+                        [$data['reservation_number'], $hotel['id']]
                     );
-                    if (!$hotel) {
-                        error_log("[BOOKING LOOKUP] Hôtel non trouvé pour slug=$id");
-                        json_error('Hôtel non trouvé', 404);
-                    }
-                    error_log("[BOOKING LOOKUP] Hôtel trouvé: id={$hotel['id']}, name={$hotel['name']}, pms_type=" . ($hotel['pms_type'] ?? 'null'));
-
-                    $data = get_input();
-                    error_log("[BOOKING LOOKUP] Input reçu: " . json_encode($data));
-
-                    // Chercher d'abord dans notre BDD locale
-                    $localBooking = null;
-                    if (!empty($data['booking_ref'])) {
-                        error_log("[BOOKING LOOKUP] Recherche par booking_ref: {$data['booking_ref']}");
-                        $localBooking = db()->queryOne(
-                            "SELECT * FROM pms_bookings WHERE booking_ref = ? AND hotel_id = ?",
-                            [$data['booking_ref'], $hotel['id']]
-                        );
-                    } elseif (!empty($data['last_name'])) {
-                        error_log("[BOOKING LOOKUP] Recherche par last_name: {$data['last_name']}");
-                        $localBooking = db()->queryOne(
-                            "SELECT * FROM pms_bookings WHERE guest_last_name = ? AND hotel_id = ? AND status IN ('confirmed', 'pending') ORDER BY created_at DESC",
-                            [$data['last_name'], $hotel['id']]
-                        );
-                    } elseif (!empty($data['email'])) {
-                        error_log("[BOOKING LOOKUP] Recherche par email: {$data['email']}");
-                        $localBooking = db()->queryOne(
-                            "SELECT * FROM pms_bookings WHERE guest_email = ? AND hotel_id = ? AND status IN ('confirmed', 'pending') ORDER BY created_at DESC",
-                            [$data['email'], $hotel['id']]
-                        );
-                    }
-                    error_log("[BOOKING LOOKUP] Résultat BDD locale: " . ($localBooking ? "trouvé (ref={$localBooking['booking_ref']})" : "non trouvé"));
-
-                    // Chercher aussi dans le PMS GeHo via POST /GetBooking/
-                    error_log("[BOOKING LOOKUP] Appel PMS pms_get_booking, pms_type=" . ($hotel['pms_type'] ?? 'null'));
-                    $pmsResult = pms_get_booking($hotel, [
-                        'noresa' => $data['noresa'] ?? ($localBooking['pms_booking_id'] ?? ''),
-                        'last_name' => $data['last_name'] ?? '',
-                        'email' => $data['email'] ?? '',
-                        'phone' => $data['phone'] ?? '',
-                        'exact' => '1'
-                    ]);
-                    error_log("[BOOKING LOOKUP] Résultat PMS: " . json_encode($pmsResult));
-
-                    json_out([
-                        'local_booking' => $localBooking,
-                        'pms_result' => $pmsResult
-                    ]);
-                } catch (Exception $e) {
-                    error_log("[BOOKING LOOKUP] EXCEPTION: " . $e->getMessage() . " | File: " . $e->getFile() . ":" . $e->getLine() . " | Trace: " . $e->getTraceAsString());
-                    json_error('Erreur serveur lors de la recherche: ' . $e->getMessage(), 500);
-                }
-            }
-            break;
-
-        // ==================== PMS ADMIN (gestion interne) ====================
-        case 'pms':
-            require_auth();
-            $user = require_auth();
-
-            // GET /pms/bookings?hotel_id=X - Liste des réservations
-            if ($method === 'GET' && $id === 'bookings') {
-                $hotelId = $_GET['hotel_id'] ?? null;
-                if (!$hotelId) json_error('hotel_id requis');
-
-                $userHotelIds = getManageableHotels($user);
-                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
-
-                $bookings = db()->query(
-                    "SELECT * FROM pms_bookings WHERE hotel_id = ? ORDER BY created_at DESC LIMIT 100",
-                    [$hotelId]
-                );
-                json_out($bookings);
-            }
-
-            // POST /pms/test-connection - Tester la connexion au PMS
-            if ($method === 'POST' && $id === 'test-connection') {
-                if (!in_array($user['role'], ['admin', 'groupe_manager'])) json_error('Permission refusée', 403);
-
-                $data = get_input();
-                if (empty($data['hotel_id'])) json_error('hotel_id requis');
-
-                $hotel = db()->queryOne("SELECT * FROM hotels WHERE id = ?", [$data['hotel_id']]);
-                if (!$hotel) json_error('Hôtel non trouvé', 404);
-                if (empty($hotel['pms_type'])) json_error('Aucun PMS configuré');
-
-                $result = pms_test_connection($hotel);
-                json_out($result);
-            }
-            break;
-
-        // ==================== PMS RELAY (agent distant) ====================
-        case 'pms-relay':
-
-            // GET /pms-relay/poll - L'agent local récupère les requêtes en attente (long-polling)
-            if ($method === 'GET' && $id === 'poll') {
-                $token = $_GET['token'] ?? ($_SERVER['HTTP_X_RELAY_TOKEN'] ?? '');
-                if (empty($token)) json_error('Token requis', 401);
-
-                $hotel = db()->queryOne(
-                    "SELECT * FROM hotels WHERE pms_relay_token = ? AND pms_connection_mode = 'relay' AND pms_type IS NOT NULL",
-                    [$token]
-                );
-                if (!$hotel) json_error('Token invalide ou relais non configuré', 403);
-
-                // Long-polling: attendre jusqu'à 25 secondes qu'une requête arrive
-                $timeout = 25;
-                $start = time();
-                $request = null;
-
-                while (time() - $start < $timeout) {
-                    $request = db()->queryOne(
-                        "SELECT * FROM pms_relay_queue WHERE hotel_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1",
-                        [$hotel['id']]
+                } elseif (!empty($data['last_name'])) {
+                    $reservation = db()->queryOne(
+                        "SELECT * FROM selfcheckin_reservations WHERE LOWER(guest_last_name) LIKE LOWER(?) AND hotel_id = ? AND type = 'pre_booked' AND status IN ('pending', 'confirmed') ORDER BY checkin_date DESC",
+                        [$data['last_name'], $hotel['id']]
                     );
-
-                    if ($request) {
-                        // Marquer comme "processing"
-                        db()->execute(
-                            "UPDATE pms_relay_queue SET status = 'processing', picked_at = ? WHERE id = ? AND status = 'pending'",
-                            [date('Y-m-d H:i:s'), $request['id']]
-                        );
-                        break;
-                    }
-
-                    usleep(500000); // 500ms
                 }
 
-                if (!$request) {
-                    json_out(['request' => null]);
-                } else {
-                    json_out(['request' => [
-                        'request_id' => $request['request_id'],
-                        'endpoint' => $request['endpoint'],
-                        'method' => $request['method'],
-                        'body' => $request['request_body'] ? json_decode($request['request_body'], true) : null
-                    ]]);
-                }
-            }
+                if (!$reservation) json_error('Réservation non trouvée. Vérifiez votre nom ou numéro de réservation.', 404);
 
-            // POST /pms-relay/response - L'agent poste la réponse du PMS
-            if ($method === 'POST' && $id === 'response') {
-                $token = $_SERVER['HTTP_X_RELAY_TOKEN'] ?? '';
-                if (empty($token)) json_error('Token requis', 401);
-
-                $hotel = db()->queryOne(
-                    "SELECT id FROM hotels WHERE pms_relay_token = ? AND pms_connection_mode = 'relay'",
-                    [$token]
+                // Tarif petit-déjeuner actuel (pour ajout éventuel)
+                $effectiveDate = $getEffectiveDate($hotel);
+                $pricing = db()->queryOne(
+                    "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
+                    [$hotel['id'], $effectiveDate]
                 );
-                if (!$hotel) json_error('Token invalide', 403);
-
-                $data = get_input();
-                if (empty($data['request_id'])) json_error('request_id requis');
-
-                $queue = db()->queryOne(
-                    "SELECT id FROM pms_relay_queue WHERE request_id = ? AND hotel_id = ? AND status = 'processing'",
-                    [$data['request_id'], $hotel['id']]
-                );
-                if (!$queue) json_error('Requête non trouvée ou déjà traitée', 404);
-
-                $status = !empty($data['error']) ? 'error' : 'completed';
-                db()->execute(
-                    "UPDATE pms_relay_queue SET status = ?, response_body = ?, response_status = ?, error_message = ?, completed_at = ? WHERE id = ?",
-                    [$status, json_encode($data['response'] ?? null), $data['http_status'] ?? 200, $data['error'] ?? null, date('Y-m-d H:i:s'), $queue['id']]
-                );
-
-                json_out(['ok' => true]);
-            }
-
-            // POST /pms-relay/generate-token - Générer un token pour l'agent (admin only)
-            if ($method === 'POST' && $id === 'generate-token') {
-                $user = require_auth();
-                if (!in_array($user['role'], ['admin', 'groupe_manager'])) json_error('Permission refusée', 403);
-
-                $data = get_input();
-                if (empty($data['hotel_id'])) json_error('hotel_id requis');
-
-                $newToken = bin2hex(random_bytes(32));
-                db()->execute(
-                    "UPDATE hotels SET pms_relay_token = ? WHERE id = ?",
-                    [$newToken, $data['hotel_id']]
-                );
-
-                json_out(['token' => $newToken]);
-            }
-
-            // GET /pms-relay/status - Statut de l'agent pour un hôtel (admin)
-            if ($method === 'GET' && $id === 'status') {
-                $user = require_auth();
-                $hotelId = $_GET['hotel_id'] ?? null;
-                if (!$hotelId) json_error('hotel_id requis');
-
-                // Vérifier s'il y a eu une activité récente de l'agent (requête traitée dans les 2 dernières minutes)
-                $recent = db()->queryOne(
-                    "SELECT MAX(completed_at) as last_activity FROM pms_relay_queue WHERE hotel_id = ? AND status IN ('completed', 'error')",
-                    [$hotelId]
-                );
-                $pending = db()->count("SELECT COUNT(*) FROM pms_relay_queue WHERE hotel_id = ? AND status = 'pending'", [$hotelId]);
-                $lastActivity = $recent['last_activity'] ?? null;
-                $agentOnline = $lastActivity && (strtotime($lastActivity) > strtotime('-2 minutes'));
 
                 json_out([
-                    'agent_online' => $agentOnline,
-                    'last_activity' => $lastActivity,
-                    'pending_requests' => $pending
+                    'reservation' => [
+                        'id' => $reservation['id'],
+                        'reservation_number' => $reservation['reservation_number'],
+                        'guest_first_name' => $reservation['guest_first_name'],
+                        'guest_last_name' => $reservation['guest_last_name'],
+                        'guest_email' => $reservation['guest_email'],
+                        'nb_adults' => (int)$reservation['nb_adults'],
+                        'nb_children' => (int)$reservation['nb_children'],
+                        'checkin_date' => $reservation['checkin_date'],
+                        'room_number' => $reservation['room_number'],
+                        'accommodation_price' => (float)$reservation['accommodation_price'],
+                        'tourist_tax_amount' => (float)$reservation['tourist_tax_amount'],
+                        'breakfast_price' => (float)$reservation['breakfast_price'],
+                        'breakfast_included' => (bool)$reservation['breakfast_included'],
+                        'total_amount' => (float)$reservation['total_amount'],
+                        'deposit_amount' => (float)$reservation['deposit_amount'],
+                        'remaining_amount' => (float)$reservation['remaining_amount'],
+                        'payment_status' => $reservation['payment_status'],
+                        'status' => $reservation['status'],
+                    ],
+                    'breakfast_option' => [
+                        'unit_price' => (float)($pricing['breakfast_price'] ?? $hotel['default_breakfast_price']),
+                        'start' => $pricing['breakfast_start'] ?? $hotel['breakfast_start'],
+                        'end' => $pricing['breakfast_end'] ?? $hotel['breakfast_end'],
+                    ]
                 ]);
             }
 
-            // Nettoyage des vieilles requêtes (appelé périodiquement)
-            if ($method === 'POST' && $id === 'cleanup') {
-                $user = require_auth();
-                if ($user['role'] !== 'admin') json_error('Permission refusée', 403);
+            // POST /booking/{slug}/update-reservation - Modifier réservation (ajouter petit-déjeuner)
+            if ($method === 'POST' && $id && $action === 'update-reservation') {
+                $hotel = db()->queryOne(
+                    "SELECT * FROM hotels WHERE booking_slug = ? AND selfcheckin_enabled = 1 AND status = 'active'",
+                    [$id]
+                );
+                if (!$hotel) json_error('Hôtel non trouvé', 404);
 
-                // Timeout les requêtes pending/processing depuis plus de 60 secondes
-                db()->execute(
-                    "UPDATE pms_relay_queue SET status = 'timeout', error_message = 'Timeout: agent non connecté' WHERE status IN ('pending', 'processing') AND created_at < DATE_SUB(NOW(), INTERVAL 60 SECOND)"
+                $data = get_input();
+                if (empty($data['reservation_id'])) json_error('reservation_id requis');
+
+                $reservation = db()->queryOne(
+                    "SELECT * FROM selfcheckin_reservations WHERE id = ? AND hotel_id = ? AND status IN ('pending', 'confirmed')",
+                    [$data['reservation_id'], $hotel['id']]
                 );
-                // Supprimer les requêtes de plus d'1 heure
-                db()->execute(
-                    "DELETE FROM pms_relay_queue WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 HOUR)"
+                if (!$reservation) json_error('Réservation non trouvée', 404);
+
+                // Ajouter petit-déjeuner
+                if (!empty($data['add_breakfast']) && !$reservation['breakfast_included']) {
+                    $effectiveDate = $getEffectiveDate($hotel);
+                    $pricing = db()->queryOne(
+                        "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
+                        [$hotel['id'], $effectiveDate]
+                    );
+                    $breakfastUnitPrice = (float)($pricing['breakfast_price'] ?? $hotel['default_breakfast_price']);
+                    $nbPersons = (int)$reservation['nb_adults'] + (int)$reservation['nb_children'];
+                    $breakfastTotal = $breakfastUnitPrice * $nbPersons;
+
+                    $newTotal = (float)$reservation['total_amount'] + $breakfastTotal;
+                    $newRemaining = $newTotal - (float)$reservation['deposit_amount'];
+
+                    db()->execute(
+                        "UPDATE selfcheckin_reservations SET breakfast_included = 1, breakfast_price = ?, total_amount = ?, remaining_amount = ?, updated_at = NOW() WHERE id = ?",
+                        [$breakfastTotal, $newTotal, max(0, $newRemaining), $reservation['id']]
+                    );
+
+                    $reservation['breakfast_included'] = 1;
+                    $reservation['breakfast_price'] = $breakfastTotal;
+                    $reservation['total_amount'] = $newTotal;
+                    $reservation['remaining_amount'] = max(0, $newRemaining);
+                }
+
+                json_out([
+                    'reservation' => [
+                        'id' => (int)$reservation['id'],
+                        'reservation_number' => $reservation['reservation_number'],
+                        'total_amount' => (float)$reservation['total_amount'],
+                        'deposit_amount' => (float)$reservation['deposit_amount'],
+                        'remaining_amount' => (float)$reservation['remaining_amount'],
+                        'breakfast_included' => (bool)$reservation['breakfast_included'],
+                        'breakfast_price' => (float)$reservation['breakfast_price'],
+                    ]
+                ]);
+            }
+
+            // POST /booking/{slug}/pay - Créer un PaymentIntent Stripe pour le restant à payer
+            if ($method === 'POST' && $id && $action === 'pay') {
+                $hotel = db()->queryOne(
+                    "SELECT * FROM hotels WHERE booking_slug = ? AND selfcheckin_enabled = 1 AND status = 'active'",
+                    [$id]
                 );
-                json_out(['ok' => true]);
+                if (!$hotel) json_error('Hôtel non trouvé', 404);
+                if (empty($hotel['stripe_secret_key'])) json_error('Paiement non configuré pour cet hôtel', 500);
+
+                $data = get_input();
+                if (empty($data['reservation_id'])) json_error('reservation_id requis');
+
+                $reservation = db()->queryOne(
+                    "SELECT * FROM selfcheckin_reservations WHERE id = ? AND hotel_id = ? AND payment_status != 'paid'",
+                    [$data['reservation_id'], $hotel['id']]
+                );
+                if (!$reservation) json_error('Réservation non trouvée ou déjà payée', 404);
+
+                $remainingAmount = (float)$reservation['remaining_amount'];
+
+                // Si rien à payer (arrhes couvrent tout)
+                if ($remainingAmount <= 0) {
+                    db()->execute(
+                        "UPDATE selfcheckin_reservations SET payment_status = 'paid', status = 'confirmed', updated_at = NOW() WHERE id = ?",
+                        [$reservation['id']]
+                    );
+                    if ($reservation['locker_id']) {
+                        db()->execute("UPDATE hotel_lockers SET status = 'assigned', updated_at = NOW() WHERE id = ?", [$reservation['locker_id']]);
+                    }
+                    json_out([
+                        'no_payment_needed' => true,
+                        'reservation' => selfcheckin_format_confirmation($reservation, $hotel)
+                    ]);
+                    break;
+                }
+
+                // Créer PaymentIntent Stripe
+                $amountCents = (int)round($remainingAmount * 100);
+                $guestName = trim(($reservation['guest_first_name'] ?? '') . ' ' . ($reservation['guest_last_name'] ?? ''));
+
+                $ch = curl_init('https://api.stripe.com/v1/payment_intents');
+                curl_setopt_array($ch, [
+                    CURLOPT_POST => true,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $hotel['stripe_secret_key']],
+                    CURLOPT_POSTFIELDS => http_build_query([
+                        'amount' => $amountCents,
+                        'currency' => 'eur',
+                        'metadata[reservation_id]' => $reservation['id'],
+                        'metadata[reservation_number]' => $reservation['reservation_number'],
+                        'metadata[hotel_id]' => $hotel['id'],
+                        'metadata[guest_name]' => $guestName,
+                        'receipt_email' => $reservation['guest_email'] ?: ($data['email'] ?? ''),
+                        'description' => "Check-in {$reservation['reservation_number']} - {$hotel['name']}"
+                    ])
+                ]);
+                $stripeRaw = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                $stripeResponse = json_decode($stripeRaw, true);
+                if ($httpCode !== 200 || empty($stripeResponse['client_secret'])) {
+                    $stripeErr = $stripeResponse['error']['message'] ?? 'Erreur Stripe (HTTP ' . $httpCode . ')';
+                    json_error('Erreur paiement: ' . $stripeErr, 500);
+                }
+
+                db()->execute(
+                    "UPDATE selfcheckin_reservations SET stripe_payment_intent_id = ?, updated_at = NOW() WHERE id = ?",
+                    [$stripeResponse['id'], $reservation['id']]
+                );
+
+                json_out([
+                    'client_secret' => $stripeResponse['client_secret'],
+                    'payment_intent_id' => $stripeResponse['id'],
+                    'amount' => $remainingAmount
+                ]);
+            }
+
+            // POST /booking/{slug}/confirm - Confirmer après paiement Stripe réussi
+            if ($method === 'POST' && $id && $action === 'confirm') {
+                $hotel = db()->queryOne(
+                    "SELECT * FROM hotels WHERE booking_slug = ? AND selfcheckin_enabled = 1 AND status = 'active'",
+                    [$id]
+                );
+                if (!$hotel) json_error('Hôtel non trouvé', 404);
+
+                $data = get_input();
+                if (empty($data['reservation_id']) || empty($data['payment_intent_id'])) json_error('Données manquantes');
+
+                $reservation = db()->queryOne(
+                    "SELECT * FROM selfcheckin_reservations WHERE id = ? AND hotel_id = ?",
+                    [$data['reservation_id'], $hotel['id']]
+                );
+                if (!$reservation) json_error('Réservation non trouvée', 404);
+
+                // Vérifier le paiement Stripe
+                $ch = curl_init('https://api.stripe.com/v1/payment_intents/' . $data['payment_intent_id']);
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $hotel['stripe_secret_key']]
+                ]);
+                $piResponse = json_decode(curl_exec($ch), true);
+                curl_close($ch);
+
+                if (empty($piResponse['status']) || $piResponse['status'] !== 'succeeded') {
+                    db()->execute(
+                        "UPDATE selfcheckin_reservations SET payment_status = 'failed', updated_at = NOW() WHERE id = ?",
+                        [$reservation['id']]
+                    );
+                    json_error('Paiement non confirmé. Veuillez réessayer.');
+                }
+
+                $chargeId = $piResponse['latest_charge'] ?? null;
+                db()->execute(
+                    "UPDATE selfcheckin_reservations SET payment_status = 'paid', status = 'confirmed', stripe_charge_id = ?, updated_at = NOW() WHERE id = ?",
+                    [$chargeId, $reservation['id']]
+                );
+
+                // Marquer le casier comme assigné
+                if ($reservation['locker_id']) {
+                    db()->execute("UPDATE hotel_lockers SET status = 'assigned', updated_at = NOW() WHERE id = ?", [$reservation['locker_id']]);
+                }
+
+                // Rafraîchir les données de la réservation
+                $reservation = db()->queryOne("SELECT * FROM selfcheckin_reservations WHERE id = ?", [$reservation['id']]);
+
+                json_out([
+                    'success' => true,
+                    'reservation' => selfcheckin_format_confirmation($reservation, $hotel)
+                ]);
+            }
+
+            // GET /booking/{slug}/available-rooms - Chambres disponibles pour walk-in
+            if ($method === 'GET' && $id && $action === 'available-rooms') {
+                $hotel = db()->queryOne(
+                    "SELECT * FROM hotels WHERE booking_slug = ? AND selfcheckin_enabled = 1 AND walkin_enabled = 1 AND status = 'active'",
+                    [$id]
+                );
+                if (!$hotel) json_error('Hôtel non trouvé ou réservation sans rendez-vous désactivée', 404);
+
+                $effectiveDate = $getEffectiveDate($hotel);
+
+                // Récupérer les slots walk-in disponibles (sans info client = pas encore pris)
+                $slots = db()->query(
+                    "SELECT r.id, r.reservation_number, r.room_number, r.checkin_date
+                     FROM selfcheckin_reservations r
+                     WHERE r.hotel_id = ? AND r.type = 'walkin' AND r.status = 'pending'
+                        AND r.guest_last_name IS NULL AND r.checkin_date = ?
+                     ORDER BY r.room_number",
+                    [$hotel['id'], $effectiveDate]
+                );
+
+                $pricing = db()->queryOne(
+                    "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
+                    [$hotel['id'], $effectiveDate]
+                );
+
+                json_out([
+                    'rooms' => $slots,
+                    'pricing' => [
+                        'date' => $effectiveDate,
+                        'night_price' => (float)($pricing['night_price'] ?? $hotel['default_night_price']),
+                        'breakfast_price' => (float)($pricing['breakfast_price'] ?? $hotel['default_breakfast_price']),
+                        'tourist_tax' => (float)($pricing['tourist_tax'] ?? $hotel['default_tourist_tax']),
+                        'breakfast_start' => $pricing['breakfast_start'] ?? $hotel['breakfast_start'],
+                        'breakfast_end' => $pricing['breakfast_end'] ?? $hotel['breakfast_end'],
+                    ]
+                ]);
+            }
+
+            // POST /booking/{slug}/walkin - Créer réservation walk-in (client sans réservation)
+            if ($method === 'POST' && $id && $action === 'walkin') {
+                $hotel = db()->queryOne(
+                    "SELECT * FROM hotels WHERE booking_slug = ? AND selfcheckin_enabled = 1 AND walkin_enabled = 1 AND status = 'active'",
+                    [$id]
+                );
+                if (!$hotel) json_error('Hôtel non trouvé ou walk-in désactivé', 404);
+                if (empty($hotel['stripe_secret_key'])) json_error('Paiement non configuré', 500);
+
+                $data = get_input();
+
+                // Validation des champs obligatoires
+                $required = ['reservation_id', 'guest_first_name', 'guest_last_name', 'guest_email', 'guest_phone', 'nb_adults'];
+                foreach ($required as $field) {
+                    if (empty($data[$field])) json_error("Le champ $field est requis");
+                }
+                if (!filter_var($data['guest_email'], FILTER_VALIDATE_EMAIL)) json_error('Email invalide');
+
+                // Vérifier le slot walk-in
+                $reservation = db()->queryOne(
+                    "SELECT * FROM selfcheckin_reservations WHERE id = ? AND hotel_id = ? AND type = 'walkin' AND status = 'pending' AND guest_last_name IS NULL",
+                    [$data['reservation_id'], $hotel['id']]
+                );
+                if (!$reservation) json_error('Cette chambre n\'est plus disponible', 404);
+
+                // Calculer les tarifs
+                $effectiveDate = $getEffectiveDate($hotel);
+                $pricing = db()->queryOne(
+                    "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
+                    [$hotel['id'], $effectiveDate]
+                );
+
+                $nightPrice = (float)($pricing['night_price'] ?? $hotel['default_night_price']);
+                $touristTaxUnit = (float)($pricing['tourist_tax'] ?? $hotel['default_tourist_tax']);
+                $breakfastUnitPrice = (float)($pricing['breakfast_price'] ?? $hotel['default_breakfast_price']);
+
+                $nbAdults = (int)$data['nb_adults'];
+                $nbChildren = (int)($data['nb_children'] ?? 0);
+                $nbPersons = $nbAdults + $nbChildren;
+                $wantsBreakfast = !empty($data['breakfast']);
+
+                $accommodationPrice = $nightPrice;
+                $touristTaxTotal = $touristTaxUnit * $nbAdults; // Taxe par adulte par nuit
+                $breakfastTotal = $wantsBreakfast ? ($breakfastUnitPrice * $nbPersons) : 0;
+                $totalAmount = $accommodationPrice + $touristTaxTotal + $breakfastTotal;
+
+                // Mettre à jour la réservation avec les infos client
+                db()->execute(
+                    "UPDATE selfcheckin_reservations SET
+                        guest_first_name = ?, guest_last_name = ?, guest_email = ?, guest_phone = ?,
+                        nb_adults = ?, nb_children = ?, breakfast_included = ?,
+                        accommodation_price = ?, tourist_tax_amount = ?, breakfast_price = ?,
+                        total_amount = ?, remaining_amount = ?, deposit_amount = 0,
+                        id_document_path = ?, updated_at = NOW()
+                     WHERE id = ?",
+                    [
+                        $data['guest_first_name'], $data['guest_last_name'],
+                        $data['guest_email'], $data['guest_phone'],
+                        $nbAdults, $nbChildren, $wantsBreakfast ? 1 : 0,
+                        $accommodationPrice, $touristTaxTotal, $breakfastTotal,
+                        $totalAmount, $totalAmount, $data['id_document_path'] ?? null,
+                        $reservation['id']
+                    ]
+                );
+
+                // Créer PaymentIntent Stripe
+                $amountCents = (int)round($totalAmount * 100);
+                $ch = curl_init('https://api.stripe.com/v1/payment_intents');
+                curl_setopt_array($ch, [
+                    CURLOPT_POST => true,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $hotel['stripe_secret_key']],
+                    CURLOPT_POSTFIELDS => http_build_query([
+                        'amount' => $amountCents,
+                        'currency' => 'eur',
+                        'metadata[reservation_id]' => $reservation['id'],
+                        'metadata[reservation_number]' => $reservation['reservation_number'],
+                        'metadata[hotel_id]' => $hotel['id'],
+                        'metadata[type]' => 'walkin',
+                        'receipt_email' => $data['guest_email'],
+                        'description' => "Walk-in {$reservation['reservation_number']} - {$hotel['name']}"
+                    ])
+                ]);
+                $stripeRaw = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                $stripeResponse = json_decode($stripeRaw, true);
+                if ($httpCode !== 200 || empty($stripeResponse['client_secret'])) {
+                    $stripeErr = $stripeResponse['error']['message'] ?? 'Erreur Stripe';
+                    json_error('Erreur paiement: ' . $stripeErr, 500);
+                }
+
+                db()->execute(
+                    "UPDATE selfcheckin_reservations SET stripe_payment_intent_id = ?, updated_at = NOW() WHERE id = ?",
+                    [$stripeResponse['id'], $reservation['id']]
+                );
+
+                json_out([
+                    'client_secret' => $stripeResponse['client_secret'],
+                    'payment_intent_id' => $stripeResponse['id'],
+                    'amount' => $totalAmount,
+                    'reservation_id' => (int)$reservation['id'],
+                    'pricing_detail' => [
+                        'accommodation' => $accommodationPrice,
+                        'tourist_tax' => $touristTaxTotal,
+                        'breakfast' => $breakfastTotal,
+                        'total' => $totalAmount,
+                    ]
+                ]);
+            }
+
+            // POST /booking/{slug}/upload-id - Upload pièce d'identité (walk-in)
+            if ($method === 'POST' && $id && $action === 'upload-id') {
+                $hotel = db()->queryOne(
+                    "SELECT id FROM hotels WHERE booking_slug = ? AND selfcheckin_enabled = 1 AND status = 'active'",
+                    [$id]
+                );
+                if (!$hotel) json_error('Hôtel non trouvé', 404);
+
+                if (!isset($_FILES['id_document'])) json_error('Fichier requis');
+
+                $file = $_FILES['id_document'];
+                $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+                $allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+                if (!in_array($ext, $allowedExts)) json_error('Format non autorisé. Formats acceptés : JPG, PNG, WebP');
+                if ($file['size'] > 5 * 1024 * 1024) json_error('Fichier trop volumineux (max 5 Mo)');
+
+                $uploadDir = __DIR__ . '/../uploads/id_documents/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+
+                $filename = uniqid('id_') . '.' . $ext;
+                $path = $uploadDir . $filename;
+                if (!move_uploaded_file($file['tmp_name'], $path)) json_error('Erreur lors de l\'upload');
+
+                json_out([
+                    'path' => 'uploads/id_documents/' . $filename,
+                    'filename' => $filename
+                ]);
+            }
+
+            break;
+
+        // ==================== SELF CHECK-IN ADMIN (réservations) ====================
+        case 'selfcheckin':
+            $user = require_auth();
+            $userHotelIds = getManageableHotels($user);
+
+            // GET /selfcheckin?hotel_id=X - Liste des réservations
+            if ($method === 'GET' && !$id) {
+                $hotelId = $_GET['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $status = $_GET['status'] ?? null;
+                $type = $_GET['type'] ?? null;
+                $date = $_GET['date'] ?? null;
+
+                $sql = "SELECT r.*, l.locker_number as current_locker_number
+                        FROM selfcheckin_reservations r
+                        LEFT JOIN hotel_lockers l ON r.locker_id = l.id
+                        WHERE r.hotel_id = ?";
+                $params = [$hotelId];
+
+                if ($status) { $sql .= " AND r.status = ?"; $params[] = $status; }
+                if ($type) { $sql .= " AND r.type = ?"; $params[] = $type; }
+                if ($date) { $sql .= " AND r.checkin_date = ?"; $params[] = $date; }
+
+                $sql .= " ORDER BY r.checkin_date DESC, r.created_at DESC LIMIT 200";
+
+                $reservations = db()->query($sql, $params);
+                json_out(['reservations' => $reservations]);
+            }
+
+            // GET /selfcheckin/stats?hotel_id=X - Statistiques du jour
+            if ($method === 'GET' && $id === 'stats') {
+                $hotelId = $_GET['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $today = date('Y-m-d');
+                $stats = [
+                    'today_total' => db()->count("SELECT COUNT(*) FROM selfcheckin_reservations WHERE hotel_id = ? AND checkin_date = ?", [$hotelId, $today]),
+                    'today_prebooked' => db()->count("SELECT COUNT(*) FROM selfcheckin_reservations WHERE hotel_id = ? AND checkin_date = ? AND type = 'pre_booked'", [$hotelId, $today]),
+                    'today_walkin' => db()->count("SELECT COUNT(*) FROM selfcheckin_reservations WHERE hotel_id = ? AND checkin_date = ? AND type = 'walkin'", [$hotelId, $today]),
+                    'today_confirmed' => db()->count("SELECT COUNT(*) FROM selfcheckin_reservations WHERE hotel_id = ? AND checkin_date = ? AND payment_status = 'paid'", [$hotelId, $today]),
+                    'today_pending' => db()->count("SELECT COUNT(*) FROM selfcheckin_reservations WHERE hotel_id = ? AND checkin_date = ? AND payment_status = 'pending'", [$hotelId, $today]),
+                    'lockers_total' => db()->count("SELECT COUNT(*) FROM hotel_lockers WHERE hotel_id = ?", [$hotelId]),
+                    'lockers_available' => db()->count("SELECT COUNT(*) FROM hotel_lockers WHERE hotel_id = ? AND status = 'available'", [$hotelId]),
+                    'lockers_assigned' => db()->count("SELECT COUNT(*) FROM hotel_lockers WHERE hotel_id = ? AND status = 'assigned'", [$hotelId]),
+                ];
+                json_out($stats);
+            }
+
+            // GET /selfcheckin/{id} - Détail d'une réservation
+            if ($method === 'GET' && $id && $id !== 'stats') {
+                $reservation = db()->queryOne("SELECT * FROM selfcheckin_reservations WHERE id = ?", [$id]);
+                if (!$reservation) json_error('Réservation non trouvée', 404);
+                if (!in_array($reservation['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                json_out($reservation);
+            }
+
+            // POST /selfcheckin - Créer une réservation (pré-enregistrée ou slot walk-in)
+            if ($method === 'POST' && !$id) {
+                $data = get_input();
+                if (empty($data['hotel_id'])) json_error('hotel_id requis');
+                if (!in_array($data['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $type = $data['type'] ?? 'pre_booked';
+                $hotelId = (int)$data['hotel_id'];
+
+                // Générer numéro de réservation
+                $resNumber = $data['reservation_number'] ?? ('SC-' . strtoupper(substr(uniqid(), -6)) . '-' . date('ymd'));
+
+                // Vérifier unicité du numéro
+                $existing = db()->queryOne(
+                    "SELECT id FROM selfcheckin_reservations WHERE hotel_id = ? AND reservation_number = ?",
+                    [$hotelId, $resNumber]
+                );
+                if ($existing) json_error('Ce numéro de réservation existe déjà');
+
+                // Valider le casier si fourni
+                $lockerId = null;
+                $lockerNumber = null;
+                $lockerCode = null;
+                if (!empty($data['locker_id'])) {
+                    $locker = db()->queryOne(
+                        "SELECT * FROM hotel_lockers WHERE id = ? AND hotel_id = ?",
+                        [$data['locker_id'], $hotelId]
+                    );
+                    if (!$locker) json_error('Casier non trouvé');
+                    $lockerId = $locker['id'];
+                    $lockerNumber = $locker['locker_number'];
+                    $lockerCode = $locker['locker_code'];
+                }
+
+                // Calculer le reste à payer
+                $totalAmount = (float)($data['total_amount'] ?? 0);
+                $depositAmount = (float)($data['deposit_amount'] ?? 0);
+                $remainingAmount = max(0, $totalAmount - $depositAmount);
+
+                $insertId = db()->insert('selfcheckin_reservations', [
+                    'hotel_id' => $hotelId,
+                    'reservation_number' => $resNumber,
+                    'type' => $type,
+                    'guest_first_name' => $data['guest_first_name'] ?? null,
+                    'guest_last_name' => $data['guest_last_name'] ?? null,
+                    'guest_email' => $data['guest_email'] ?? null,
+                    'guest_phone' => $data['guest_phone'] ?? null,
+                    'nb_adults' => (int)($data['nb_adults'] ?? 1),
+                    'nb_children' => (int)($data['nb_children'] ?? 0),
+                    'checkin_date' => $data['checkin_date'] ?? date('Y-m-d'),
+                    'checkout_date' => $data['checkout_date'] ?? null,
+                    'room_id' => $data['room_id'] ?? null,
+                    'room_number' => $data['room_number'] ?? null,
+                    'locker_id' => $lockerId,
+                    'locker_number' => $lockerNumber,
+                    'locker_code' => $lockerCode,
+                    'accommodation_price' => (float)($data['accommodation_price'] ?? 0),
+                    'tourist_tax_amount' => (float)($data['tourist_tax_amount'] ?? 0),
+                    'breakfast_price' => (float)($data['breakfast_price'] ?? 0),
+                    'total_amount' => $totalAmount,
+                    'deposit_amount' => $depositAmount,
+                    'remaining_amount' => $remainingAmount,
+                    'breakfast_included' => !empty($data['breakfast_included']) ? 1 : 0,
+                    'payment_status' => $depositAmount >= $totalAmount && $totalAmount > 0 ? 'paid' : 'pending',
+                    'status' => 'pending',
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'created_by' => $user['id']
+                ]);
+
+                json_out(['id' => $insertId, 'reservation_number' => $resNumber, 'message' => 'Réservation créée'], 201);
+            }
+
+            // PUT /selfcheckin/{id} - Modifier une réservation
+            if ($method === 'PUT' && $id) {
+                $reservation = db()->queryOne("SELECT * FROM selfcheckin_reservations WHERE id = ?", [$id]);
+                if (!$reservation) json_error('Réservation non trouvée', 404);
+                if (!in_array($reservation['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $data = get_input();
+                $fields = [];
+                $params = [];
+
+                $updatableFields = [
+                    'guest_first_name', 'guest_last_name', 'guest_email', 'guest_phone',
+                    'nb_adults', 'nb_children', 'checkin_date', 'checkout_date',
+                    'room_id', 'room_number', 'accommodation_price', 'tourist_tax_amount',
+                    'breakfast_price', 'total_amount', 'deposit_amount', 'breakfast_included',
+                    'status', 'payment_status'
+                ];
+
+                foreach ($updatableFields as $field) {
+                    if (isset($data[$field])) {
+                        $fields[] = "$field = ?";
+                        $params[] = $data[$field];
+                    }
+                }
+
+                // Changement de casier
+                if (isset($data['locker_id'])) {
+                    // Libérer l'ancien casier
+                    if ($reservation['locker_id']) {
+                        db()->execute("UPDATE hotel_lockers SET status = 'available', updated_at = NOW() WHERE id = ?", [$reservation['locker_id']]);
+                    }
+                    if ($data['locker_id']) {
+                        $locker = db()->queryOne(
+                            "SELECT * FROM hotel_lockers WHERE id = ? AND hotel_id = ?",
+                            [$data['locker_id'], $reservation['hotel_id']]
+                        );
+                        if ($locker) {
+                            $fields[] = "locker_id = ?"; $params[] = $locker['id'];
+                            $fields[] = "locker_number = ?"; $params[] = $locker['locker_number'];
+                            $fields[] = "locker_code = ?"; $params[] = $locker['locker_code'];
+                        }
+                    } else {
+                        $fields[] = "locker_id = ?"; $params[] = null;
+                        $fields[] = "locker_number = ?"; $params[] = null;
+                        $fields[] = "locker_code = ?"; $params[] = null;
+                    }
+                }
+
+                // Recalculer le reste à payer
+                if (isset($data['total_amount']) || isset($data['deposit_amount'])) {
+                    $total = (float)($data['total_amount'] ?? $reservation['total_amount']);
+                    $deposit = (float)($data['deposit_amount'] ?? $reservation['deposit_amount']);
+                    $fields[] = "remaining_amount = ?";
+                    $params[] = max(0, $total - $deposit);
+                }
+
+                if (empty($fields)) json_error('Rien à modifier');
+
+                $fields[] = "updated_at = NOW()";
+                $params[] = $id;
+
+                db()->execute(
+                    "UPDATE selfcheckin_reservations SET " . implode(', ', $fields) . " WHERE id = ?",
+                    $params
+                );
+
+                json_out(['message' => 'Réservation mise à jour']);
+            }
+
+            // DELETE /selfcheckin/{id} - Supprimer une réservation
+            if ($method === 'DELETE' && $id) {
+                $reservation = db()->queryOne("SELECT * FROM selfcheckin_reservations WHERE id = ?", [$id]);
+                if (!$reservation) json_error('Réservation non trouvée', 404);
+                if (!in_array($reservation['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                // Libérer le casier
+                if ($reservation['locker_id']) {
+                    db()->execute("UPDATE hotel_lockers SET status = 'available', updated_at = NOW() WHERE id = ?", [$reservation['locker_id']]);
+                }
+
+                db()->execute("DELETE FROM selfcheckin_reservations WHERE id = ?", [$id]);
+                json_out(['message' => 'Réservation supprimée']);
+            }
+            break;
+
+        // ==================== CASIERS (LOCKERS) ====================
+        case 'lockers':
+            $user = require_auth();
+            $userHotelIds = getManageableHotels($user);
+
+            // GET /lockers?hotel_id=X - Liste des casiers
+            if ($method === 'GET' && !$id) {
+                $hotelId = $_GET['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $lockers = db()->query(
+                    "SELECT l.*, r.room_number as linked_room_number
+                     FROM hotel_lockers l
+                     LEFT JOIN rooms r ON l.room_id = r.id
+                     WHERE l.hotel_id = ? ORDER BY CAST(l.locker_number AS UNSIGNED), l.locker_number",
+                    [$hotelId]
+                );
+                json_out(['lockers' => $lockers]);
+            }
+
+            // GET /lockers/{id}
+            if ($method === 'GET' && $id) {
+                $locker = db()->queryOne("SELECT * FROM hotel_lockers WHERE id = ?", [$id]);
+                if (!$locker) json_error('Casier non trouvé', 404);
+                if (!in_array($locker['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                json_out($locker);
+            }
+
+            // POST /lockers - Créer un casier
+            if ($method === 'POST' && !$id) {
+                $data = get_input();
+                if (empty($data['hotel_id']) || empty($data['locker_number']) || empty($data['locker_code'])) {
+                    json_error('hotel_id, locker_number et locker_code requis');
+                }
+                if (!in_array($data['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                // Vérifier unicité
+                $existing = db()->queryOne(
+                    "SELECT id FROM hotel_lockers WHERE hotel_id = ? AND locker_number = ?",
+                    [$data['hotel_id'], $data['locker_number']]
+                );
+                if ($existing) json_error('Ce numéro de casier existe déjà pour cet hôtel');
+
+                $insertId = db()->insert('hotel_lockers', [
+                    'hotel_id' => (int)$data['hotel_id'],
+                    'locker_number' => $data['locker_number'],
+                    'locker_code' => $data['locker_code'],
+                    'room_id' => $data['room_id'] ?: null,
+                    'status' => $data['status'] ?? 'available',
+                    'notes' => $data['notes'] ?? null,
+                    'created_at' => date('Y-m-d H:i:s')
+                ]);
+
+                json_out(['id' => $insertId, 'message' => 'Casier créé'], 201);
+            }
+
+            // PUT /lockers/{id} - Modifier un casier
+            if ($method === 'PUT' && $id) {
+                $locker = db()->queryOne("SELECT * FROM hotel_lockers WHERE id = ?", [$id]);
+                if (!$locker) json_error('Casier non trouvé', 404);
+                if (!in_array($locker['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $data = get_input();
+                $fields = [];
+                $params = [];
+
+                foreach (['locker_number', 'locker_code', 'room_id', 'status', 'notes'] as $field) {
+                    if (isset($data[$field])) {
+                        $fields[] = "$field = ?";
+                        $params[] = $data[$field] ?: null;
+                    }
+                }
+
+                if (empty($fields)) json_error('Rien à modifier');
+                $fields[] = "updated_at = NOW()";
+                $params[] = $id;
+
+                db()->execute(
+                    "UPDATE hotel_lockers SET " . implode(', ', $fields) . " WHERE id = ?",
+                    $params
+                );
+                json_out(['message' => 'Casier mis à jour']);
+            }
+
+            // DELETE /lockers/{id} - Supprimer un casier
+            if ($method === 'DELETE' && $id) {
+                $locker = db()->queryOne("SELECT * FROM hotel_lockers WHERE id = ?", [$id]);
+                if (!$locker) json_error('Casier non trouvé', 404);
+                if (!in_array($locker['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                // Vérifier si le casier est en cours d'utilisation
+                $inUse = db()->queryOne(
+                    "SELECT id FROM selfcheckin_reservations WHERE locker_id = ? AND status IN ('pending', 'confirmed', 'checked_in')",
+                    [$id]
+                );
+                if ($inUse) json_error('Ce casier est actuellement assigné à une réservation active');
+
+                db()->execute("DELETE FROM hotel_lockers WHERE id = ?", [$id]);
+                json_out(['message' => 'Casier supprimé']);
+            }
+            break;
+
+        // ==================== TARIFS SELF CHECK-IN ====================
+        case 'selfcheckin-pricing':
+            $user = require_auth();
+            $userHotelIds = getManageableHotels($user);
+
+            // GET /selfcheckin-pricing?hotel_id=X&from=DATE&to=DATE
+            if ($method === 'GET') {
+                $hotelId = $_GET['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $from = $_GET['from'] ?? date('Y-m-d');
+                $to = $_GET['to'] ?? date('Y-m-d', strtotime('+30 days'));
+
+                $pricing = db()->query(
+                    "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date BETWEEN ? AND ? ORDER BY date",
+                    [$hotelId, $from, $to]
+                );
+
+                $hotel = db()->queryOne(
+                    "SELECT default_night_price, default_breakfast_price, default_tourist_tax, breakfast_start, breakfast_end FROM hotels WHERE id = ?",
+                    [$hotelId]
+                );
+
+                json_out([
+                    'pricing' => $pricing,
+                    'defaults' => $hotel
+                ]);
+            }
+
+            // POST /selfcheckin-pricing - Créer/modifier tarif pour une date
+            if ($method === 'POST' && !$id) {
+                $data = get_input();
+                if (empty($data['hotel_id']) || empty($data['date'])) json_error('hotel_id et date requis');
+                if (!in_array($data['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $hotelId = (int)$data['hotel_id'];
+                $date = $data['date'];
+
+                $existing = db()->queryOne(
+                    "SELECT id FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
+                    [$hotelId, $date]
+                );
+
+                $pricingData = [
+                    (float)($data['night_price'] ?? 0),
+                    (float)($data['breakfast_price'] ?? 0),
+                    (float)($data['tourist_tax'] ?? 0),
+                    $data['breakfast_start'] ?? '07:00:00',
+                    $data['breakfast_end'] ?? '10:30:00',
+                    $data['notes'] ?? null,
+                ];
+
+                if ($existing) {
+                    db()->execute(
+                        "UPDATE selfcheckin_pricing SET night_price = ?, breakfast_price = ?, tourist_tax = ?, breakfast_start = ?, breakfast_end = ?, notes = ?, updated_at = NOW() WHERE id = ?",
+                        array_merge($pricingData, [$existing['id']])
+                    );
+                    json_out(['message' => 'Tarif mis à jour', 'id' => $existing['id']]);
+                } else {
+                    $insertId = db()->insert('selfcheckin_pricing', [
+                        'hotel_id' => $hotelId,
+                        'date' => $date,
+                        'night_price' => $pricingData[0],
+                        'breakfast_price' => $pricingData[1],
+                        'tourist_tax' => $pricingData[2],
+                        'breakfast_start' => $pricingData[3],
+                        'breakfast_end' => $pricingData[4],
+                        'notes' => $pricingData[5],
+                        'created_at' => date('Y-m-d H:i:s')
+                    ]);
+                    json_out(['message' => 'Tarif créé', 'id' => $insertId], 201);
+                }
+            }
+
+            // POST /selfcheckin-pricing/bulk - Mise à jour en masse
+            if ($method === 'POST' && $id === 'bulk') {
+                $data = get_input();
+                if (empty($data['hotel_id']) || empty($data['dates'])) json_error('hotel_id et dates requis');
+                if (!in_array($data['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $hotelId = (int)$data['hotel_id'];
+                $nightPrice = (float)($data['night_price'] ?? 0);
+                $breakfastPrice = (float)($data['breakfast_price'] ?? 0);
+                $touristTax = (float)($data['tourist_tax'] ?? 0);
+                $breakfastStart = $data['breakfast_start'] ?? '07:00:00';
+                $breakfastEnd = $data['breakfast_end'] ?? '10:30:00';
+                $notes = $data['notes'] ?? null;
+
+                $count = 0;
+                foreach ($data['dates'] as $date) {
+                    $existing = db()->queryOne(
+                        "SELECT id FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
+                        [$hotelId, $date]
+                    );
+
+                    if ($existing) {
+                        db()->execute(
+                            "UPDATE selfcheckin_pricing SET night_price = ?, breakfast_price = ?, tourist_tax = ?, breakfast_start = ?, breakfast_end = ?, notes = ?, updated_at = NOW() WHERE id = ?",
+                            [$nightPrice, $breakfastPrice, $touristTax, $breakfastStart, $breakfastEnd, $notes, $existing['id']]
+                        );
+                    } else {
+                        db()->insert('selfcheckin_pricing', [
+                            'hotel_id' => $hotelId,
+                            'date' => $date,
+                            'night_price' => $nightPrice,
+                            'breakfast_price' => $breakfastPrice,
+                            'tourist_tax' => $touristTax,
+                            'breakfast_start' => $breakfastStart,
+                            'breakfast_end' => $breakfastEnd,
+                            'notes' => $notes,
+                            'created_at' => date('Y-m-d H:i:s')
+                        ]);
+                    }
+                    $count++;
+                }
+
+                json_out(['message' => "$count tarif(s) mis à jour"]);
+            }
+
+            // DELETE /selfcheckin-pricing/{id}
+            if ($method === 'DELETE' && $id && $id !== 'bulk') {
+                $pricing = db()->queryOne("SELECT * FROM selfcheckin_pricing WHERE id = ?", [$id]);
+                if (!$pricing) json_error('Tarif non trouvé', 404);
+                if (!in_array($pricing['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                db()->execute("DELETE FROM selfcheckin_pricing WHERE id = ?", [$id]);
+                json_out(['message' => 'Tarif supprimé']);
             }
             break;
 
         default:
             json_error('Endpoint non trouvé', 404);
     }
-    
+
 } catch (PDOException $e) {
     json_error(DEBUG ? $e->getMessage() : 'Erreur serveur', 500);
 } catch (Exception $e) {
     json_error($e->getMessage(), 500);
 }
 
-// ==================== PMS HELPER FUNCTIONS ====================
+// ==================== SELF CHECK-IN HELPER FUNCTIONS ====================
 
 /**
- * Appel HTTP générique vers le PMS Geho
+ * Formater les données de confirmation pour l'affichage client
  */
-function geho_request($hotel, $endpoint, $method = 'GET', $body = null) {
-    error_log("[GEHO REQUEST] hotel_id={$hotel['id']}, endpoint=$endpoint, method=$method, mode=" . ($hotel['pms_connection_mode'] ?? 'direct'));
-
-    // Mode relay : passer par la file d'attente au lieu d'un appel curl direct
-    if (($hotel['pms_connection_mode'] ?? 'direct') === 'relay') {
-        error_log("[GEHO REQUEST] Mode relay activé");
-        $result = geho_request_relay($hotel, $endpoint, $method, $body);
-        error_log("[GEHO REQUEST] Relay result: " . json_encode(array_diff_key($result, ['raw' => 1])));
-        return $result;
-    }
-
-    // Mode direct : appel curl classique
-    $ip = $hotel['pms_ip'];
-    $port = $hotel['pms_port'] ?: 80;
-    $baseUrl = "http://{$ip}:{$port}";
-
-    $url = rtrim($baseUrl, '/') . '/' . ltrim($endpoint, '/');
-    error_log("[GEHO REQUEST] URL: $url | Body: " . ($body ? json_encode($body) : 'null'));
-
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 15,
-        CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'Accept: application/json',
-        ],
-    ]);
-
-    // Authentification PMS si configurée
-    if (!empty($hotel['pms_username']) && !empty($hotel['pms_password'])) {
-        curl_setopt($ch, CURLOPT_USERPWD, $hotel['pms_username'] . ':' . $hotel['pms_password']);
-    }
-    if (!empty($hotel['pms_api_key'])) {
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Accept: application/json',
-            'X-API-Key: ' . $hotel['pms_api_key'],
-        ]);
-    }
-
-    if ($method === 'POST' || $method === 'PUT') {
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
-        if ($body) curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
-    }
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
-    $totalTime = curl_getinfo($ch, CURLINFO_TOTAL_TIME);
-    curl_close($ch);
-
-    if ($error) {
-        error_log("[GEHO REQUEST] CURL ERROR: $error (après {$totalTime}s)");
-        return ['success' => false, 'error' => 'Connexion PMS échouée: ' . $error];
-    }
-
-    error_log("[GEHO REQUEST] Réponse HTTP=$httpCode en {$totalTime}s | Body: " . substr($response, 0, 500));
-
-    $decoded = json_decode($response, true);
+function selfcheckin_format_confirmation($reservation, $hotel) {
     return [
-        'success' => $httpCode >= 200 && $httpCode < 300,
-        'status' => $httpCode,
-        'data' => $decoded,
-        'raw' => $response
+        'id' => (int)$reservation['id'],
+        'reservation_number' => $reservation['reservation_number'],
+        'type' => $reservation['type'],
+        'guest_first_name' => $reservation['guest_first_name'],
+        'guest_last_name' => $reservation['guest_last_name'],
+        'guest_email' => $reservation['guest_email'],
+        'guest_phone' => $reservation['guest_phone'],
+        'checkin_date' => $reservation['checkin_date'],
+        'room_number' => $reservation['room_number'],
+        'locker_number' => $reservation['locker_number'],
+        'locker_code' => $reservation['locker_code'],
+        'nb_adults' => (int)$reservation['nb_adults'],
+        'nb_children' => (int)$reservation['nb_children'],
+        'accommodation_price' => (float)$reservation['accommodation_price'],
+        'tourist_tax_amount' => (float)$reservation['tourist_tax_amount'],
+        'breakfast_included' => (bool)$reservation['breakfast_included'],
+        'breakfast_price' => (float)$reservation['breakfast_price'],
+        'total_amount' => (float)$reservation['total_amount'],
+        'deposit_amount' => (float)$reservation['deposit_amount'],
+        'remaining_amount' => (float)$reservation['remaining_amount'],
+        'payment_status' => $reservation['payment_status'],
+        'hotel_name' => $hotel['name'],
+        'hotel_address' => $hotel['address'],
+        'hotel_city' => $hotel['city'],
     ];
-}
-
-/**
- * Appel PMS via le relay : insère dans la file, attend la réponse de l'agent
- */
-function geho_request_relay($hotel, $endpoint, $method, $body) {
-    $requestId = bin2hex(random_bytes(16));
-
-    // Insérer la requête dans la file
-    db()->insert('pms_relay_queue', [
-        'hotel_id' => $hotel['id'],
-        'request_id' => $requestId,
-        'endpoint' => $endpoint,
-        'method' => $method,
-        'request_body' => $body ? json_encode($body) : null,
-        'status' => 'pending',
-        'created_at' => date('Y-m-d H:i:s')
-    ]);
-
-    // Attendre la réponse (polling avec timeout de 30 secondes)
-    $timeout = 30;
-    $start = time();
-
-    while (time() - $start < $timeout) {
-        $row = db()->queryOne(
-            "SELECT * FROM pms_relay_queue WHERE request_id = ? AND status IN ('completed', 'error', 'timeout')",
-            [$requestId]
-        );
-
-        if ($row) {
-            // Nettoyer l'entrée
-            db()->execute("DELETE FROM pms_relay_queue WHERE id = ?", [$row['id']]);
-
-            if ($row['status'] === 'error' || $row['status'] === 'timeout') {
-                return ['success' => false, 'error' => $row['error_message'] ?? 'Erreur relais PMS'];
-            }
-
-            $decoded = json_decode($row['response_body'], true);
-            $httpCode = (int)($row['response_status'] ?? 200);
-            return [
-                'success' => $httpCode >= 200 && $httpCode < 300,
-                'status' => $httpCode,
-                'data' => $decoded,
-                'raw' => $row['response_body']
-            ];
-        }
-
-        usleep(300000); // 300ms entre chaque vérification
-    }
-
-    // Timeout côté serveur
-    db()->execute(
-        "UPDATE pms_relay_queue SET status = 'timeout', error_message = 'Timeout: agent non connecté ou PMS ne répond pas' WHERE request_id = ?",
-        [$requestId]
-    );
-
-    return ['success' => false, 'error' => 'Timeout: l\'agent relais PMS ne répond pas. Vérifiez que l\'agent est en cours d\'exécution sur le PC de l\'hôtel.'];
-}
-
-/**
- * Tester la connexion au PMS
- */
-function pms_test_connection($hotel) {
-    if ($hotel['pms_type'] === 'geho') {
-        // GetParams retourne la date de travail - sert de health check
-        $result = geho_request($hotel, '/GetParams/');
-        $connected = $result['success'] && isset($result['data']['DateJour']);
-        return [
-            'connected' => $connected,
-            'pms_type' => 'geho',
-            'message' => $connected ? 'Connexion réussie (date PMS: ' . $result['data']['DateJour'] . ')' : ($result['error'] ?? 'Connexion échouée'),
-            'details' => $result['data'] ?? null
-        ];
-    }
-
-    return ['connected' => false, 'message' => 'Type PMS non supporté: ' . $hotel['pms_type']];
-}
-
-/**
- * Récupérer la disponibilité depuis le PMS
- */
-function pms_get_availability($hotel, $checkin, $checkout, $nbAdult, $nbChild = 0) {
-    if ($hotel['pms_type'] === 'geho') {
-        // POST /AvailRooms/ - API GeHo officielle
-        $result = geho_request($hotel, '/AvailRooms/', 'POST', [
-            'CheckIn' => $checkin,
-            'CheckOut' => $checkout,
-            'LangCode' => 'fr',
-            'NbAdult' => (int)$nbAdult,
-            'NbChild' => (int)$nbChild
-        ]);
-
-        if ($result['success'] && isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] === 0 && !empty($result['data']['Availabilities'])) {
-            $nights = (strtotime($checkout) - strtotime($checkin)) / 86400;
-            return array_map(function($room) use ($nights) {
-                return [
-                    'room_type' => $room['TypeCode'],
-                    'room_type_label' => $room['Name'],
-                    'description' => $room['Description'] ?? '',
-                    'max_capacity' => $room['MaxCapacity'] ?? 0,
-                    'available' => (int)$room['Quantity'],
-                    'rate_per_night' => (float)$room['NightPrice'],
-                    'total' => (float)$room['StayPrice'],
-                    'currency' => 'EUR',
-                    'source' => 'geho'
-                ];
-            }, $result['data']['Availabilities']);
-        }
-
-        // Fallback: retourner les types de chambres depuis notre BDD avec un tarif par défaut
-        if (!$result['success'] || (isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] !== 0)) {
-            $rooms = db()->query(
-                "SELECT room_type, COUNT(*) as available_count FROM rooms WHERE hotel_id = ? AND status = 'active' GROUP BY room_type",
-                [$hotel['id']]
-            );
-
-            $nights = (strtotime($checkout) - strtotime($checkin)) / 86400;
-            $defaultRates = [
-                'standard' => 89,
-                'superieure' => 129,
-                'suite' => 199,
-                'familiale' => 159,
-                'pmr' => 99
-            ];
-
-            return array_map(function($r) use ($nights, $defaultRates) {
-                $rate = $defaultRates[$r['room_type']] ?? 99;
-                return [
-                    'room_type' => $r['room_type'],
-                    'room_type_label' => ucfirst($r['room_type']),
-                    'available' => (int)$r['available_count'],
-                    'rate_per_night' => $rate,
-                    'total' => $rate * $nights,
-                    'currency' => 'EUR',
-                    'source' => 'local'
-                ];
-            }, $rooms);
-        }
-
-        return [];
-    }
-
-    return [];
-}
-
-/**
- * Créer une réservation dans le PMS via POST /CreateBooking/
- */
-function pms_create_reservation($booking) {
-    $hotel = db()->queryOne("SELECT * FROM hotels WHERE id = ?", [$booking['hotel_id']]);
-    if (!$hotel || empty($hotel['pms_type'])) {
-        return ['success' => false, 'error' => 'PMS non configuré'];
-    }
-
-    if ($hotel['pms_type'] === 'geho') {
-        $nbNights = (strtotime($booking['checkout_date']) - strtotime($booking['checkin_date'])) / 86400;
-        $nbAdult = (int)($booking['nb_adult'] ?? $booking['guests_count'] ?? 1);
-        $nbChild = (int)($booking['nb_child'] ?? 0);
-
-        $payload = [
-            'CheckIn' => $booking['checkin_date'],
-            'NbNights' => (int)$nbNights,
-            'TypeCode' => $booking['room_type'],
-            'LastName' => trim(($booking['guest_first_name'] ?? '') . ' ' . ($booking['guest_last_name'] ?? '')),
-            'NbAdult' => $nbAdult,
-            'NbChild' => $nbChild,
-            'Civilite' => $booking['civilite'] ?? 'M.',
-            'Adresse1' => $booking['address1'] ?? '',
-            'Adresse2' => $booking['address2'] ?? '',
-            'Ville' => $booking['city'] ?? '',
-            'CDP' => $booking['postal_code'] ?? '',
-            'Email' => $booking['guest_email'] ?? '',
-            'Phone' => $booking['guest_phone'] ?? ''
-        ];
-
-        $result = geho_request($hotel, '/CreateBooking/', 'POST', $payload);
-
-        if ($result['success'] && isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] === 0) {
-            return [
-                'success' => true,
-                'pms_id' => $result['data']['NoResa'] ?? null
-            ];
-        }
-
-        $errorMsg = $result['data']['ErrorMessage'] ?? $result['error'] ?? 'Erreur PMS Geho';
-        return ['success' => false, 'error' => $errorMsg];
-    }
-
-    return ['success' => false, 'error' => 'Type PMS non supporté: ' . $hotel['pms_type']];
-}
-
-/**
- * Récupérer les produits/extras disponibles via POST /Products/
- */
-function pms_get_products($hotel, $noResa) {
-    if ($hotel['pms_type'] === 'geho') {
-        $result = geho_request($hotel, '/Products/', 'POST', [
-            'NoResa' => $noResa,
-            'CodeLang' => 'fr'
-        ]);
-
-        if ($result['success'] && isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] === 0) {
-            return ['success' => true, 'products' => $result['data']['Products'] ?? []];
-        }
-
-        return ['success' => false, 'error' => $result['data']['ErrorMessage'] ?? 'Erreur récupération produits', 'products' => []];
-    }
-
-    return ['success' => false, 'error' => 'PMS non supporté', 'products' => []];
-}
-
-/**
- * Ajouter des produits/extras à une réservation via POST /AddProduct/
- */
-function pms_add_products($hotel, $noResa, $prodList) {
-    if ($hotel['pms_type'] === 'geho') {
-        $result = geho_request($hotel, '/AddProduct/', 'POST', [
-            'NoResa' => $noResa,
-            'ProdList' => $prodList
-        ]);
-
-        if ($result['success'] && isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] === 0) {
-            return ['success' => true];
-        }
-
-        return ['success' => false, 'error' => $result['data']['ErrorMessage'] ?? 'Erreur ajout produits'];
-    }
-
-    return ['success' => false, 'error' => 'PMS non supporté'];
-}
-
-/**
- * Rechercher une réservation via POST /GetBooking/
- */
-function pms_get_booking($hotel, $params) {
-    if ($hotel['pms_type'] === 'geho') {
-        $payload = [
-            'NoResa' => $params['noresa'] ?? '',
-            'TypeRequest' => $params['type_request'] ?? '',
-            'LastName' => $params['last_name'] ?? '',
-            'CodeLang' => 'fr',
-            'Email' => $params['email'] ?? '',
-            'Phone' => $params['phone'] ?? '',
-            'SearchExactName' => $params['exact'] ?? '1'
-        ];
-
-        $result = geho_request($hotel, '/GetBooking/', 'POST', $payload);
-
-        if ($result['success'] && isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] === 0) {
-            return ['success' => true, 'reservations' => $result['data']['ResaInfo'] ?? []];
-        }
-
-        return ['success' => false, 'error' => $result['data']['ErrorMessage'] ?? 'Réservation non trouvée', 'reservations' => []];
-    }
-
-    return ['success' => false, 'error' => 'PMS non supporté', 'reservations' => []];
-}
-
-/**
- * Annuler une réservation via POST /CancelBooking/
- */
-function pms_cancel_booking($hotel, $noResa, $reason) {
-    if ($hotel['pms_type'] === 'geho') {
-        $result = geho_request($hotel, '/CancelBooking/', 'POST', [
-            'NoResa' => $noResa,
-            'Reason' => $reason
-        ]);
-
-        if ($result['success'] && isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] === 0) {
-            return ['success' => true];
-        }
-
-        return ['success' => false, 'error' => $result['data']['ErrorMessage'] ?? 'Erreur annulation'];
-    }
-
-    return ['success' => false, 'error' => 'PMS non supporté'];
-}
-
-/**
- * Mettre à jour les coordonnées client via POST /UpdateCustomer/
- */
-function pms_update_customer($hotel, $noResa, $clientInfo) {
-    if ($hotel['pms_type'] === 'geho') {
-        $result = geho_request($hotel, '/UpdateCustomer/', 'POST', [
-            'NoResa' => $noResa,
-            'ClientInfo' => $clientInfo
-        ]);
-
-        if ($result['success'] && isset($result['data']['ErrorCode']) && $result['data']['ErrorCode'] === 0) {
-            return ['success' => true];
-        }
-
-        return ['success' => false, 'error' => $result['data']['ErrorMessage'] ?? 'Erreur mise à jour client'];
-    }
-
-    return ['success' => false, 'error' => 'PMS non supporté'];
 }
