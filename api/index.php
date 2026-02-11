@@ -2206,6 +2206,89 @@ try {
                 json_out(['success' => true, 'message' => 'Horaires petit-déjeuner enregistrés']);
             }
 
+            // GET /hotels/{id}/selfcheckin-services - Liste des services complémentaires
+            if ($method === 'GET' && $id && is_numeric($id) && $action === 'selfcheckin-services' && !$subaction) {
+                require_auth();
+                $services = db()->query(
+                    "SELECT * FROM hotel_selfcheckin_services WHERE hotel_id = ? ORDER BY sort_order, name",
+                    [$id]
+                );
+                json_out(['success' => true, 'services' => $services]);
+            }
+
+            // GET /hotels/{id}/selfcheckin-services/{serviceId} - Détail d'un service
+            if ($method === 'GET' && $id && is_numeric($id) && $action === 'selfcheckin-services' && $subaction && is_numeric($subaction)) {
+                require_auth();
+                $service = db()->queryOne(
+                    "SELECT * FROM hotel_selfcheckin_services WHERE id = ? AND hotel_id = ?",
+                    [$subaction, $id]
+                );
+                if (!$service) json_error('Service non trouvé', 404);
+                json_out(['success' => true, 'service' => $service]);
+            }
+
+            // POST /hotels/{id}/selfcheckin-services - Créer un service complémentaire
+            if ($method === 'POST' && $id && is_numeric($id) && $action === 'selfcheckin-services') {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin', 'groupe_manager', 'hotel_manager'])) json_error('Permission refusée', 403);
+
+                $data = get_input();
+                if (empty($data['name'])) json_error('Le nom du service est requis');
+
+                $insertId = db()->insert(
+                    "INSERT INTO hotel_selfcheckin_services (hotel_id, name, description, price, icon, is_active, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())",
+                    [
+                        (int)$id,
+                        $data['name'],
+                        $data['description'] ?? null,
+                        (float)($data['price'] ?? 0),
+                        $data['icon'] ?? 'concierge-bell',
+                        isset($data['is_active']) ? (int)$data['is_active'] : 1,
+                        (int)($data['sort_order'] ?? 0)
+                    ]
+                );
+                json_out(['success' => true, 'id' => $insertId], 201);
+            }
+
+            // PUT /hotels/{id}/selfcheckin-services/{serviceId} - Modifier un service
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'selfcheckin-services' && $subaction && is_numeric($subaction)) {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin', 'groupe_manager', 'hotel_manager'])) json_error('Permission refusée', 403);
+
+                $service = db()->queryOne("SELECT * FROM hotel_selfcheckin_services WHERE id = ? AND hotel_id = ?", [$subaction, $id]);
+                if (!$service) json_error('Service non trouvé', 404);
+
+                $data = get_input();
+                $sets = [];
+                $params = [];
+
+                if (isset($data['name'])) { $sets[] = "name = ?"; $params[] = $data['name']; }
+                if (isset($data['description'])) { $sets[] = "description = ?"; $params[] = $data['description']; }
+                if (isset($data['price'])) { $sets[] = "price = ?"; $params[] = (float)$data['price']; }
+                if (isset($data['icon'])) { $sets[] = "icon = ?"; $params[] = $data['icon']; }
+                if (isset($data['is_active'])) { $sets[] = "is_active = ?"; $params[] = (int)$data['is_active']; }
+                if (isset($data['sort_order'])) { $sets[] = "sort_order = ?"; $params[] = (int)$data['sort_order']; }
+
+                if (!empty($sets)) {
+                    $sets[] = "updated_at = NOW()";
+                    $params[] = $subaction;
+                    db()->execute("UPDATE hotel_selfcheckin_services SET " . implode(', ', $sets) . " WHERE id = ?", $params);
+                }
+                json_out(['success' => true]);
+            }
+
+            // DELETE /hotels/{id}/selfcheckin-services/{serviceId} - Supprimer un service
+            if ($method === 'DELETE' && $id && is_numeric($id) && $action === 'selfcheckin-services' && $subaction && is_numeric($subaction)) {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin', 'groupe_manager', 'hotel_manager'])) json_error('Permission refusée', 403);
+
+                $service = db()->queryOne("SELECT * FROM hotel_selfcheckin_services WHERE id = ? AND hotel_id = ?", [$subaction, $id]);
+                if (!$service) json_error('Service non trouvé', 404);
+
+                db()->execute("DELETE FROM hotel_selfcheckin_services WHERE id = ?", [$subaction]);
+                json_out(['success' => true]);
+            }
+
             // GET /hotels/{id}/leave-config - Configuration congés de l'hôtel
             if ($method === 'GET' && $id && is_numeric($id) && $action === 'leave-config') {
                 require_auth();
@@ -2467,9 +2550,10 @@ try {
                 );
                 if ($exists) json_error('Ce numéro de chambre existe déjà');
                 
+                $maxAdults = isset($data['max_adults']) ? (int)$data['max_adults'] : 2;
                 $id = db()->insert(
-                    "INSERT INTO rooms (hotel_id, room_number, floor, room_type, bed_type, status, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())",
-                    [$data['hotel_id'], $data['room_number'], $data['floor'] ?? 1, $data['room_type'] ?? 'standard', $data['bed_type'] ?? 'double', $data['status'] ?? 'active']
+                    "INSERT INTO rooms (hotel_id, room_number, floor, room_type, bed_type, max_adults, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())",
+                    [$data['hotel_id'], $data['room_number'], $data['floor'] ?? 1, $data['room_type'] ?? 'standard', $data['bed_type'] ?? 'double', $maxAdults, $data['status'] ?? 'active']
                 );
                 json_out(['success' => true, 'id' => $id], 201);
             }
@@ -2498,6 +2582,7 @@ try {
                 if (isset($data['floor'])) { $sets[] = "floor = ?"; $params[] = $data['floor']; }
                 if (isset($data['room_type'])) { $sets[] = "room_type = ?"; $params[] = $data['room_type']; }
                 if (isset($data['bed_type'])) { $sets[] = "bed_type = ?"; $params[] = $data['bed_type']; }
+                if (isset($data['max_adults'])) { $sets[] = "max_adults = ?"; $params[] = (int)$data['max_adults']; }
                 if (isset($data['status'])) { $sets[] = "status = ?"; $params[] = $data['status']; }
                 
                 if (!empty($sets)) {
@@ -8874,6 +8959,13 @@ try {
                     [$hotel['id'], $effectiveDate]
                 );
 
+                // Récupérer la capacité de la chambre si assignée
+                $roomMaxAdults = null;
+                if ($reservation['room_id']) {
+                    $room = db()->queryOne("SELECT max_adults FROM rooms WHERE id = ?", [$reservation['room_id']]);
+                    $roomMaxAdults = $room ? (int)$room['max_adults'] : null;
+                }
+
                 json_out([
                     'reservation' => [
                         'id' => $reservation['id'],
@@ -8881,10 +8973,12 @@ try {
                         'guest_first_name' => $reservation['guest_first_name'],
                         'guest_last_name' => $reservation['guest_last_name'],
                         'guest_email' => $reservation['guest_email'],
+                        'guest_phone' => $reservation['guest_phone'],
                         'nb_adults' => (int)$reservation['nb_adults'],
                         'nb_children' => (int)$reservation['nb_children'],
                         'checkin_date' => $reservation['checkin_date'],
                         'room_number' => $reservation['room_number'],
+                        'room_max_adults' => $roomMaxAdults,
                         'accommodation_price' => (float)$reservation['accommodation_price'],
                         'tourist_tax_amount' => (float)$reservation['tourist_tax_amount'],
                         'breakfast_price' => (float)$reservation['breakfast_price'],
@@ -8922,13 +9016,60 @@ try {
                 );
                 if (!$reservation) json_error('Réservation non trouvée', 404);
 
+                $effectiveDate = $getEffectiveDate($hotel);
+                $pricing = db()->queryOne(
+                    "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
+                    [$hotel['id'], $effectiveDate]
+                );
+
+                // Modifier les infos client si fournies
+                $guestUpdates = [];
+                $guestParams = [];
+                if (isset($data['guest_first_name'])) { $guestUpdates[] = "guest_first_name = ?"; $guestParams[] = $data['guest_first_name']; }
+                if (isset($data['guest_last_name'])) { $guestUpdates[] = "guest_last_name = ?"; $guestParams[] = $data['guest_last_name']; }
+                if (isset($data['guest_email'])) { $guestUpdates[] = "guest_email = ?"; $guestParams[] = $data['guest_email']; }
+                if (isset($data['guest_phone'])) { $guestUpdates[] = "guest_phone = ?"; $guestParams[] = $data['guest_phone']; }
+
+                // Modifier le nombre de personnes avec vérification de capacité
+                if (isset($data['nb_adults'])) {
+                    $newNbAdults = (int)$data['nb_adults'];
+                    if ($newNbAdults < 1) json_error('Le nombre d\'adultes doit être au moins 1');
+
+                    // Vérifier la capacité de la chambre
+                    if ($reservation['room_id']) {
+                        $room = db()->queryOne("SELECT max_adults FROM rooms WHERE id = ?", [$reservation['room_id']]);
+                        if ($room && $newNbAdults > (int)$room['max_adults']) {
+                            json_error('La chambre ' . $reservation['room_number'] . ' ne peut accueillir que ' . $room['max_adults'] . ' adulte(s) maximum');
+                        }
+                    }
+
+                    $guestUpdates[] = "nb_adults = ?";
+                    $guestParams[] = $newNbAdults;
+                    $reservation['nb_adults'] = $newNbAdults;
+
+                    // Recalculer la taxe de séjour
+                    $touristTaxUnit = (float)($pricing['tourist_tax'] ?? $hotel['default_tourist_tax']);
+                    $newTouristTax = $touristTaxUnit * $newNbAdults;
+                    $guestUpdates[] = "tourist_tax_amount = ?";
+                    $guestParams[] = $newTouristTax;
+                    $reservation['tourist_tax_amount'] = $newTouristTax;
+                }
+                if (isset($data['nb_children'])) {
+                    $guestUpdates[] = "nb_children = ?";
+                    $guestParams[] = (int)$data['nb_children'];
+                    $reservation['nb_children'] = (int)$data['nb_children'];
+                }
+
+                if (!empty($guestUpdates)) {
+                    $guestUpdates[] = "updated_at = NOW()";
+                    $guestParams[] = $reservation['id'];
+                    db()->execute("UPDATE selfcheckin_reservations SET " . implode(', ', $guestUpdates) . " WHERE id = ?", $guestParams);
+                    // Rafraîchir la réservation
+                    $reservation = db()->queryOne("SELECT * FROM selfcheckin_reservations WHERE id = ?", [$reservation['id']]);
+                }
+
                 // Ajouter petit-déjeuner
                 if (!empty($data['add_breakfast']) && !$reservation['breakfast_included']) {
-                    $effectiveDate = $getEffectiveDate($hotel);
-                    $pricing = db()->queryOne(
-                        "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
-                        [$hotel['id'], $effectiveDate]
-                    );
                     $breakfastUnitPrice = (float)($pricing['breakfast_price'] ?? $hotel['default_breakfast_price']);
                     $nbPersons = (int)$reservation['nb_adults'] + (int)$reservation['nb_children'];
                     $breakfastTotal = $breakfastUnitPrice * $nbPersons;
@@ -8947,15 +9088,34 @@ try {
                     $reservation['remaining_amount'] = max(0, $newRemaining);
                 }
 
+                // Recalculer le total si les personnes ont changé
+                if (isset($data['nb_adults']) || isset($data['nb_children'])) {
+                    $newTotal = (float)$reservation['accommodation_price'] + (float)$reservation['tourist_tax_amount'] + (float)$reservation['breakfast_price'];
+                    $newRemaining = $newTotal - (float)$reservation['deposit_amount'];
+                    db()->execute(
+                        "UPDATE selfcheckin_reservations SET total_amount = ?, remaining_amount = ?, updated_at = NOW() WHERE id = ?",
+                        [$newTotal, max(0, $newRemaining), $reservation['id']]
+                    );
+                    $reservation['total_amount'] = $newTotal;
+                    $reservation['remaining_amount'] = max(0, $newRemaining);
+                }
+
                 json_out([
                     'reservation' => [
                         'id' => (int)$reservation['id'],
                         'reservation_number' => $reservation['reservation_number'],
+                        'guest_first_name' => $reservation['guest_first_name'],
+                        'guest_last_name' => $reservation['guest_last_name'],
+                        'guest_email' => $reservation['guest_email'],
+                        'guest_phone' => $reservation['guest_phone'],
+                        'nb_adults' => (int)$reservation['nb_adults'],
+                        'nb_children' => (int)$reservation['nb_children'],
                         'total_amount' => (float)$reservation['total_amount'],
                         'deposit_amount' => (float)$reservation['deposit_amount'],
                         'remaining_amount' => (float)$reservation['remaining_amount'],
                         'breakfast_included' => (bool)$reservation['breakfast_included'],
                         'breakfast_price' => (float)$reservation['breakfast_price'],
+                        'tourist_tax_amount' => (float)$reservation['tourist_tax_amount'],
                     ]
                 ]);
             }
@@ -9101,16 +9261,26 @@ try {
                 if (!$hotel) json_error('Hôtel non trouvé ou réservation sans rendez-vous désactivée', 404);
 
                 $effectiveDate = $getEffectiveDate($hotel);
+                $nbAdultsFilter = isset($_GET['nb_adults']) ? (int)$_GET['nb_adults'] : null;
 
                 // Récupérer les slots walk-in disponibles (sans info client = pas encore pris)
-                $slots = db()->query(
-                    "SELECT r.id, r.reservation_number, r.room_number, r.checkin_date
-                     FROM selfcheckin_reservations r
-                     WHERE r.hotel_id = ? AND r.type = 'walkin' AND r.status = 'pending'
-                        AND r.guest_last_name IS NULL AND r.checkin_date = ?
-                     ORDER BY r.room_number",
-                    [$hotel['id'], $effectiveDate]
-                );
+                // Joindre avec rooms pour obtenir la capacité
+                $sql = "SELECT r.id, r.reservation_number, r.checkin_date, r.room_id,
+                               rm.room_type, rm.bed_type, rm.max_adults
+                        FROM selfcheckin_reservations r
+                        LEFT JOIN rooms rm ON rm.id = r.room_id
+                        WHERE r.hotel_id = ? AND r.type = 'walkin' AND r.status = 'pending'
+                           AND r.guest_last_name IS NULL AND r.checkin_date = ?";
+                $params = [$hotel['id'], $effectiveDate];
+
+                // Filtrer par capacité si nb_adults fourni
+                if ($nbAdultsFilter && $nbAdultsFilter > 0) {
+                    $sql .= " AND (rm.max_adults >= ? OR rm.max_adults IS NULL)";
+                    $params[] = $nbAdultsFilter;
+                }
+
+                $sql .= " ORDER BY rm.max_adults, r.room_number";
+                $slots = db()->query($sql, $params);
 
                 $pricing = db()->queryOne(
                     "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
@@ -9122,8 +9292,20 @@ try {
                 $weekSched = null;
                 try { $weekSched = db()->queryOne("SELECT * FROM hotel_breakfast_schedules WHERE hotel_id = ? AND day_of_week = ?", [$hotel['id'], $dow]); } catch (Exception $e) {}
 
+                // Ne pas renvoyer le room_number pour les walk-in (sera affiché après paiement)
+                $slotsForClient = array_map(function($s) {
+                    return [
+                        'id' => $s['id'],
+                        'reservation_number' => $s['reservation_number'],
+                        'checkin_date' => $s['checkin_date'],
+                        'room_type' => $s['room_type'] ?? 'standard',
+                        'bed_type' => $s['bed_type'] ?? 'double',
+                        'max_adults' => (int)($s['max_adults'] ?? 2),
+                    ];
+                }, $slots);
+
                 json_out([
-                    'rooms' => $slots,
+                    'rooms' => $slotsForClient,
                     'pricing' => [
                         'date' => $effectiveDate,
                         'night_price' => (float)($pricing['night_price'] ?? $hotel['default_night_price']),
@@ -9160,6 +9342,15 @@ try {
                 );
                 if (!$reservation) json_error('Cette chambre n\'est plus disponible', 404);
 
+                // Vérifier la capacité de la chambre
+                $nbAdults = (int)$data['nb_adults'];
+                if ($reservation['room_id']) {
+                    $room = db()->queryOne("SELECT max_adults FROM rooms WHERE id = ?", [$reservation['room_id']]);
+                    if ($room && $nbAdults > (int)$room['max_adults']) {
+                        json_error('Cette chambre ne peut accueillir que ' . $room['max_adults'] . ' adulte(s) maximum');
+                    }
+                }
+
                 // Calculer les tarifs
                 $effectiveDate = $getEffectiveDate($hotel);
                 $pricing = db()->queryOne(
@@ -9171,7 +9362,6 @@ try {
                 $touristTaxUnit = (float)($pricing['tourist_tax'] ?? $hotel['default_tourist_tax']);
                 $breakfastUnitPrice = (float)($pricing['breakfast_price'] ?? $hotel['default_breakfast_price']);
 
-                $nbAdults = (int)$data['nb_adults'];
                 $nbChildren = (int)($data['nb_children'] ?? 0);
                 $nbPersons = $nbAdults + $nbChildren;
                 $wantsBreakfast = !empty($data['breakfast']);
@@ -9179,7 +9369,25 @@ try {
                 $accommodationPrice = $nightPrice;
                 $touristTaxTotal = $touristTaxUnit * $nbAdults; // Taxe par adulte par nuit
                 $breakfastTotal = $wantsBreakfast ? ($breakfastUnitPrice * $nbPersons) : 0;
-                $totalAmount = $accommodationPrice + $touristTaxTotal + $breakfastTotal;
+
+                // Calculer les services complémentaires
+                $servicesTotal = 0;
+                $selectedServices = $data['services'] ?? [];
+                if (!empty($selectedServices) && is_array($selectedServices)) {
+                    foreach ($selectedServices as $svc) {
+                        $serviceId = (int)($svc['id'] ?? 0);
+                        $serviceQty = max(1, (int)($svc['quantity'] ?? 1));
+                        $dbService = db()->queryOne(
+                            "SELECT * FROM hotel_selfcheckin_services WHERE id = ? AND hotel_id = ? AND is_active = 1",
+                            [$serviceId, $hotel['id']]
+                        );
+                        if ($dbService) {
+                            $servicesTotal += (float)$dbService['price'] * $serviceQty;
+                        }
+                    }
+                }
+
+                $totalAmount = $accommodationPrice + $touristTaxTotal + $breakfastTotal + $servicesTotal;
 
                 // Mettre à jour la réservation avec les infos client
                 db()->execute(
@@ -9199,6 +9407,24 @@ try {
                         $reservation['id']
                     ]
                 );
+
+                // Enregistrer les services complémentaires commandés
+                if (!empty($selectedServices) && is_array($selectedServices)) {
+                    foreach ($selectedServices as $svc) {
+                        $serviceId = (int)($svc['id'] ?? 0);
+                        $serviceQty = max(1, (int)($svc['quantity'] ?? 1));
+                        $dbService = db()->queryOne(
+                            "SELECT * FROM hotel_selfcheckin_services WHERE id = ? AND hotel_id = ? AND is_active = 1",
+                            [$serviceId, $hotel['id']]
+                        );
+                        if ($dbService) {
+                            db()->insert(
+                                "INSERT INTO selfcheckin_reservation_services (reservation_id, service_id, service_name, service_price, quantity, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
+                                [$reservation['id'], $dbService['id'], $dbService['name'], (float)$dbService['price'], $serviceQty]
+                            );
+                        }
+                    }
+                }
 
                 // Créer PaymentIntent Stripe
                 $amountCents = (int)round($totalAmount * 100);
@@ -9242,6 +9468,7 @@ try {
                         'accommodation' => $accommodationPrice,
                         'tourist_tax' => $touristTaxTotal,
                         'breakfast' => $breakfastTotal,
+                        'services' => $servicesTotal,
                         'total' => $totalAmount,
                     ]
                 ]);
@@ -9261,7 +9488,7 @@ try {
                 $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
                 $allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
                 if (!in_array($ext, $allowedExts)) json_error('Format non autorisé. Formats acceptés : JPG, PNG, WebP');
-                if ($file['size'] > 5 * 1024 * 1024) json_error('Fichier trop volumineux (max 5 Mo)');
+                if ($file['size'] > 20 * 1024 * 1024) json_error('Fichier trop volumineux (max 20 Mo). Essayez de réduire la qualité de l\'image.');
 
                 $uploadDir = __DIR__ . '/../uploads/id_documents/';
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
@@ -9272,8 +9499,24 @@ try {
 
                 json_out([
                     'path' => 'uploads/id_documents/' . $filename,
-                    'filename' => $filename
+                    'filename' => $filename,
+                    'rgpd_notice' => 'Conformément au RGPD (Règlement Général sur la Protection des Données), votre pièce d\'identité sera conservée de manière sécurisée et automatiquement supprimée après 7 jours. Elle est utilisée uniquement pour la vérification d\'identité lors de votre check-in.'
                 ]);
+            }
+
+            // GET /booking/{slug}/services - Services complémentaires disponibles (public)
+            if ($method === 'GET' && $id && $action === 'services') {
+                $hotel = db()->queryOne(
+                    "SELECT id FROM hotels WHERE booking_slug = ? AND selfcheckin_enabled = 1 AND status = 'active'",
+                    [$id]
+                );
+                if (!$hotel) json_error('Hôtel non trouvé', 404);
+
+                $services = db()->query(
+                    "SELECT id, name, description, price, icon FROM hotel_selfcheckin_services WHERE hotel_id = ? AND is_active = 1 ORDER BY sort_order, name",
+                    [$hotel['id']]
+                );
+                json_out(['services' => $services]);
             }
 
             break;

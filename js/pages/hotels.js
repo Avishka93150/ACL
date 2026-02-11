@@ -3,11 +3,13 @@
  */
 
 const ROOM_TYPES = [
-    { value: 'standard', label: 'Standard', icon: '🛏️' },
-    { value: 'superieure', label: 'Supérieure', icon: '⭐' },
-    { value: 'suite', label: 'Suite', icon: '👑' },
-    { value: 'familiale', label: 'Familiale', icon: '👨‍👩‍👧‍👦' },
-    { value: 'pmr', label: 'PMR', icon: '♿' }
+    { value: 'standard', label: 'Standard', icon: '🛏️', defaultMaxAdults: 2 },
+    { value: 'superieure', label: 'Supérieure', icon: '⭐', defaultMaxAdults: 2 },
+    { value: 'suite', label: 'Suite', icon: '👑', defaultMaxAdults: 2 },
+    { value: 'triple', label: 'Triple', icon: '🛏️🛏️🛏️', defaultMaxAdults: 3 },
+    { value: 'quadruple', label: 'Quadruple', icon: '👨‍👩‍👧‍👦', defaultMaxAdults: 4 },
+    { value: 'familiale', label: 'Familiale', icon: '👨‍👩‍👧‍👦', defaultMaxAdults: 4 },
+    { value: 'pmr', label: 'PMR', icon: '♿', defaultMaxAdults: 2 }
 ];
 
 const BED_TYPES = [
@@ -596,6 +598,22 @@ async function renderTabSelfcheckin(content, h) {
             </div>
         </div>
 
+        <!-- Services complémentaires -->
+        <div class="card mb-20">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-concierge-bell"></i> Services complémentaires</h3>
+                <button class="btn btn-primary btn-sm" onclick="showCreateService(${h.id})"><i class="fas fa-plus"></i> Nouveau service</button>
+            </div>
+            <div class="card-body" style="padding:24px">
+                <p class="text-muted mb-15">Services proposés aux clients juste avant le paiement lors du self check-in (ex: kit de bienvenue, parking, late checkout...).</p>
+                <div id="hotel-services-list">
+                    <div style="text-align:center;padding:20px;color:var(--gray-400)">
+                        <i class="fas fa-spinner fa-spin"></i> Chargement...
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Stripe -->
         <div class="card">
             <div class="card-header">
@@ -619,6 +637,9 @@ async function renderTabSelfcheckin(content, h) {
             </div>
         </div>
     `;
+
+    // Charger les services complémentaires
+    loadHotelServices(h.id);
 }
 
 // ---- Sauvegarder horaires PDJ par jour de la semaine ----
@@ -744,6 +765,174 @@ async function deleteHotelLocker(hotelId, lockerId) {
         await API.delete(`lockers/${lockerId}`);
         toast('Casier supprimé', 'success');
         renderHotelTab(_editHotelData, null);
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+// ---- CRUD Services complémentaires ----
+
+async function loadHotelServices(hotelId) {
+    const container = document.getElementById('hotel-services-list');
+    if (!container) return;
+
+    try {
+        const res = await API.get(`hotels/${hotelId}/selfcheckin-services`);
+        const services = res.services || [];
+
+        if (services.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state" style="padding:30px">
+                    <i class="fas fa-concierge-bell" style="font-size:36px;color:var(--gray-300);margin-bottom:12px"></i>
+                    <p>Aucun service complémentaire configuré</p>
+                    <small class="text-muted">Ajoutez des services proposés aux clients lors du self check-in</small>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = `
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+                ${services.map(s => `
+                    <div class="card" style="padding:0;border-left:4px solid ${s.is_active ? '#16A34A' : '#9CA3AF'};overflow:hidden;margin:0">
+                        <div style="padding:14px">
+                            <div style="display:flex;justify-content:space-between;align-items:start">
+                                <div>
+                                    <h4 style="margin:0;font-size:15px">
+                                        <i class="fas fa-${esc(s.icon || 'concierge-bell')}" style="color:${s.is_active ? '#2563EB' : '#9CA3AF'}"></i>
+                                        ${esc(s.name)}
+                                    </h4>
+                                    <p style="margin:4px 0 0;font-size:14px;font-weight:600;color:#2563EB">${formatCurrency(s.price)}</p>
+                                </div>
+                                <span style="padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;background:${s.is_active ? '#F0FDF4' : '#F3F4F6'};color:${s.is_active ? '#16A34A' : '#9CA3AF'}">
+                                    ${s.is_active ? 'Actif' : 'Inactif'}
+                                </span>
+                            </div>
+                            ${s.description ? `<p style="margin:6px 0 0;font-size:12px;color:var(--gray-400)">${esc(s.description)}</p>` : ''}
+                            <div style="margin-top:10px;display:flex;gap:6px">
+                                <button class="btn btn-sm btn-outline" onclick="showEditService(${hotelId}, ${s.id})"><i class="fas fa-edit"></i></button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteService(${hotelId}, ${s.id})"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } catch (err) {
+        container.innerHTML = `<p class="text-danger">${err.message}</p>`;
+    }
+}
+
+function showCreateService(hotelId) {
+    openModal('Nouveau service complémentaire', `
+        <form onsubmit="saveService(event, ${hotelId})">
+            <div class="form-group">
+                <label>Nom du service *</label>
+                <input type="text" name="name" required placeholder="Ex: Kit de bienvenue, Parking, Late checkout...">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" rows="2" placeholder="Description optionnelle du service..."></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Prix (EUR) *</label>
+                    <input type="number" name="price" required step="0.01" min="0" value="0" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                    <label>Icône FontAwesome</label>
+                    <input type="text" name="icon" value="concierge-bell" placeholder="concierge-bell">
+                    <small class="form-help">Nom sans le préfixe fa- (ex: parking, coffee, moon, gift)</small>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="is_active" value="1" checked> Service actif
+                </label>
+            </div>
+            <div style="text-align:right;margin-top:20px">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Créer</button>
+            </div>
+        </form>
+    ');
+}
+
+async function saveService(e, hotelId) {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    data.hotel_id = hotelId;
+    data.is_active = data.is_active ? 1 : 0;
+    try {
+        await API.post(`hotels/${hotelId}/selfcheckin-services`, data);
+        toast('Service créé', 'success');
+        closeModal();
+        loadHotelServices(hotelId);
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function showEditService(hotelId, serviceId) {
+    try {
+        const res = await API.get(`hotels/${hotelId}/selfcheckin-services/${serviceId}`);
+        const s = res.service;
+        openModal('Modifier le service', `
+            <form onsubmit="updateService(event, ${hotelId}, ${serviceId})">
+                <div class="form-group">
+                    <label>Nom du service *</label>
+                    <input type="text" name="name" value="${esc(s.name)}" required>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" rows="2">${esc(s.description || '')}</textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Prix (EUR) *</label>
+                        <input type="number" name="price" value="${s.price}" required step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Icône FontAwesome</label>
+                        <input type="text" name="icon" value="${esc(s.icon || 'concierge-bell')}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="is_active" value="1" ${s.is_active == 1 ? 'checked' : ''}> Service actif
+                    </label>
+                </div>
+                <div style="text-align:right;margin-top:20px">
+                    <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
+                </div>
+            </form>
+        `);
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function updateService(e, hotelId, serviceId) {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    data.is_active = data.is_active ? 1 : 0;
+    try {
+        await API.put(`hotels/${hotelId}/selfcheckin-services/${serviceId}`, data);
+        toast('Service mis à jour', 'success');
+        closeModal();
+        loadHotelServices(hotelId);
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function deleteService(hotelId, serviceId) {
+    if (!confirm('Supprimer ce service complémentaire ?')) return;
+    try {
+        await API.delete(`hotels/${hotelId}/selfcheckin-services/${serviceId}`);
+        toast('Service supprimé', 'success');
+        loadHotelServices(hotelId);
     } catch (err) {
         toast(err.message, 'error');
     }
@@ -1165,6 +1354,7 @@ async function viewHotelRooms(hotelId) {
                                 <div class="room-number">${esc(r.room_number)}</div>
                                 <div class="room-type">${getRoomTypeIcon(r.room_type)} ${LABELS.room_type[r.room_type] || r.room_type}</div>
                                 <div class="room-bed">${getBedTypeLabel(r.bed_type)}</div>
+                                <div class="room-capacity"><i class="fas fa-user"></i> ${r.max_adults || 2} adulte(s) max</div>
                                 <div class="room-status">${getStatusLabel(r.status)}</div>
                             </div>
                         `).join('')}
@@ -1241,6 +1431,11 @@ function showAddRoomModal(hotelId) {
                 </select>
             </div>
             <div class="form-group">
+                <label>Capacité max adultes</label>
+                <input type="number" name="max_adults" value="2" min="1" max="10">
+                <small class="form-help">Nombre maximum d'adultes pouvant occuper cette chambre</small>
+            </div>
+            <div class="form-group">
                 <label>${t('hotels.status')}</label>
                 <select name="status">
                     ${ROOM_STATUSES.map(s => `<option value="${s.value}">${s.label}</option>`).join('')}
@@ -1252,6 +1447,14 @@ function showAddRoomModal(hotelId) {
             </div>
         </form>
     `);
+
+    // Auto-update max_adults when room type changes
+    document.querySelectorAll('input[name="room_type"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            const rt = ROOM_TYPES.find(t => t.value === radio.value);
+            if (rt) document.querySelector('input[name="max_adults"]').value = rt.defaultMaxAdults;
+        });
+    });
 }
 
 async function createRoom(e, hotelId) {
@@ -1305,6 +1508,11 @@ async function showEditRoomModal(roomId, hotelId) {
                     <select name="bed_type">
                         ${BED_TYPES.map(b => `<option value="${b.value}" ${r.bed_type === b.value ? 'selected' : ''}>${b.label}</option>`).join('')}
                     </select>
+                </div>
+                <div class="form-group">
+                    <label>Capacité max adultes</label>
+                    <input type="number" name="max_adults" value="${r.max_adults || 2}" min="1" max="10">
+                    <small class="form-help">Nombre maximum d'adultes pouvant occuper cette chambre</small>
                 </div>
                 <div class="form-group">
                     <label>${t('hotels.status')}</label>

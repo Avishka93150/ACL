@@ -57,17 +57,19 @@
         .btn-success:hover { background: #047857; }
         .btn-lg { padding: 16px 32px; font-size: 17px; border-radius: 12px; }
         .btn-block { width: 100%; }
+        .btn-sm { padding: 6px 12px; font-size: 13px; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
 
         .form-group { margin-bottom: 16px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; color: var(--gray-700); margin-bottom: 6px; }
-        .form-group input, .form-group select { width: 100%; padding: 10px 14px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-size: 15px; font-family: inherit; transition: border-color 0.2s; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 14px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-size: 15px; font-family: inherit; transition: border-color 0.2s; }
         .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
         .choice-grid { display: grid; gap: 16px; margin-top: 24px; }
         .choice-card { padding: 24px; border: 2px solid var(--gray-200); border-radius: 12px; cursor: pointer; transition: all 0.2s; text-align: center; }
         .choice-card:hover { border-color: var(--primary); background: var(--primary-light); transform: translateY(-2px); box-shadow: var(--shadow); }
+        .choice-card.selected { border-color: var(--primary); background: var(--primary-light); }
         .choice-card i { font-size: 36px; color: var(--primary); display: block; margin-bottom: 12px; }
         .choice-card h3 { font-size: 16px; margin-bottom: 4px; }
         .choice-card p { font-size: 13px; color: var(--gray-500); }
@@ -111,6 +113,18 @@
         .back-link { color: rgba(255,255,255,0.8); text-decoration: none; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px; }
         .back-link:hover { color: white; }
 
+        .service-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border: 1.5px solid var(--gray-200); border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+        .service-item:hover { border-color: var(--primary); background: var(--primary-light); }
+        .service-item.selected { border-color: var(--primary); background: var(--primary-light); }
+        .service-item .service-info { display: flex; align-items: center; gap: 10px; }
+        .service-item .service-price { font-weight: 700; color: var(--primary); white-space: nowrap; }
+
+        .rgpd-notice { background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: 8px; padding: 12px 14px; font-size: 12px; color: #0369A1; margin: 12px 0; }
+        .rgpd-notice i { margin-right: 6px; }
+
+        .editable-field { display: flex; align-items: center; gap: 8px; }
+        .editable-field input, .editable-field select { flex: 1; }
+
         @media (max-width: 640px) {
             .card-body { padding: 20px; }
             .form-row { grid-template-columns: 1fr; }
@@ -151,6 +165,11 @@
     let currentReservation = null;
     let currentStep = 'welcome';
     let idDocumentPath = null;
+    let availableServices = [];
+    let selectedServices = {};
+    let walkinNbAdults = 1;
+    let walkinAvailableRooms = [];
+    let lastLookupData = null;
 
     // ==================== API ====================
     async function apiGet(url) {
@@ -184,6 +203,16 @@
     function fmtPrice(n) { return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n || 0); }
     function fmtDate(d) { if (!d) return '-'; return new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
 
+    const ROOM_TYPE_LABELS = {
+        standard: 'Standard', superieure: 'Supérieure', suite: 'Suite',
+        triple: 'Triple', quadruple: 'Quadruple',
+        familiale: 'Familiale', pmr: 'PMR'
+    };
+    const BED_TYPE_LABELS = {
+        single: 'Simple', double: 'Double', twin: 'Twin (2 lits)',
+        queen: 'Queen', king: 'King'
+    };
+
     // ==================== INIT ====================
     async function init() {
         if (!hotelSlug) {
@@ -200,6 +229,12 @@
             if (hotel.stripe_public_key) {
                 stripe = Stripe(hotel.stripe_public_key);
             }
+
+            // Load available services
+            try {
+                const svcRes = await apiGet(`/booking/${hotelSlug}/services`);
+                availableServices = svcRes.services || [];
+            } catch (e) { availableServices = []; }
 
             // Update header
             document.getElementById('hotel-header').style.display = 'flex';
@@ -246,7 +281,7 @@
                             <p>Rechercher ma réservation et récupérer ma clé</p>
                         </div>
                         ${hotel.walkin_enabled ? `
-                        <div class="choice-card" onclick="showWalkin()">
+                        <div class="choice-card" onclick="showWalkinPersonCount()">
                             <i class="fas fa-walking"></i>
                             <h3>Sans réservation</h3>
                             <p>Réserver une chambre disponible maintenant</p>
@@ -322,6 +357,7 @@
 
             const res = await apiPost(`/booking/${hotelSlug}/lookup`, body);
             currentReservation = res.reservation;
+            lastLookupData = res;
             showReservationDetails(res);
         } catch (err) {
             errDiv.innerHTML = `<div class="alert alert-error"><i class="fas fa-times-circle"></i> ${esc(err.message)}</div>`;
@@ -337,6 +373,7 @@
         const bfOption = data.breakfast_option;
         const canAddBreakfast = !r.breakfast_included && bfOption && bfOption.unit_price > 0;
         const nbPersons = r.nb_adults + r.nb_children;
+        const maxAdults = r.room_max_adults || 10;
 
         document.getElementById('app').innerHTML = `
             <a href="javascript:showLookup()" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
@@ -353,12 +390,56 @@
 
                     <div class="info-box">
                         <p><strong>N° ${esc(r.reservation_number)}</strong></p>
-                        <p style="margin-top:4px">${esc(r.guest_first_name || '')} <strong>${esc(r.guest_last_name || '')}</strong></p>
-                        <p style="font-size:13px;color:var(--gray-500);margin-top:4px">
-                            ${r.nb_adults} adulte(s) ${r.nb_children > 0 ? '+ ' + r.nb_children + ' enfant(s)' : ''} |
+                        <p style="margin-top:8px;font-size:13px;color:var(--gray-500)">
                             Arrivée : ${fmtDate(r.checkin_date)}
+                            ${r.room_number ? ' | Chambre ' + esc(r.room_number) : ''}
+                            ${maxAdults ? ' (max ' + maxAdults + ' adulte(s))' : ''}
                         </p>
                     </div>
+
+                    <h3 style="margin:20px 0 12px"><i class="fas fa-user-edit"></i> Vos informations <small style="font-weight:400;color:var(--gray-400)">(modifiable)</small></h3>
+                    <form id="reservation-edit-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Prénom</label>
+                                <input type="text" id="res-firstname" value="${esc(r.guest_first_name || '')}">
+                            </div>
+                            <div class="form-group">
+                                <label>Nom</label>
+                                <input type="text" id="res-lastname" value="${esc(r.guest_last_name || '')}">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Email</label>
+                                <input type="email" id="res-email" value="${esc(r.guest_email || '')}">
+                            </div>
+                            <div class="form-group">
+                                <label>Téléphone</label>
+                                <input type="tel" id="res-phone" value="${esc(r.guest_phone || '')}" placeholder="+33 6 ...">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Nombre d'adultes</label>
+                                <select id="res-adults" onchange="onResAdultsChange()">
+                                    ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${r.nb_adults === n ? 'selected' : ''} ${n > maxAdults ? 'disabled' : ''}>${n}${n > maxAdults ? ' (hors capacité)' : ''}</option>`).join('')}
+                                </select>
+                                ${maxAdults ? `<small style="color:var(--gray-500)">Capacité max de la chambre : ${maxAdults} adulte(s)</small>` : ''}
+                            </div>
+                            <div class="form-group">
+                                <label>Nombre d'enfants</label>
+                                <select id="res-children">
+                                    ${[0,1,2,3,4].map(n => `<option value="${n}" ${r.nb_children === n ? 'selected' : ''}>${n}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+                        <div id="res-capacity-warning"></div>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="saveReservationEdits()" id="save-edits-btn" style="margin-bottom:16px">
+                            <i class="fas fa-save"></i> Enregistrer les modifications
+                        </button>
+                        <div id="res-edit-status"></div>
+                    </form>
 
                     <h3 style="margin:20px 0 12px"><i class="fas fa-receipt"></i> Détail de la réservation</h3>
                     <table class="summary-table">
@@ -398,6 +479,55 @@
         `;
     }
 
+    function onResAdultsChange() {
+        const maxAdults = currentReservation.room_max_adults || 10;
+        const selected = parseInt(document.getElementById('res-adults').value);
+        const warnDiv = document.getElementById('res-capacity-warning');
+        if (selected > maxAdults) {
+            warnDiv.innerHTML = `<div class="alert alert-error"><i class="fas fa-exclamation-triangle"></i> La chambre ne peut accueillir que ${maxAdults} adulte(s) maximum.</div>`;
+        } else {
+            warnDiv.innerHTML = '';
+        }
+    }
+
+    async function saveReservationEdits() {
+        const btn = document.getElementById('save-edits-btn');
+        const statusDiv = document.getElementById('res-edit-status');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner" style="border-color:var(--gray-300);border-top-color:var(--primary)"></span> Enregistrement...';
+
+        try {
+            const updateData = {
+                reservation_id: currentReservation.id,
+                guest_first_name: document.getElementById('res-firstname').value.trim(),
+                guest_last_name: document.getElementById('res-lastname').value.trim(),
+                guest_email: document.getElementById('res-email').value.trim(),
+                guest_phone: document.getElementById('res-phone').value.trim(),
+                nb_adults: parseInt(document.getElementById('res-adults').value),
+                nb_children: parseInt(document.getElementById('res-children').value)
+            };
+
+            const res = await apiPost(`/booking/${hotelSlug}/update-reservation`, updateData);
+            currentReservation = { ...currentReservation, ...res.reservation };
+
+            // Re-fetch full data
+            const lookupRes = await apiPost(`/booking/${hotelSlug}/lookup`, {
+                reservation_number: currentReservation.reservation_number
+            });
+            currentReservation = lookupRes.reservation;
+            lastLookupData = lookupRes;
+            showReservationDetails(lookupRes);
+
+            statusDiv.innerHTML = '<div class="alert alert-info" style="margin-top:8px"><i class="fas fa-check-circle"></i> Modifications enregistrées</div>';
+            setTimeout(() => { const s = document.getElementById('res-edit-status'); if (s) s.innerHTML = ''; }, 3000);
+        } catch (err) {
+            statusDiv.innerHTML = `<div class="alert alert-error" style="margin-top:8px">${esc(err.message)}</div>`;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Enregistrer les modifications';
+        }
+    }
+
     async function addBreakfast(reservationId) {
         const btn = document.getElementById('add-breakfast-btn');
         btn.disabled = true;
@@ -410,11 +540,11 @@
             });
             currentReservation = { ...currentReservation, ...res.reservation };
 
-            // Re-fetch full data for display
             const lookupRes = await apiPost(`/booking/${hotelSlug}/lookup`, {
                 reservation_number: currentReservation.reservation_number
             });
             currentReservation = lookupRes.reservation;
+            lastLookupData = lookupRes;
             showReservationDetails(lookupRes);
         } catch (err) {
             alert('Erreur: ' + err.message);
@@ -442,7 +572,7 @@
         currentStep = 'payment';
 
         document.getElementById('app').innerHTML = `
-            <a href="javascript:showReservationDetails({reservation: currentReservation, breakfast_option: {}})" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
+            <a href="javascript:showReservationDetails(lastLookupData)" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
             <div class="card">
                 <div class="card-header">
                     <h2><i class="fas fa-credit-card"></i> Paiement</h2>
@@ -477,7 +607,6 @@
             </div>
         `;
 
-        // Init Stripe Elements
         try {
             const res = await apiPost(`/booking/${hotelSlug}/pay`, {
                 reservation_id: currentReservation.id
@@ -539,13 +668,17 @@
 
     // ==================== FLOW B: WALK-IN ====================
 
-    async function showWalkin() {
-        currentStep = 'walkin';
+    // Step 1: Ask number of persons FIRST
+    function showWalkinPersonCount() {
+        currentStep = 'walkin-persons';
+        selectedServices = {};
+        idDocumentPath = null;
+
         document.getElementById('app').innerHTML = `
             <a href="javascript:showWelcome()" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
-            <div class="card card-wide">
+            <div class="card">
                 <div class="card-header">
-                    <h2><i class="fas fa-walking"></i> Réservation sans rendez-vous</h2>
+                    <h2><i class="fas fa-users"></i> Nombre de personnes</h2>
                 </div>
                 <div class="card-body">
                     <div class="step-indicator">
@@ -553,26 +686,64 @@
                         <div class="step-dot"></div>
                         <div class="step-dot"></div>
                         <div class="step-dot"></div>
+                        <div class="step-dot"></div>
+                    </div>
+
+                    <p style="color:var(--gray-500);margin-bottom:20px">Combien de personnes séjourneront ?</p>
+
+                    <div class="form-group">
+                        <label>Nombre d'adultes *</label>
+                        <select id="walkin-nb-adults" style="font-size:18px;padding:14px">
+                            ${[1,2,3,4,5,6].map(n => `<option value="${n}">${n} adulte${n > 1 ? 's' : ''}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <button class="btn btn-primary btn-block btn-lg" onclick="searchWalkinRooms()">
+                        <i class="fas fa-search"></i> Rechercher les chambres disponibles
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    // Step 2: Search and show available rooms (no room number shown)
+    async function searchWalkinRooms() {
+        walkinNbAdults = parseInt(document.getElementById('walkin-nb-adults').value) || 1;
+        currentStep = 'walkin-rooms';
+
+        document.getElementById('app').innerHTML = `
+            <a href="javascript:showWalkinPersonCount()" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
+            <div class="card card-wide">
+                <div class="card-header">
+                    <h2><i class="fas fa-bed"></i> Chambres disponibles</h2>
+                </div>
+                <div class="card-body">
+                    <div class="step-indicator">
+                        <div class="step-dot done"></div>
+                        <div class="step-dot active"></div>
+                        <div class="step-dot"></div>
+                        <div class="step-dot"></div>
+                        <div class="step-dot"></div>
                     </div>
                     <div style="text-align:center;padding:20px">
                         <div class="spinner" style="width:30px;height:30px;border-color:var(--gray-300);border-top-color:var(--primary)"></div>
-                        <p style="margin-top:8px;color:var(--gray-500)">Recherche des chambres disponibles...</p>
+                        <p style="margin-top:8px;color:var(--gray-500)">Recherche des chambres pour ${walkinNbAdults} adulte(s)...</p>
                     </div>
                 </div>
             </div>
         `;
 
         try {
-            const res = await apiGet(`/booking/${hotelSlug}/available-rooms`);
+            const res = await apiGet(`/booking/${hotelSlug}/available-rooms?nb_adults=${walkinNbAdults}`);
             if (!res.rooms || res.rooms.length === 0) {
                 document.getElementById('app').innerHTML = `
-                    <a href="javascript:showWelcome()" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
+                    <a href="javascript:showWalkinPersonCount()" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
                     <div class="card">
                         <div class="card-body" style="text-align:center;padding:48px">
                             <i class="fas fa-bed" style="font-size:48px;color:var(--gray-300);margin-bottom:16px"></i>
                             <h2>Aucune chambre disponible</h2>
-                            <p style="color:var(--gray-500);margin-top:8px">Désolé, il n'y a plus de chambre disponible pour cette nuit.</p>
-                            <button class="btn btn-outline" style="margin-top:20px" onclick="showWelcome()">Retour</button>
+                            <p style="color:var(--gray-500);margin-top:8px">Désolé, il n'y a pas de chambre disponible pour ${walkinNbAdults} adulte(s) cette nuit.</p>
+                            <button class="btn btn-outline" style="margin-top:20px" onclick="showWalkinPersonCount()">Modifier le nombre de personnes</button>
                         </div>
                     </div>
                 `;
@@ -580,21 +751,23 @@
             }
 
             pricing = res.pricing;
-            showWalkinRooms(res.rooms, res.pricing);
+            walkinAvailableRooms = res.rooms;
+            showWalkinRoomSelection(res.rooms, res.pricing);
         } catch (err) {
             showError(err.message);
         }
     }
 
-    function showWalkinRooms(rooms, pricingData) {
+    function showWalkinRoomSelection(rooms, pricingData) {
         document.getElementById('app').innerHTML = `
-            <a href="javascript:showWelcome()" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
+            <a href="javascript:showWalkinPersonCount()" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
             <div class="card card-wide">
                 <div class="card-header">
-                    <h2><i class="fas fa-bed"></i> Chambres disponibles</h2>
+                    <h2><i class="fas fa-bed"></i> Choisissez votre chambre</h2>
                 </div>
                 <div class="card-body">
                     <div class="step-indicator">
+                        <div class="step-dot done"></div>
                         <div class="step-dot active"></div>
                         <div class="step-dot"></div>
                         <div class="step-dot"></div>
@@ -607,14 +780,18 @@
                             Taxe de séjour : ${fmtPrice(pricingData.tourist_tax)} / adulte |
                             Petit-déjeuner : ${fmtPrice(pricingData.breakfast_price)} / pers (${pricingData.breakfast_start} - ${pricingData.breakfast_end})
                         </p>
+                        <p style="font-size:13px;color:var(--primary);margin-top:4px;font-weight:600">
+                            <i class="fas fa-users"></i> ${walkinNbAdults} adulte(s)
+                        </p>
                     </div>
 
                     <div class="choice-grid" style="margin-top:16px">
                         ${rooms.map(r => `
-                            <div class="choice-card" onclick="selectWalkinRoom(${r.id}, '${esc(r.room_number)}')">
+                            <div class="choice-card" onclick="selectWalkinRoom(${r.id})">
                                 <i class="fas fa-bed"></i>
-                                <h3>Chambre ${esc(r.room_number)}</h3>
-                                <p>${fmtPrice(pricingData.night_price)} / nuit</p>
+                                <h3>${esc(ROOM_TYPE_LABELS[r.room_type] || r.room_type)}</h3>
+                                <p>${esc(BED_TYPE_LABELS[r.bed_type] || r.bed_type)} - Max ${r.max_adults} adulte(s)</p>
+                                <p style="font-weight:600;color:var(--primary);margin-top:4px">${fmtPrice(pricingData.night_price)} / nuit</p>
                             </div>
                         `).join('')}
                     </div>
@@ -623,15 +800,16 @@
         `;
     }
 
-    function selectWalkinRoom(reservationId, roomNumber) {
-        currentReservation = { id: reservationId, room_number: roomNumber };
+    function selectWalkinRoom(reservationId) {
+        currentReservation = { id: reservationId };
         showWalkinIdUpload();
     }
 
+    // Step 3: ID Upload with RGPD notice
     function showWalkinIdUpload() {
         currentStep = 'walkin-id';
         document.getElementById('app').innerHTML = `
-            <a href="javascript:showWalkin()" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
+            <a href="javascript:searchWalkinRooms()" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
             <div class="card">
                 <div class="card-header">
                     <h2><i class="fas fa-id-card"></i> Pièce d'identité</h2>
@@ -639,17 +817,26 @@
                 <div class="card-body">
                     <div class="step-indicator">
                         <div class="step-dot done"></div>
+                        <div class="step-dot done"></div>
                         <div class="step-dot active"></div>
                         <div class="step-dot"></div>
                         <div class="step-dot"></div>
                     </div>
 
-                    <p style="color:var(--gray-500);margin-bottom:16px">Pour des raisons légales, veuillez photographier votre pièce d'identité.</p>
+                    <p style="color:var(--gray-500);margin-bottom:12px">Pour des raisons légales, veuillez photographier votre pièce d'identité.</p>
+
+                    <div class="rgpd-notice">
+                        <i class="fas fa-shield-alt"></i>
+                        <strong>Protection de vos données (RGPD)</strong><br>
+                        Conformément au Règlement Général sur la Protection des Données, votre pièce d'identité est collectée uniquement pour vérifier votre identité lors du check-in.
+                        Elle sera conservée de manière sécurisée et <strong>automatiquement supprimée après 7 jours</strong>.
+                        Aucune copie ne sera conservée au-delà de ce délai. Vous pouvez exercer vos droits d'accès, de rectification et de suppression en contactant l'établissement.
+                    </div>
 
                     <div class="id-upload-zone" id="id-upload-zone" onclick="document.getElementById('id-file-input').click()">
                         <i class="fas fa-camera"></i>
                         <p style="font-weight:600">Prendre une photo ou importer un fichier</p>
-                        <p style="font-size:12px;color:var(--gray-400);margin-top:4px">JPG, PNG ou WebP - Max 5 Mo</p>
+                        <p style="font-size:12px;color:var(--gray-400);margin-top:4px">JPG, PNG ou WebP - Max 20 Mo</p>
                     </div>
                     <input type="file" id="id-file-input" accept="image/*" capture="environment" style="display:none" onchange="handleIdUpload(this)">
 
@@ -658,6 +845,7 @@
                     </div>
 
                     <div id="id-upload-status" style="margin-top:12px"></div>
+                    <div id="id-quality-option" style="display:none"></div>
 
                     <div class="form-group" style="margin-top:16px">
                         <label>Date de naissance (vérification majorité) *</label>
@@ -679,6 +867,75 @@
         const file = input.files[0];
         if (!file) return;
 
+        const maxSize = 20 * 1024 * 1024; // 20 Mo
+
+        // Check file size and propose quality reduction
+        if (file.size > maxSize) {
+            const qualityDiv = document.getElementById('id-quality-option');
+            qualityDiv.style.display = 'block';
+            qualityDiv.innerHTML = `
+                <div class="info-box warning">
+                    <p style="font-weight:600"><i class="fas fa-exclamation-triangle"></i> Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(1)} Mo)</p>
+                    <p style="font-size:13px;color:var(--gray-500);margin:8px 0">La taille maximale est de 20 Mo. Souhaitez-vous réduire la qualité de l'image ?</p>
+                    <button class="btn btn-primary btn-sm" onclick="compressAndUpload()">
+                        <i class="fas fa-compress"></i> Réduire la qualité et envoyer
+                    </button>
+                </div>
+            `;
+            window._originalFile = file;
+            return;
+        }
+
+        await doUploadId(file);
+    }
+
+    async function compressAndUpload() {
+        const file = window._originalFile;
+        if (!file) return;
+
+        const qualityDiv = document.getElementById('id-quality-option');
+        qualityDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Compression en cours...</div>';
+
+        try {
+            const compressed = await compressImage(file, 0.5, 1600);
+            await doUploadId(compressed);
+            qualityDiv.style.display = 'none';
+        } catch (err) {
+            qualityDiv.innerHTML = `<div class="alert alert-error">Erreur de compression : ${esc(err.message)}. Essayez avec une image plus petite.</div>`;
+        }
+    }
+
+    function compressImage(file, quality, maxDim) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let w = img.width, h = img.height;
+                    if (w > maxDim || h > maxDim) {
+                        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+                        else { w = Math.round(w * maxDim / h); h = maxDim; }
+                    }
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    canvas.toBlob((blob) => {
+                        if (!blob) { reject(new Error('Compression failed')); return; }
+                        const compressed = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' });
+                        resolve(compressed);
+                    }, 'image/jpeg', quality);
+                };
+                img.onerror = () => reject(new Error('Image invalide'));
+                img.src = e.target.result;
+            };
+            reader.onerror = () => reject(new Error('Erreur lecture'));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async function doUploadId(file) {
         // Preview
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -696,10 +953,25 @@
         try {
             const res = await apiUpload(`/booking/${hotelSlug}/upload-id`, file);
             idDocumentPath = res.path;
-            statusDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-check-circle"></i> Document enregistré</div>';
+            statusDiv.innerHTML = `<div class="alert alert-info"><i class="fas fa-check-circle"></i> Document enregistré</div>`;
             document.getElementById('id-continue-btn').disabled = false;
         } catch (err) {
             statusDiv.innerHTML = `<div class="alert alert-error">${esc(err.message)}</div>`;
+            // If file too large, suggest compression
+            if (err.message.includes('volumineux') || err.message.includes('trop')) {
+                const qualityDiv = document.getElementById('id-quality-option');
+                qualityDiv.style.display = 'block';
+                window._originalFile = file;
+                qualityDiv.innerHTML = `
+                    <div class="info-box warning" style="margin-top:8px">
+                        <p style="font-weight:600"><i class="fas fa-compress"></i> Réduire la qualité ?</p>
+                        <p style="font-size:13px;margin:4px 0">Le fichier est trop volumineux. Nous pouvons réduire automatiquement la qualité.</p>
+                        <button class="btn btn-primary btn-sm" onclick="compressAndUpload()" style="margin-top:8px">
+                            <i class="fas fa-compress"></i> Réduire et réessayer
+                        </button>
+                    </div>
+                `;
+            }
         }
     }
 
@@ -712,7 +984,6 @@
             return;
         }
 
-        // Check age >= 18
         const birth = new Date(birthdate);
         const today = new Date();
         let age = today.getFullYear() - birth.getFullYear();
@@ -732,9 +1003,14 @@
         showWalkinForm();
     }
 
+    // Step 4: Guest info + services + recap
     function showWalkinForm() {
         currentStep = 'walkin-form';
         const p = pricing;
+
+        // Build max adults options based on selected room capacity
+        const selectedRoom = walkinAvailableRooms.find(r => r.id === currentReservation.id);
+        const maxAdults = selectedRoom ? selectedRoom.max_adults : 6;
 
         document.getElementById('app').innerHTML = `
             <a href="javascript:showWalkinIdUpload()" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
@@ -744,6 +1020,7 @@
                 </div>
                 <div class="card-body">
                     <div class="step-indicator">
+                        <div class="step-dot done"></div>
                         <div class="step-dot done"></div>
                         <div class="step-dot done"></div>
                         <div class="step-dot active"></div>
@@ -777,8 +1054,9 @@
                             <div class="form-group">
                                 <label>Nombre d'adultes *</label>
                                 <select id="wi-adults" onchange="updateWalkinPricing()">
-                                    ${[1,2,3,4,5].map(n => `<option value="${n}">${n}</option>`).join('')}
+                                    ${Array.from({length: maxAdults}, (_, i) => i + 1).map(n => `<option value="${n}" ${n === walkinNbAdults ? 'selected' : ''}>${n}</option>`).join('')}
                                 </select>
+                                <small style="color:var(--gray-500)">Max ${maxAdults} adulte(s) pour cette chambre</small>
                             </div>
                             <div class="form-group">
                                 <label>Nombre d'enfants</label>
@@ -794,6 +1072,24 @@
                                 Petit-déjeuner (${fmtPrice(p.breakfast_price)} / pers) - ${p.breakfast_start} à ${p.breakfast_end}
                             </label>
                         </div>
+
+                        ${availableServices.length > 0 ? `
+                        <h3 style="margin:20px 0 12px"><i class="fas fa-concierge-bell"></i> Services complémentaires</h3>
+                        <div id="services-list">
+                            ${availableServices.map(s => `
+                                <div class="service-item" id="svc-${s.id}" onclick="toggleService(${s.id}, '${esc(s.name)}', ${s.price})">
+                                    <div class="service-info">
+                                        <i class="fas fa-${esc(s.icon || 'concierge-bell')}" style="color:var(--primary);font-size:18px"></i>
+                                        <div>
+                                            <strong style="font-size:14px">${esc(s.name)}</strong>
+                                            ${s.description ? `<br><small style="color:var(--gray-500)">${esc(s.description)}</small>` : ''}
+                                        </div>
+                                    </div>
+                                    <div class="service-price">${fmtPrice(s.price)}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        ` : ''}
 
                         <h3 style="margin:20px 0 12px"><i class="fas fa-receipt"></i> Récapitulatif</h3>
                         <div id="walkin-pricing-summary"></div>
@@ -811,6 +1107,17 @@
         updateWalkinPricing();
     }
 
+    function toggleService(id, name, price) {
+        if (selectedServices[id]) {
+            delete selectedServices[id];
+            document.getElementById('svc-' + id).classList.remove('selected');
+        } else {
+            selectedServices[id] = { id, name, price, quantity: 1 };
+            document.getElementById('svc-' + id).classList.add('selected');
+        }
+        updateWalkinPricing();
+    }
+
     function updateWalkinPricing() {
         const p = pricing;
         const nbAdults = parseInt(document.getElementById('wi-adults').value) || 1;
@@ -821,13 +1128,18 @@
         const accommodation = p.night_price;
         const touristTax = p.tourist_tax * nbAdults;
         const breakfast = wantsBreakfast ? p.breakfast_price * nbPersons : 0;
-        const total = accommodation + touristTax + breakfast;
+
+        let servicesTotal = 0;
+        Object.values(selectedServices).forEach(s => { servicesTotal += s.price * s.quantity; });
+
+        const total = accommodation + touristTax + breakfast + servicesTotal;
 
         document.getElementById('walkin-pricing-summary').innerHTML = `
             <table class="summary-table">
-                <tr><td>Chambre ${esc(currentReservation.room_number)} - 1 nuit</td><td>${fmtPrice(accommodation)}</td></tr>
+                <tr><td>Chambre - 1 nuit</td><td>${fmtPrice(accommodation)}</td></tr>
                 <tr><td>Taxe de séjour (${nbAdults} adulte(s))</td><td>${fmtPrice(touristTax)}</td></tr>
                 ${wantsBreakfast ? `<tr><td>Petit-déjeuner (${nbPersons} pers.)</td><td>${fmtPrice(breakfast)}</td></tr>` : ''}
+                ${Object.values(selectedServices).map(s => `<tr><td><i class="fas fa-concierge-bell" style="color:var(--primary)"></i> ${esc(s.name)}</td><td>${fmtPrice(s.price)}</td></tr>`).join('')}
                 <tr class="total"><td>Total à payer</td><td>${fmtPrice(total)}</td></tr>
             </table>
         `;
@@ -842,6 +1154,8 @@
         errDiv.innerHTML = '';
 
         try {
+            const svcArray = Object.values(selectedServices).map(s => ({ id: s.id, quantity: s.quantity }));
+
             const res = await apiPost(`/booking/${hotelSlug}/walkin`, {
                 reservation_id: currentReservation.id,
                 guest_first_name: document.getElementById('wi-firstname').value.trim(),
@@ -851,10 +1165,10 @@
                 nb_adults: parseInt(document.getElementById('wi-adults').value),
                 nb_children: parseInt(document.getElementById('wi-children').value),
                 breakfast: document.getElementById('wi-breakfast').checked ? 1 : 0,
-                id_document_path: idDocumentPath
+                id_document_path: idDocumentPath,
+                services: svcArray
             });
 
-            // Update current reservation for payment
             currentReservation = {
                 ...currentReservation,
                 id: res.reservation_id,
@@ -873,6 +1187,7 @@
         }
     }
 
+    // Step 5: Payment (no room number shown yet)
     function showWalkinPayment(payData) {
         currentStep = 'walkin-payment';
 
@@ -883,6 +1198,7 @@
                 </div>
                 <div class="card-body">
                     <div class="step-indicator">
+                        <div class="step-dot done"></div>
                         <div class="step-dot done"></div>
                         <div class="step-dot done"></div>
                         <div class="step-dot done"></div>
@@ -945,6 +1261,7 @@
                     reservation_id: currentReservation.id,
                     payment_intent_id: paymentIntent.id
                 });
+                // Room number is revealed here after payment
                 showConfirmation(confirmRes.reservation);
             }
         } catch (err) {
@@ -1008,13 +1325,12 @@
                     </div>
 
                     <div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--gray-200)">
-                        <p style="font-size:24px">Bon séjour ! <span style="font-size:28px">&#127969;</span></p>
+                        <p style="font-size:24px">Bon séjour ! &#127969;</p>
                     </div>
                 </div>
             </div>
         `;
 
-        // Store for PDF generation
         window._confirmationData = r;
     }
 
