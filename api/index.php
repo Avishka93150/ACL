@@ -2269,6 +2269,7 @@ try {
                 if (isset($data['checkout_time'])) { $sets[] = "checkout_time = ?"; $params[] = $data['checkout_time']; }
                 if (isset($data['status'])) { $sets[] = "status = ?"; $params[] = $data['status']; }
                 if (isset($data['category'])) { $sets[] = "category = ?"; $params[] = $data['category'] ?: null; }
+                if (isset($data['description'])) { $sets[] = "description = ?"; $params[] = $data['description'] ?: null; }
 
                 // Xotelo hotel key
                 if (isset($data['xotelo_hotel_key'])) {
