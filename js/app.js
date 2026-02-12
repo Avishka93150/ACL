@@ -10,8 +10,6 @@ function initTheme() {
     const saved = localStorage.getItem('acl_theme');
     if (saved) {
         document.documentElement.setAttribute('data-theme', saved);
-    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.documentElement.setAttribute('data-theme', 'dark');
     }
 }
 
