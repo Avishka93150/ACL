@@ -85,6 +85,32 @@
         .info-box.success { background: var(--success-light); border-color: #A7F3D0; }
         .info-box.warning { background: var(--warning-light); border-color: #FDE68A; }
 
+        .breakfast-card { background: linear-gradient(135deg, #FFF7ED 0%, #FFFBEB 100%); border: 2px solid #FDE68A; border-radius: 14px; padding: 20px; margin: 20px 0; cursor: pointer; transition: all 0.3s ease; position: relative; overflow: hidden; }
+        .breakfast-card:hover { border-color: #F59E0B; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(245,158,11,0.2); }
+        .breakfast-card .breakfast-icon { font-size: 48px; line-height: 1; margin-bottom: 4px; }
+        .breakfast-card .breakfast-header { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+        .breakfast-card .breakfast-header h4 { font-size: 17px; font-weight: 700; color: var(--gray-800); margin: 0; }
+        .breakfast-card .breakfast-details { font-size: 13px; color: var(--gray-500); margin-bottom: 8px; }
+        .breakfast-card .breakfast-price-tag { display: inline-flex; align-items: center; gap: 6px; background: #F59E0B; color: white; font-size: 15px; font-weight: 700; padding: 8px 16px; border-radius: 8px; }
+        .breakfast-card .breakfast-action { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+        .breakfast-card .btn-breakfast { background: #F59E0B; color: white; border: none; padding: 10px 24px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; }
+        .breakfast-card .btn-breakfast:hover { background: #D97706; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(245,158,11,0.4); }
+        .breakfast-card .btn-breakfast:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+        .breakfast-card .breakfast-badge { position: absolute; top: -1px; right: 16px; background: #EF4444; color: white; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 0 0 8px 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .breakfast-checkbox-card { display: flex; align-items: center; gap: 14px; padding: 16px 20px; background: linear-gradient(135deg, #FFF7ED 0%, #FFFBEB 100%); border: 2px solid #FDE68A; border-radius: 12px; cursor: pointer; transition: all 0.3s ease; margin-bottom: 16px; }
+        .breakfast-checkbox-card:hover { border-color: #F59E0B; background: linear-gradient(135deg, #FEF3C7 0%, #FFF7ED 100%); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(245,158,11,0.15); }
+        .breakfast-checkbox-card.checked { border-color: #F59E0B; background: linear-gradient(135deg, #FEF3C7 0%, #FFF7ED 100%); box-shadow: 0 4px 12px rgba(245,158,11,0.15); }
+        .breakfast-checkbox-card .bf-icon { font-size: 36px; line-height: 1; flex-shrink: 0; }
+        .breakfast-checkbox-card .bf-content { flex: 1; }
+        .breakfast-checkbox-card .bf-content strong { font-size: 15px; color: var(--gray-800); display: block; margin-bottom: 2px; }
+        .breakfast-checkbox-card .bf-content span { font-size: 13px; color: var(--gray-500); }
+        .breakfast-checkbox-card .bf-price { font-size: 15px; font-weight: 700; color: #D97706; white-space: nowrap; }
+        .breakfast-checkbox-card input[type="checkbox"] { display: none; }
+        .breakfast-checkbox-card .bf-check { width: 24px; height: 24px; border: 2px solid var(--gray-300); border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; }
+        .breakfast-checkbox-card.checked .bf-check { background: #F59E0B; border-color: #F59E0B; }
+        .breakfast-checkbox-card.checked .bf-check::after { content: '\f00c'; font-family: 'Font Awesome 6 Free'; font-weight: 900; color: white; font-size: 12px; }
+
         .locker-display { text-align: center; padding: 32px; background: linear-gradient(135deg, #1e3a5f, #2563EB); border-radius: 12px; color: white; margin: 20px 0; }
         .locker-display .locker-number { font-size: 48px; font-weight: 800; margin: 8px 0; }
         .locker-display .locker-code { font-size: 28px; font-weight: 700; letter-spacing: 4px; background: rgba(255,255,255,0.2); padding: 8px 20px; border-radius: 8px; display: inline-block; margin: 8px 0; }
@@ -540,22 +566,27 @@
                     <table class="summary-table">
                         <tr><td>Hébergement</td><td>${fmtPrice(r.accommodation_price)}</td></tr>
                         <tr><td>Taxe de séjour (${r.nb_adults} pers.)</td><td>${fmtPrice(r.tourist_tax_amount)}</td></tr>
-                        <tr><td>Petit-déjeuner ${r.breakfast_included ? '<i class="fas fa-check-circle" style="color:var(--success)"></i>' : '<span style="color:var(--gray-400)">(non inclus)</span>'}</td><td>${r.breakfast_included ? fmtPrice(r.breakfast_price) : '-'}</td></tr>
+                        <tr><td>🥐 Petit-déjeuner ${r.breakfast_included ? '<i class="fas fa-check-circle" style="color:var(--success)"></i>' : '<span style="color:var(--gray-400)">(non inclus)</span>'}</td><td>${r.breakfast_included ? fmtPrice(r.breakfast_price) : '-'}</td></tr>
                         <tr class="total"><td>Total</td><td>${fmtPrice(r.total_amount)}</td></tr>
                         ${r.deposit_amount > 0 ? `<tr class="deposit"><td>Arrhes versées</td><td>- ${fmtPrice(r.deposit_amount)}</td></tr>` : ''}
                         <tr class="remaining"><td>Reste à payer</td><td>${fmtPrice(r.remaining_amount)}</td></tr>
                     </table>
 
                     ${canAddBreakfast ? `
-                    <div class="info-box" id="breakfast-option">
-                        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+                    <div class="breakfast-card" id="breakfast-option">
+                        <div class="breakfast-badge">Recommandé</div>
+                        <div class="breakfast-header">
+                            <span class="breakfast-icon">🥐</span>
                             <div>
-                                <p style="font-weight:600"><i class="fas fa-coffee"></i> Ajouter le petit-déjeuner ?</p>
-                                <p style="font-size:13px;color:var(--gray-500)">${fmtPrice(bfOption.unit_price)} / personne (${nbPersons} pers.) | ${bfOption.start} - ${bfOption.end}</p>
-                                <p style="font-size:14px;font-weight:600;color:var(--primary)">+ ${fmtPrice(bfOption.unit_price * nbPersons)}</p>
+                                <h4>Petit-déjeuner gourmand</h4>
+                                <p class="breakfast-details"><i class="fas fa-clock"></i> Servi de ${bfOption.start} à ${bfOption.end} &bull; ${nbPersons} personne${nbPersons > 1 ? 's' : ''}</p>
                             </div>
-                            <button class="btn btn-outline" onclick="addBreakfast(${r.id})" id="add-breakfast-btn">
-                                <i class="fas fa-plus"></i> Ajouter
+                        </div>
+                        <p style="font-size:13px;color:var(--gray-600);margin-bottom:12px"><i class="fas fa-utensils" style="color:#F59E0B;margin-right:6px"></i> Commencez votre journée avec un délicieux petit-déjeuner : viennoiseries, boissons chaudes, fruits frais et plus encore !</p>
+                        <div class="breakfast-action">
+                            <span class="breakfast-price-tag"><i class="fas fa-tag"></i> + ${fmtPrice(bfOption.unit_price * nbPersons)}</span>
+                            <button class="btn-breakfast" onclick="addBreakfast(${r.id})" id="add-breakfast-btn">
+                                <i class="fas fa-plus-circle"></i> Ajouter le petit-déjeuner
                             </button>
                         </div>
                     </div>` : ''}
@@ -1233,11 +1264,17 @@
                             </div>
                         </div>
 
-                        <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="wi-breakfast" onchange="updateWalkinPricing()">
-                                Petit-déjeuner (${fmtPrice(p.breakfast_price)} / pers) - ${p.breakfast_start} à ${p.breakfast_end}
-                            </label>
+                        <div class="breakfast-checkbox-card" id="wi-breakfast-card" onclick="toggleBreakfastCard()">
+                            <span class="bf-icon">🥐</span>
+                            <input type="checkbox" id="wi-breakfast" onchange="updateWalkinPricing()">
+                            <div class="bf-content">
+                                <strong><i class="fas fa-coffee" style="color:#F59E0B;margin-right:4px"></i> Petit-déjeuner gourmand</strong>
+                                <span>${p.breakfast_start} à ${p.breakfast_end} &bull; Viennoiseries, boissons chaudes, fruits frais...</span>
+                            </div>
+                            <div style="text-align:right">
+                                <div class="bf-price">${fmtPrice(p.breakfast_price)} / pers</div>
+                                <div class="bf-check"></div>
+                            </div>
                         </div>
 
                         ${availableServices.length > 0 ? `
@@ -1282,6 +1319,14 @@
             selectedServices[id] = { id, name, price, quantity: 1 };
             document.getElementById('svc-' + id).classList.add('selected');
         }
+        updateWalkinPricing();
+    }
+
+    function toggleBreakfastCard() {
+        const cb = document.getElementById('wi-breakfast');
+        cb.checked = !cb.checked;
+        const card = document.getElementById('wi-breakfast-card');
+        card.classList.toggle('checked', cb.checked);
         updateWalkinPricing();
     }
 
