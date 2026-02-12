@@ -171,6 +171,7 @@
     let walkinAvailableRooms = [];
     let walkinSelectedRoomIds = [];
     let walkinMultiMode = false;
+    let walkinRoomGroups = [];
     let lastLookupData = null;
 
     // ==================== API ====================
@@ -705,6 +706,7 @@
     async function searchWalkinRooms() {
         walkinNbPersons = parseInt(document.getElementById('walkin-nb-persons').value) || 1;
         walkinSelectedRoomIds = [];
+        walkinRoomGroups = [];
         currentStep = 'walkin-rooms';
 
         document.getElementById('app').innerHTML = `
@@ -758,6 +760,57 @@
     function showWalkinRoomSelection(rooms, pricingData) {
         const isMulti = walkinMultiMode;
 
+        // Build room groups for multi mode (group by room_type + bed_type + max_adults)
+        if (isMulti) {
+            walkinRoomGroups = [];
+            const groupMap = {};
+            rooms.forEach(r => {
+                const key = (r.room_type || 'standard') + '|' + (r.bed_type || 'double') + '|' + (r.max_adults || 2);
+                if (!(key in groupMap)) {
+                    groupMap[key] = walkinRoomGroups.length;
+                    walkinRoomGroups.push({
+                        room_type: r.room_type || 'standard',
+                        bed_type: r.bed_type || 'double',
+                        max_adults: r.max_adults || 2,
+                        rooms: [],
+                        selectedCount: 0
+                    });
+                }
+                walkinRoomGroups[groupMap[key]].rooms.push(r);
+            });
+        }
+
+        let roomCardsHtml = '';
+        if (isMulti) {
+            // Grouped cards with quantity selectors (+/-)
+            roomCardsHtml = walkinRoomGroups.map((g, idx) => `
+                <div class="choice-card" id="room-group-${idx}" style="cursor:default">
+                    <i class="fas fa-bed"></i>
+                    <h3>${esc(ROOM_TYPE_LABELS[g.room_type] || g.room_type)}</h3>
+                    <p>${esc(BED_TYPE_LABELS[g.bed_type] || g.bed_type)} - Max ${g.max_adults} personne(s)</p>
+                    <p style="font-weight:600;color:var(--primary);margin-top:4px">${fmtPrice(pricingData.night_price)} / nuit</p>
+                    <p style="font-size:12px;color:var(--gray-500);margin-top:2px">${g.rooms.length} disponible(s)</p>
+                    <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:10px">
+                        <button type="button" class="btn btn-outline" onclick="changeRoomTypeQty(${idx}, -1)" style="width:36px;height:36px;padding:0;font-size:18px;border-radius:50%;line-height:1;display:flex;align-items:center;justify-content:center">&minus;</button>
+                        <span id="qty-${idx}" style="font-size:20px;font-weight:700;min-width:28px;text-align:center">0</span>
+                        <button type="button" class="btn btn-primary" onclick="changeRoomTypeQty(${idx}, 1)" style="width:36px;height:36px;padding:0;font-size:18px;border-radius:50%;line-height:1;display:flex;align-items:center;justify-content:center">+</button>
+                    </div>
+                </div>`).join('');
+        } else {
+            // Single-room mode: individual clickable cards
+            roomCardsHtml = rooms.map(r => {
+                const tooSmall = r.max_adults < walkinNbPersons;
+                return `
+                <div class="choice-card" id="room-card-${r.id}" onclick="${tooSmall ? '' : `selectWalkinRoom(${r.id})`}" style="${tooSmall ? 'opacity:0.4;cursor:not-allowed' : ''}">
+                    <i class="fas fa-bed"></i>
+                    <h3>${esc(ROOM_TYPE_LABELS[r.room_type] || r.room_type)}</h3>
+                    <p>${esc(BED_TYPE_LABELS[r.bed_type] || r.bed_type)} - Max ${r.max_adults} personne(s)</p>
+                    <p style="font-weight:600;color:var(--primary);margin-top:4px">${fmtPrice(pricingData.night_price)} / nuit</p>
+                    ${tooSmall ? '<p style="font-size:12px;color:var(--danger);margin-top:2px">Capacité insuffisante</p>' : ''}
+                </div>`;
+            }).join('');
+        }
+
         document.getElementById('app').innerHTML = `
             <a href="javascript:showWalkinPersonCount()" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
             <div class="card card-wide">
@@ -784,24 +837,14 @@
                         </p>
                         ${isMulti ? `
                         <div class="alert alert-info" style="margin-top:8px;margin-bottom:0">
-                            <i class="fas fa-info-circle"></i> Aucune chambre ne peut accueillir ${walkinNbPersons} personnes seule. Veuillez sélectionner plusieurs chambres pour couvrir l'ensemble de votre groupe.
+                            <i class="fas fa-info-circle"></i> Sélectionnez le nombre de chambres de chaque type pour accueillir vos ${walkinNbPersons} personnes.
                         </div>` : ''}
                     </div>
 
                     ${isMulti ? `<div id="multi-room-status" style="margin-top:12px"></div>` : ''}
 
                     <div class="choice-grid" style="margin-top:16px">
-                        ${rooms.map(r => {
-                            const tooSmall = !isMulti && r.max_adults < walkinNbPersons;
-                            return `
-                            <div class="choice-card" id="room-card-${r.id}" onclick="${tooSmall ? '' : (isMulti ? `toggleWalkinRoom(${r.id})` : `selectWalkinRoom(${r.id})`)}" style="${tooSmall ? 'opacity:0.4;cursor:not-allowed' : ''}">
-                                <i class="fas fa-bed"></i>
-                                <h3>${esc(ROOM_TYPE_LABELS[r.room_type] || r.room_type)}</h3>
-                                <p>${esc(BED_TYPE_LABELS[r.bed_type] || r.bed_type)} - Max ${r.max_adults} personne(s)</p>
-                                <p style="font-weight:600;color:var(--primary);margin-top:4px">${fmtPrice(pricingData.night_price)} / nuit</p>
-                                ${tooSmall ? '<p style="font-size:12px;color:var(--danger);margin-top:2px">Capacité insuffisante</p>' : ''}
-                            </div>`;
-                        }).join('')}
+                        ${roomCardsHtml}
                     </div>
 
                     ${isMulti ? `
@@ -823,17 +866,42 @@
         showWalkinIdUpload();
     }
 
-    function toggleWalkinRoom(roomId) {
-        const idx = walkinSelectedRoomIds.indexOf(roomId);
-        if (idx >= 0) {
-            walkinSelectedRoomIds.splice(idx, 1);
-            const card = document.getElementById('room-card-' + roomId);
-            if (card) card.classList.remove('selected');
+    function changeRoomTypeQty(groupIdx, delta) {
+        const group = walkinRoomGroups[groupIdx];
+        if (!group) return;
+
+        const newCount = group.selectedCount + delta;
+        if (newCount < 0 || newCount > group.rooms.length) return;
+
+        if (delta > 0) {
+            // Add one room from this group (pick first unselected)
+            for (const r of group.rooms) {
+                if (!walkinSelectedRoomIds.includes(r.id)) {
+                    walkinSelectedRoomIds.push(r.id);
+                    break;
+                }
+            }
         } else {
-            walkinSelectedRoomIds.push(roomId);
-            const card = document.getElementById('room-card-' + roomId);
-            if (card) card.classList.add('selected');
+            // Remove one room from this group (remove last selected)
+            for (let i = group.rooms.length - 1; i >= 0; i--) {
+                const pos = walkinSelectedRoomIds.indexOf(group.rooms[i].id);
+                if (pos >= 0) {
+                    walkinSelectedRoomIds.splice(pos, 1);
+                    break;
+                }
+            }
         }
+
+        group.selectedCount = newCount;
+
+        // Update quantity display
+        const qtyEl = document.getElementById('qty-' + groupIdx);
+        if (qtyEl) qtyEl.textContent = newCount;
+
+        // Update card visual (highlight if qty > 0)
+        const card = document.getElementById('room-group-' + groupIdx);
+        if (card) card.classList.toggle('selected', newCount > 0);
+
         updateMultiRoomStatus();
     }
 
@@ -852,16 +920,22 @@
         const isSufficient = totalCapacity >= walkinNbPersons && nbRooms > 0;
 
         if (nbRooms === 0) {
-            statusDiv.innerHTML = `<p style="color:var(--gray-500);font-size:14px"><i class="fas fa-hand-pointer"></i> Cliquez sur les chambres pour les sélectionner</p>`;
+            statusDiv.innerHTML = `<p style="color:var(--gray-500);font-size:14px"><i class="fas fa-hand-pointer"></i> Utilisez les boutons + et − pour choisir le nombre de chambres</p>`;
         } else {
             const color = isSufficient ? 'var(--success)' : 'var(--warning)';
+            // Build breakdown per room type
+            const breakdown = walkinRoomGroups
+                .filter(g => g.selectedCount > 0)
+                .map(g => `${g.selectedCount}× ${ROOM_TYPE_LABELS[g.room_type] || g.room_type}`)
+                .join(', ');
             statusDiv.innerHTML = `
                 <div class="info-box" style="border-color:${color}">
                     <p style="font-weight:600">
                         <i class="fas fa-check-circle" style="color:${color}"></i>
                         ${nbRooms} chambre(s) sélectionnée(s) — Capacité : ${totalCapacity} personne(s) / ${walkinNbPersons} nécessaire(s)
                     </p>
-                    ${!isSufficient ? `<p style="font-size:13px;color:var(--warning);margin-top:4px"><i class="fas fa-exclamation-triangle"></i> Capacité insuffisante, veuillez sélectionner d'autres chambres</p>` : ''}
+                    ${breakdown ? `<p style="font-size:13px;color:var(--gray-600);margin-top:4px"><i class="fas fa-door-open"></i> ${breakdown}</p>` : ''}
+                    ${!isSufficient ? `<p style="font-size:13px;color:var(--warning);margin-top:4px"><i class="fas fa-exclamation-triangle"></i> Capacité insuffisante, veuillez ajouter d'autres chambres</p>` : ''}
                     <p style="font-size:13px;color:var(--gray-500);margin-top:4px">Hébergement : ${fmtPrice(pricing.night_price * nbRooms)} (${nbRooms} × ${fmtPrice(pricing.night_price)})</p>
                 </div>
             `;
