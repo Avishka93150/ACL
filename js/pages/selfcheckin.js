@@ -7,6 +7,7 @@ let _scReservations = [];
 let _scLockers = [];
 let _scRooms = [];
 let _scHotels = [];
+let _scHotelData = {};
 let _scFilterDate = new Date().toISOString().split('T')[0];
 let _scArchiveData = [];
 let _scArchiveStats = {};
@@ -131,7 +132,8 @@ async function scRenderReservations(content) {
 
         _scReservations = resData.reservations || [];
         _scLockers = lockersData.lockers || [];
-        _scRooms = (roomsData.hotel && roomsData.hotel.rooms) || roomsData.rooms || [];
+        _scHotelData = roomsData.hotel || roomsData || {};
+        _scRooms = (_scHotelData.rooms) || roomsData.rooms || [];
 
         content.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
@@ -318,7 +320,7 @@ function scShowCreateReservation(type) {
             <div class="form-row">
                 <div class="form-group">
                     <label>Nb adultes *</label>
-                    <input type="number" name="nb_adults" value="1" min="1" max="10" required>
+                    <input type="number" name="nb_adults" value="1" min="1" max="10" required oninput="scCalcTotal()">
                 </div>
                 <div class="form-group">
                     <label>Nb enfants</label>
@@ -339,8 +341,9 @@ function scShowCreateReservation(type) {
                     <input type="number" name="accommodation_price" step="0.01" min="0" value="0" oninput="scCalcTotal()">
                 </div>
                 <div class="form-group">
-                    <label>Taxe de séjour</label>
-                    <input type="number" name="tourist_tax_amount" step="0.01" min="0" value="0" oninput="scCalcTotal()">
+                    <label>Taxe de séjour (par pers.)</label>
+                    <input type="number" name="tourist_tax_per_person" step="0.01" min="0" value="${_scHotelData.default_tourist_tax || 0}" oninput="scCalcTotal()">
+                    <small class="form-help" id="sc-tax-total"></small>
                 </div>
             </div>
 
@@ -408,11 +411,15 @@ function scShowCreateReservation(type) {
 
 function scCalcTotal() {
     const accom = parseFloat(document.querySelector('[name="accommodation_price"]')?.value || 0);
-    const tax = parseFloat(document.querySelector('[name="tourist_tax_amount"]')?.value || 0);
+    const taxPerPerson = parseFloat(document.querySelector('[name="tourist_tax_per_person"]')?.value || 0);
+    const nbAdults = parseInt(document.querySelector('[name="nb_adults"]')?.value || 1);
     const breakfast = parseFloat(document.querySelector('[name="breakfast_price"]')?.value || 0);
+    const tax = taxPerPerson * nbAdults;
     const total = accom + tax + breakfast;
     const totalField = document.getElementById('sc-total-amount');
     if (totalField) totalField.value = total.toFixed(2);
+    const taxDisplay = document.getElementById('sc-tax-total');
+    if (taxDisplay) taxDisplay.textContent = `Total : ${tax.toFixed(2)} € (${nbAdults} pers. × ${taxPerPerson.toFixed(2)} €)`;
 }
 
 function scOnLockerChange(select) {
@@ -436,6 +443,14 @@ async function scSaveReservation(e) {
 
     // Checkboxes
     data.breakfast_included = form.querySelector('[name="breakfast_included"]')?.checked ? 1 : 0;
+
+    // Calculer la taxe de séjour totale (par personne × nb adultes)
+    if (data.tourist_tax_per_person !== undefined) {
+        const taxPerPerson = parseFloat(data.tourist_tax_per_person || 0);
+        const nbAdults = parseInt(data.nb_adults || 1);
+        data.tourist_tax_amount = (taxPerPerson * nbAdults).toFixed(2);
+        delete data.tourist_tax_per_person;
+    }
 
     try {
         await API.post('selfcheckin', data);
@@ -492,7 +507,7 @@ async function scEditReservation(id) {
                 <div class="form-row">
                     <div class="form-group">
                         <label>Nb adultes</label>
-                        <input type="number" name="nb_adults" value="${reservation.nb_adults || 1}" min="1">
+                        <input type="number" name="nb_adults" value="${reservation.nb_adults || 1}" min="1" oninput="scCalcTotal()">
                     </div>
                     <div class="form-group">
                         <label>Nb enfants</label>
@@ -515,28 +530,29 @@ async function scEditReservation(id) {
                 <div class="form-row">
                     <div class="form-group">
                         <label>Prix hébergement</label>
-                        <input type="number" name="accommodation_price" step="0.01" value="${reservation.accommodation_price || 0}">
+                        <input type="number" name="accommodation_price" step="0.01" value="${reservation.accommodation_price || 0}" oninput="scCalcTotal()">
                     </div>
                     <div class="form-group">
-                        <label>Taxe de séjour</label>
-                        <input type="number" name="tourist_tax_amount" step="0.01" value="${reservation.tourist_tax_amount || 0}">
+                        <label>Taxe de séjour (par pers.)</label>
+                        <input type="number" name="tourist_tax_per_person" step="0.01" value="${reservation.nb_adults > 0 ? ((reservation.tourist_tax_amount || 0) / (reservation.nb_adults || 1)).toFixed(2) : (reservation.tourist_tax_amount || 0)}" oninput="scCalcTotal()">
+                        <small class="form-help" id="sc-tax-total"></small>
                     </div>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
                         <label>Prix petit-déjeuner</label>
-                        <input type="number" name="breakfast_price" step="0.01" value="${reservation.breakfast_price || 0}">
+                        <input type="number" name="breakfast_price" step="0.01" value="${reservation.breakfast_price || 0}" oninput="scCalcTotal()">
                     </div>
                     <div class="form-group">
                         <label>Arrhes</label>
-                        <input type="number" name="deposit_amount" step="0.01" value="${reservation.deposit_amount || 0}">
+                        <input type="number" name="deposit_amount" step="0.01" value="${reservation.deposit_amount || 0}" oninput="scCalcTotal()">
                     </div>
                 </div>
 
                 <div class="form-group">
                     <label>Total TTC</label>
-                    <input type="number" name="total_amount" step="0.01" value="${reservation.total_amount || 0}" style="font-weight:700">
+                    <input type="number" name="total_amount" step="0.01" value="${reservation.total_amount || 0}" id="sc-total-amount" style="font-weight:700;font-size:16px" readonly>
                 </div>
 
                 <hr style="margin:16px 0">
@@ -600,6 +616,14 @@ async function scUpdateReservation(e, id) {
         data.room_id = roomSelect.selectedOptions[0].dataset.roomId || null;
     }
     data.breakfast_included = form.querySelector('[name="breakfast_included"]')?.checked ? 1 : 0;
+
+    // Calculer la taxe de séjour totale (par personne × nb adultes)
+    if (data.tourist_tax_per_person !== undefined) {
+        const taxPerPerson = parseFloat(data.tourist_tax_per_person || 0);
+        const nbAdults = parseInt(data.nb_adults || 1);
+        data.tourist_tax_amount = (taxPerPerson * nbAdults).toFixed(2);
+        delete data.tourist_tax_per_person;
+    }
 
     try {
         await API.put(`selfcheckin/${id}`, data);

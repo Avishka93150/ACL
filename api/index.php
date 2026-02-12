@@ -9053,6 +9053,7 @@ try {
                     "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
                     [$hotel['id'], $effectiveDate]
                 );
+                if (!$pricing) $pricing = [];
 
                 // Horaires PDJ : priorité = tarif jour > planning semaine > défaut hôtel
                 $dow = (int)(new DateTime($effectiveDate))->format('w');
@@ -9124,6 +9125,7 @@ try {
                     "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
                     [$hotel['id'], $effectiveDate]
                 );
+                if (!$pricing) $pricing = [];
 
                 // Récupérer la capacité de la chambre si assignée
                 $roomMaxAdults = null;
@@ -9187,6 +9189,7 @@ try {
                     "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
                     [$hotel['id'], $effectiveDate]
                 );
+                if (!$pricing) $pricing = [];
 
                 // Modifier les infos client si fournies
                 $guestUpdates = [];
@@ -9488,6 +9491,7 @@ try {
                     "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
                     [$hotel['id'], $effectiveDate]
                 );
+                if (!$pricing) $pricing = [];
 
                 // Horaires PDJ : priorité = tarif jour > planning semaine > défaut hôtel
                 $dow = (int)(new DateTime($effectiveDate))->format('w');
@@ -9583,6 +9587,7 @@ try {
                     "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
                     [$hotel['id'], $effectiveDate]
                 );
+                if (!$pricing) $pricing = [];
 
                 $nightPrice = (float)($pricing['night_price'] ?? $hotel['default_night_price']);
                 $touristTaxUnit = (float)($pricing['tourist_tax'] ?? $hotel['default_tourist_tax']);
