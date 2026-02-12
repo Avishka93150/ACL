@@ -342,6 +342,12 @@ function renderTabGeneral(content, h) {
                     </div>
                     <div class="form-row">
                         <div class="form-group">
+                            <label>N° d'astreinte</label>
+                            <input type="tel" name="on_call_phone" value="${esc(h.on_call_phone || '')}" placeholder="Numéro d'urgence / astreinte">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
                             <label>${t('hotels.stars')}</label>
                             <select name="stars">
                                 ${[1,2,3,4,5].map(n => `<option value="${n}" ${h.stars == n ? 'selected' : ''}>${n} ⭐</option>`).join('')}
