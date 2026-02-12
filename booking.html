@@ -102,11 +102,11 @@
         .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .id-upload-zone { border: 2px dashed var(--gray-300); border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s; }
-        .id-upload-zone:hover { border-color: var(--primary); background: var(--primary-light); }
-        .id-upload-zone i { font-size: 36px; color: var(--gray-400); margin-bottom: 12px; }
-        .id-upload-zone.has-file { border-color: var(--success); background: var(--success-light); }
-        .id-upload-zone.has-file i { color: var(--success); }
+        .consent-checkbox { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; border: 1.5px solid var(--gray-200); border-radius: 10px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; }
+        .consent-checkbox:hover { border-color: var(--primary); background: var(--primary-light); }
+        .consent-checkbox.checked { border-color: var(--primary); background: var(--primary-light); }
+        .consent-checkbox input[type="checkbox"] { margin-top: 3px; min-width: 18px; min-height: 18px; accent-color: var(--primary); cursor: pointer; }
+        .consent-checkbox label { font-size: 14px; color: var(--gray-600); cursor: pointer; line-height: 1.5; }
 
         #stripe-element { padding: 14px; border: 1.5px solid var(--gray-200); border-radius: 8px; background: white; }
 
@@ -164,7 +164,7 @@
     let cardElement = null;
     let currentReservation = null;
     let currentStep = 'welcome';
-    let idDocumentPath = null;
+    let walkinBirthdate = null;
     let availableServices = [];
     let selectedServices = {};
     let walkinNbPersons = 1;
@@ -189,15 +189,6 @@
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || 'Erreur serveur');
-        return data;
-    }
-
-    async function apiUpload(url, file) {
-        const formData = new FormData();
-        formData.append('id_document', file);
-        const r = await fetch(API_BASE + url, { method: 'POST', body: formData });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'Erreur upload');
         return data;
     }
 
@@ -884,14 +875,14 @@
         showWalkinIdUpload();
     }
 
-    // Step 3: ID Upload with RGPD notice
+    // Step 3: Vérification majorité et consentements
     function showWalkinIdUpload() {
         currentStep = 'walkin-id';
         document.getElementById('app').innerHTML = `
             <a href="javascript:searchWalkinRooms()" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
             <div class="card">
                 <div class="card-header">
-                    <h2><i class="fas fa-id-card"></i> Pièce d'identité</h2>
+                    <h2><i class="fas fa-check-circle"></i> Vérification et consentements</h2>
                 </div>
                 <div class="card-body">
                     <div class="step-indicator">
@@ -902,34 +893,29 @@
                         <div class="step-dot"></div>
                     </div>
 
-                    <p style="color:var(--gray-500);margin-bottom:12px">Pour des raisons légales, veuillez photographier votre pièce d'identité.</p>
+                    <p style="color:var(--gray-500);margin-bottom:16px">Veuillez renseigner votre date de naissance et accepter les conditions ci-dessous pour continuer.</p>
 
-                    <div class="rgpd-notice">
-                        <i class="fas fa-shield-alt"></i>
-                        <strong>Protection de vos données (RGPD)</strong><br>
-                        Conformément au Règlement Général sur la Protection des Données, votre pièce d'identité est collectée uniquement pour vérifier votre identité lors du check-in.
-                        Elle sera conservée de manière sécurisée et <strong>automatiquement supprimée après 7 jours</strong>.
-                        Aucune copie ne sera conservée au-delà de ce délai. Vous pouvez exercer vos droits d'accès, de rectification et de suppression en contactant l'établissement.
-                    </div>
-
-                    <div class="id-upload-zone" id="id-upload-zone" onclick="document.getElementById('id-file-input').click()">
-                        <i class="fas fa-camera"></i>
-                        <p style="font-weight:600">Prendre une photo ou importer un fichier</p>
-                        <p style="font-size:12px;color:var(--gray-400);margin-top:4px">JPG, PNG ou WebP - Max 20 Mo</p>
-                    </div>
-                    <input type="file" id="id-file-input" accept="image/*" capture="environment" style="display:none" onchange="handleIdUpload(this)">
-
-                    <div id="id-preview" style="display:none;margin-top:16px;text-align:center">
-                        <img id="id-preview-img" style="max-width:100%;max-height:300px;border-radius:8px;border:1px solid var(--gray-200)">
-                    </div>
-
-                    <div id="id-upload-status" style="margin-top:12px"></div>
-                    <div id="id-quality-option" style="display:none"></div>
-
-                    <div class="form-group" style="margin-top:16px">
-                        <label>Date de naissance (vérification majorité) *</label>
-                        <input type="date" id="walkin-birthdate" required max="${new Date().toISOString().split('T')[0]}">
+                    <div class="form-group" style="margin-bottom:20px">
+                        <label>Date de naissance *</label>
+                        <input type="date" id="walkin-birthdate" required max="${new Date().toISOString().split('T')[0]}" onchange="checkConsentForm()">
                         <small style="color:var(--gray-500)">Vous devez avoir au moins 18 ans</small>
+                    </div>
+
+                    <h3 style="font-size:15px;margin-bottom:12px;color:var(--gray-700)"><i class="fas fa-file-contract" style="color:var(--primary);margin-right:6px"></i>Consentements obligatoires</h3>
+
+                    <div class="consent-checkbox" onclick="toggleConsent(this, 'consent-cgv')">
+                        <input type="checkbox" id="consent-cgv" onchange="checkConsentForm()" onclick="event.stopPropagation()">
+                        <label for="consent-cgv">J'accepte les <strong>conditions générales de vente</strong> de l'établissement.</label>
+                    </div>
+
+                    <div class="consent-checkbox" onclick="toggleConsent(this, 'consent-majeur')">
+                        <input type="checkbox" id="consent-majeur" onchange="checkConsentForm()" onclick="event.stopPropagation()">
+                        <label for="consent-majeur">Je certifie être <strong>majeur(e)</strong> (avoir au moins 18 ans).</label>
+                    </div>
+
+                    <div class="consent-checkbox" onclick="toggleConsent(this, 'consent-rgpd')">
+                        <input type="checkbox" id="consent-rgpd" onchange="checkConsentForm()" onclick="event.stopPropagation()">
+                        <label for="consent-rgpd">Je consens au <strong>traitement de mes données personnelles</strong> dans le cadre de cette réservation, conformément au RGPD. Mes données seront utilisées uniquement pour la gestion de mon séjour.</label>
                     </div>
 
                     <div id="id-error"></div>
@@ -942,121 +928,29 @@
         `;
     }
 
-    async function handleIdUpload(input) {
-        const file = input.files[0];
-        if (!file) return;
-
-        const maxSize = 20 * 1024 * 1024; // 20 Mo
-
-        // Check file size and propose quality reduction
-        if (file.size > maxSize) {
-            const qualityDiv = document.getElementById('id-quality-option');
-            qualityDiv.style.display = 'block';
-            qualityDiv.innerHTML = `
-                <div class="info-box warning">
-                    <p style="font-weight:600"><i class="fas fa-exclamation-triangle"></i> Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(1)} Mo)</p>
-                    <p style="font-size:13px;color:var(--gray-500);margin:8px 0">La taille maximale est de 20 Mo. Souhaitez-vous réduire la qualité de l'image ?</p>
-                    <button class="btn btn-primary btn-sm" onclick="compressAndUpload()">
-                        <i class="fas fa-compress"></i> Réduire la qualité et envoyer
-                    </button>
-                </div>
-            `;
-            window._originalFile = file;
-            return;
-        }
-
-        await doUploadId(file);
+    function toggleConsent(container, checkboxId) {
+        const cb = document.getElementById(checkboxId);
+        cb.checked = !cb.checked;
+        container.classList.toggle('checked', cb.checked);
+        checkConsentForm();
     }
 
-    async function compressAndUpload() {
-        const file = window._originalFile;
-        if (!file) return;
-
-        const qualityDiv = document.getElementById('id-quality-option');
-        qualityDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Compression en cours...</div>';
-
-        try {
-            const compressed = await compressImage(file, 0.5, 1600);
-            await doUploadId(compressed);
-            qualityDiv.style.display = 'none';
-        } catch (err) {
-            qualityDiv.innerHTML = `<div class="alert alert-error">Erreur de compression : ${esc(err.message)}. Essayez avec une image plus petite.</div>`;
-        }
-    }
-
-    function compressImage(file, quality, maxDim) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let w = img.width, h = img.height;
-                    if (w > maxDim || h > maxDim) {
-                        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
-                        else { w = Math.round(w * maxDim / h); h = maxDim; }
-                    }
-                    canvas.width = w;
-                    canvas.height = h;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, w, h);
-                    canvas.toBlob((blob) => {
-                        if (!blob) { reject(new Error('Compression failed')); return; }
-                        const compressed = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' });
-                        resolve(compressed);
-                    }, 'image/jpeg', quality);
-                };
-                img.onerror = () => reject(new Error('Image invalide'));
-                img.src = e.target.result;
-            };
-            reader.onerror = () => reject(new Error('Erreur lecture'));
-            reader.readAsDataURL(file);
-        });
-    }
-
-    async function doUploadId(file) {
-        // Preview
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            document.getElementById('id-preview-img').src = e.target.result;
-            document.getElementById('id-preview').style.display = 'block';
-            document.getElementById('id-upload-zone').classList.add('has-file');
-            document.getElementById('id-upload-zone').innerHTML = '<i class="fas fa-check-circle"></i><p style="font-weight:600;color:var(--success)">Photo ajoutée</p>';
-        };
-        reader.readAsDataURL(file);
-
-        // Upload to server
-        const statusDiv = document.getElementById('id-upload-status');
-        statusDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Upload en cours...</div>';
-
-        try {
-            const res = await apiUpload(`/booking/${hotelSlug}/upload-id`, file);
-            idDocumentPath = res.path;
-            statusDiv.innerHTML = `<div class="alert alert-info"><i class="fas fa-check-circle"></i> Document enregistré</div>`;
-            document.getElementById('id-continue-btn').disabled = false;
-        } catch (err) {
-            statusDiv.innerHTML = `<div class="alert alert-error">${esc(err.message)}</div>`;
-            // If file too large, suggest compression
-            if (err.message.includes('volumineux') || err.message.includes('trop')) {
-                const qualityDiv = document.getElementById('id-quality-option');
-                qualityDiv.style.display = 'block';
-                window._originalFile = file;
-                qualityDiv.innerHTML = `
-                    <div class="info-box warning" style="margin-top:8px">
-                        <p style="font-weight:600"><i class="fas fa-compress"></i> Réduire la qualité ?</p>
-                        <p style="font-size:13px;margin:4px 0">Le fichier est trop volumineux. Nous pouvons réduire automatiquement la qualité.</p>
-                        <button class="btn btn-primary btn-sm" onclick="compressAndUpload()" style="margin-top:8px">
-                            <i class="fas fa-compress"></i> Réduire et réessayer
-                        </button>
-                    </div>
-                `;
-            }
-        }
+    function checkConsentForm() {
+        const birthdate = document.getElementById('walkin-birthdate').value;
+        const cgv = document.getElementById('consent-cgv').checked;
+        const majeur = document.getElementById('consent-majeur').checked;
+        const rgpd = document.getElementById('consent-rgpd').checked;
+        document.getElementById('id-continue-btn').disabled = !(birthdate && cgv && majeur && rgpd);
     }
 
     function validateIdAndContinue() {
         const birthdate = document.getElementById('walkin-birthdate').value;
         const errDiv = document.getElementById('id-error');
+        const cgv = document.getElementById('consent-cgv').checked;
+        const majeur = document.getElementById('consent-majeur').checked;
+        const rgpd = document.getElementById('consent-rgpd').checked;
+
+        errDiv.innerHTML = '';
 
         if (!birthdate) {
             errDiv.innerHTML = '<div class="alert alert-error">Veuillez saisir votre date de naissance.</div>';
@@ -1074,11 +968,12 @@
             return;
         }
 
-        if (!idDocumentPath) {
-            errDiv.innerHTML = '<div class="alert alert-error">Veuillez d\'abord photographier votre pièce d\'identité.</div>';
+        if (!cgv || !majeur || !rgpd) {
+            errDiv.innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-triangle"></i> Veuillez accepter tous les consentements obligatoires.</div>';
             return;
         }
 
+        walkinBirthdate = birthdate;
         showWalkinForm();
     }
 
@@ -1262,7 +1157,10 @@
                 nb_adults: parseInt(document.getElementById('wi-adults').value),
                 nb_children: parseInt(document.getElementById('wi-children').value),
                 breakfast: document.getElementById('wi-breakfast').checked ? 1 : 0,
-                id_document_path: idDocumentPath,
+                birthdate: walkinBirthdate,
+                consent_cgv: true,
+                consent_majeur: true,
+                consent_rgpd: true,
                 services: svcArray
             };
 
