@@ -375,6 +375,10 @@ function renderTabGeneral(content, h) {
                             <option value="inactive" ${h.status === 'inactive' ? 'selected' : ''}>Inactif</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label>Texte descriptif</label>
+                        <textarea name="description" rows="4" placeholder="Description unique de l'hôtel (présentation, particularités, informations clés...)" style="width:100%;resize:vertical">${esc(h.description || '')}</textarea>
+                    </div>
                     <div style="text-align:right;margin-top:20px">
                         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
                     </div>
