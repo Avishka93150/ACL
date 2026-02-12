@@ -9207,15 +9207,29 @@ try {
                 if (!$hotel) json_error('Hôtel non trouvé', 404);
 
                 $data = get_input();
-                if (empty($data['reservation_id']) || empty($data['payment_intent_id'])) json_error('Données manquantes');
+                if (empty($data['payment_intent_id'])) json_error('Données manquantes');
 
-                $reservation = db()->queryOne(
-                    "SELECT * FROM selfcheckin_reservations WHERE id = ? AND hotel_id = ?",
-                    [$data['reservation_id'], $hotel['id']]
-                );
-                if (!$reservation) json_error('Réservation non trouvée', 404);
+                // Support multi-room: reservation_ids (array) ou reservation_id (single)
+                $reservationIds = [];
+                if (!empty($data['reservation_ids']) && is_array($data['reservation_ids'])) {
+                    $reservationIds = array_map('intval', $data['reservation_ids']);
+                } elseif (!empty($data['reservation_id'])) {
+                    $reservationIds = [(int)$data['reservation_id']];
+                }
+                if (empty($reservationIds)) json_error('Données manquantes');
 
-                // Vérifier le paiement Stripe
+                // Vérifier toutes les réservations
+                $allReservations = [];
+                foreach ($reservationIds as $resId) {
+                    $reservation = db()->queryOne(
+                        "SELECT * FROM selfcheckin_reservations WHERE id = ? AND hotel_id = ?",
+                        [$resId, $hotel['id']]
+                    );
+                    if (!$reservation) json_error('Réservation non trouvée', 404);
+                    $allReservations[] = $reservation;
+                }
+
+                // Vérifier le paiement Stripe (une seule fois)
                 $ch = curl_init('https://api.stripe.com/v1/payment_intents/' . $data['payment_intent_id']);
                 curl_setopt_array($ch, [
                     CURLOPT_RETURNTRANSFER => true,
@@ -9225,30 +9239,41 @@ try {
                 curl_close($ch);
 
                 if (empty($piResponse['status']) || $piResponse['status'] !== 'succeeded') {
-                    db()->execute(
-                        "UPDATE selfcheckin_reservations SET payment_status = 'failed', updated_at = NOW() WHERE id = ?",
-                        [$reservation['id']]
-                    );
+                    foreach ($reservationIds as $resId) {
+                        db()->execute(
+                            "UPDATE selfcheckin_reservations SET payment_status = 'failed', updated_at = NOW() WHERE id = ?",
+                            [$resId]
+                        );
+                    }
                     json_error('Paiement non confirmé. Veuillez réessayer.');
                 }
 
                 $chargeId = $piResponse['latest_charge'] ?? null;
-                db()->execute(
-                    "UPDATE selfcheckin_reservations SET payment_status = 'paid', status = 'confirmed', stripe_charge_id = ?, updated_at = NOW() WHERE id = ?",
-                    [$chargeId, $reservation['id']]
-                );
 
-                // Marquer le casier comme assigné
-                if ($reservation['locker_id']) {
-                    db()->execute("UPDATE hotel_lockers SET status = 'assigned', updated_at = NOW() WHERE id = ?", [$reservation['locker_id']]);
+                // Confirmer toutes les réservations
+                $confirmations = [];
+                foreach ($allReservations as $reservation) {
+                    db()->execute(
+                        "UPDATE selfcheckin_reservations SET payment_status = 'paid', status = 'confirmed', stripe_charge_id = ?, updated_at = NOW() WHERE id = ?",
+                        [$chargeId, $reservation['id']]
+                    );
+
+                    // Marquer le casier comme assigné
+                    if ($reservation['locker_id']) {
+                        db()->execute("UPDATE hotel_lockers SET status = 'assigned', updated_at = NOW() WHERE id = ?", [$reservation['locker_id']]);
+                    }
+
+                    // Rafraîchir les données
+                    $updated = db()->queryOne("SELECT * FROM selfcheckin_reservations WHERE id = ?", [$reservation['id']]);
+                    $confirmations[] = selfcheckin_format_confirmation($updated, $hotel);
                 }
 
-                // Rafraîchir les données de la réservation
-                $reservation = db()->queryOne("SELECT * FROM selfcheckin_reservations WHERE id = ?", [$reservation['id']]);
-
+                // Pour rétrocompatibilité, 'reservation' contient la première (avec le total)
                 json_out([
                     'success' => true,
-                    'reservation' => selfcheckin_format_confirmation($reservation, $hotel)
+                    'reservation' => $confirmations[0],
+                    'reservations' => $confirmations,
+                    'nb_rooms' => count($confirmations)
                 ]);
             }
 
@@ -9261,9 +9286,9 @@ try {
                 if (!$hotel) json_error('Hôtel non trouvé ou réservation sans rendez-vous désactivée', 404);
 
                 $effectiveDate = $getEffectiveDate($hotel);
-                $nbAdultsFilter = isset($_GET['nb_adults']) ? (int)$_GET['nb_adults'] : null;
+                $nbPersonsFilter = isset($_GET['nb_persons']) ? (int)$_GET['nb_persons'] : (isset($_GET['nb_adults']) ? (int)$_GET['nb_adults'] : null);
 
-                // Récupérer les slots walk-in disponibles (sans info client = pas encore pris)
+                // Récupérer TOUS les slots walk-in disponibles (sans info client = pas encore pris)
                 // Joindre avec rooms pour obtenir la capacité
                 $sql = "SELECT r.id, r.reservation_number, r.checkin_date, r.room_id,
                                rm.room_type, rm.bed_type, rm.max_adults
@@ -9273,14 +9298,19 @@ try {
                            AND r.guest_last_name IS NULL AND r.checkin_date = ?";
                 $params = [$hotel['id'], $effectiveDate];
 
-                // Filtrer par capacité si nb_adults fourni
-                if ($nbAdultsFilter && $nbAdultsFilter > 0) {
-                    $sql .= " AND (rm.max_adults >= ? OR rm.max_adults IS NULL)";
-                    $params[] = $nbAdultsFilter;
-                }
-
-                $sql .= " ORDER BY rm.max_adults, r.room_number";
+                $sql .= " ORDER BY rm.max_adults DESC, r.room_number";
                 $slots = db()->query($sql, $params);
+
+                // Vérifier si une seule chambre peut accueillir tout le monde
+                $singleRoomPossible = false;
+                if ($nbPersonsFilter && $nbPersonsFilter > 0) {
+                    foreach ($slots as $s) {
+                        if ((int)($s['max_adults'] ?? 2) >= $nbPersonsFilter) {
+                            $singleRoomPossible = true;
+                            break;
+                        }
+                    }
+                }
 
                 $pricing = db()->queryOne(
                     "SELECT * FROM selfcheckin_pricing WHERE hotel_id = ? AND date = ?",
@@ -9306,6 +9336,8 @@ try {
 
                 json_out([
                     'rooms' => $slotsForClient,
+                    'single_room_possible' => $singleRoomPossible,
+                    'nb_persons' => $nbPersonsFilter ? (int)$nbPersonsFilter : null,
                     'pricing' => [
                         'date' => $effectiveDate,
                         'night_price' => (float)($pricing['night_price'] ?? $hotel['default_night_price']),
@@ -9328,26 +9360,48 @@ try {
 
                 $data = get_input();
 
+                // Support multi-room: reservation_ids (array) ou reservation_id (single)
+                $reservationIds = [];
+                if (!empty($data['reservation_ids']) && is_array($data['reservation_ids'])) {
+                    $reservationIds = array_map('intval', $data['reservation_ids']);
+                } elseif (!empty($data['reservation_id'])) {
+                    $reservationIds = [(int)$data['reservation_id']];
+                }
+                if (empty($reservationIds)) json_error('Au moins une chambre doit être sélectionnée');
+
                 // Validation des champs obligatoires
-                $required = ['reservation_id', 'guest_first_name', 'guest_last_name', 'guest_email', 'guest_phone', 'nb_adults'];
-                foreach ($required as $field) {
+                $requiredFields = ['guest_first_name', 'guest_last_name', 'guest_email', 'guest_phone', 'nb_adults'];
+                foreach ($requiredFields as $field) {
                     if (empty($data[$field])) json_error("Le champ $field est requis");
                 }
                 if (!filter_var($data['guest_email'], FILTER_VALIDATE_EMAIL)) json_error('Email invalide');
 
-                // Vérifier le slot walk-in
-                $reservation = db()->queryOne(
-                    "SELECT * FROM selfcheckin_reservations WHERE id = ? AND hotel_id = ? AND type = 'walkin' AND status = 'pending' AND guest_last_name IS NULL",
-                    [$data['reservation_id'], $hotel['id']]
-                );
-                if (!$reservation) json_error('Cette chambre n\'est plus disponible', 404);
+                // Vérifier tous les slots walk-in
+                $reservations = [];
+                $totalCapacity = 0;
+                foreach ($reservationIds as $resId) {
+                    $reservation = db()->queryOne(
+                        "SELECT r.*, rm.max_adults as room_max_adults FROM selfcheckin_reservations r LEFT JOIN rooms rm ON rm.id = r.room_id WHERE r.id = ? AND r.hotel_id = ? AND r.type = 'walkin' AND r.status = 'pending' AND r.guest_last_name IS NULL",
+                        [$resId, $hotel['id']]
+                    );
+                    if (!$reservation) json_error('Une des chambres sélectionnées n\'est plus disponible', 404);
+                    $reservations[] = $reservation;
+                    $totalCapacity += (int)($reservation['room_max_adults'] ?? 2);
+                }
 
-                // Vérifier la capacité de la chambre
                 $nbAdults = (int)$data['nb_adults'];
-                if ($reservation['room_id']) {
-                    $room = db()->queryOne("SELECT max_adults FROM rooms WHERE id = ?", [$reservation['room_id']]);
-                    if ($room && $nbAdults > (int)$room['max_adults']) {
-                        json_error('Cette chambre ne peut accueillir que ' . $room['max_adults'] . ' adulte(s) maximum');
+                $nbRooms = count($reservations);
+
+                // Vérifier la capacité totale (toutes les chambres combinées)
+                if ($nbAdults > $totalCapacity) {
+                    json_error('La capacité totale des chambres sélectionnées (' . $totalCapacity . ' personnes) est insuffisante pour ' . $nbAdults . ' personnes');
+                }
+
+                // Pour une seule chambre, vérifier la capacité individuelle
+                if ($nbRooms === 1 && $reservations[0]['room_id']) {
+                    $roomMaxAdults = (int)($reservations[0]['room_max_adults'] ?? 2);
+                    if ($nbAdults > $roomMaxAdults) {
+                        json_error('Cette chambre ne peut accueillir que ' . $roomMaxAdults . ' personne(s) maximum');
                     }
                 }
 
@@ -9366,8 +9420,8 @@ try {
                 $nbPersons = $nbAdults + $nbChildren;
                 $wantsBreakfast = !empty($data['breakfast']);
 
-                $accommodationPrice = $nightPrice;
-                $touristTaxTotal = $touristTaxUnit * $nbAdults; // Taxe par adulte par nuit
+                $accommodationPrice = $nightPrice * $nbRooms; // Prix par chambre * nombre de chambres
+                $touristTaxTotal = $touristTaxUnit * $nbAdults; // Taxe par personne par nuit
                 $breakfastTotal = $wantsBreakfast ? ($breakfastUnitPrice * $nbPersons) : 0;
 
                 // Calculer les services complémentaires
@@ -9389,26 +9443,34 @@ try {
 
                 $totalAmount = $accommodationPrice + $touristTaxTotal + $breakfastTotal + $servicesTotal;
 
-                // Mettre à jour la réservation avec les infos client
-                db()->execute(
-                    "UPDATE selfcheckin_reservations SET
-                        guest_first_name = ?, guest_last_name = ?, guest_email = ?, guest_phone = ?,
-                        nb_adults = ?, nb_children = ?, breakfast_included = ?,
-                        accommodation_price = ?, tourist_tax_amount = ?, breakfast_price = ?,
-                        total_amount = ?, remaining_amount = ?, deposit_amount = 0,
-                        id_document_path = ?, updated_at = NOW()
-                     WHERE id = ?",
-                    [
-                        $data['guest_first_name'], $data['guest_last_name'],
-                        $data['guest_email'], $data['guest_phone'],
-                        $nbAdults, $nbChildren, $wantsBreakfast ? 1 : 0,
-                        $accommodationPrice, $touristTaxTotal, $breakfastTotal,
-                        $totalAmount, $totalAmount, $data['id_document_path'] ?? null,
-                        $reservation['id']
-                    ]
-                );
+                // Mettre à jour toutes les réservations avec les infos client
+                $primaryReservationId = $reservations[0]['id'];
+                foreach ($reservations as $idx => $res) {
+                    $isPrimary = ($idx === 0);
+                    db()->execute(
+                        "UPDATE selfcheckin_reservations SET
+                            guest_first_name = ?, guest_last_name = ?, guest_email = ?, guest_phone = ?,
+                            nb_adults = ?, nb_children = ?, breakfast_included = ?,
+                            accommodation_price = ?, tourist_tax_amount = ?, breakfast_price = ?,
+                            total_amount = ?, remaining_amount = ?, deposit_amount = 0,
+                            id_document_path = ?, updated_at = NOW()
+                         WHERE id = ?",
+                        [
+                            $data['guest_first_name'], $data['guest_last_name'],
+                            $data['guest_email'], $data['guest_phone'],
+                            $nbAdults, $nbChildren, $wantsBreakfast ? 1 : 0,
+                            $isPrimary ? $accommodationPrice : $nightPrice,
+                            $isPrimary ? $touristTaxTotal : 0,
+                            $isPrimary ? $breakfastTotal : 0,
+                            $isPrimary ? $totalAmount : $nightPrice,
+                            $isPrimary ? $totalAmount : 0,
+                            $data['id_document_path'] ?? null,
+                            $res['id']
+                        ]
+                    );
+                }
 
-                // Enregistrer les services complémentaires commandés
+                // Enregistrer les services complémentaires sur la réservation primaire
                 if (!empty($selectedServices) && is_array($selectedServices)) {
                     foreach ($selectedServices as $svc) {
                         $serviceId = (int)($svc['id'] ?? 0);
@@ -9420,7 +9482,7 @@ try {
                         if ($dbService) {
                             db()->insert(
                                 "INSERT INTO selfcheckin_reservation_services (reservation_id, service_id, service_name, service_price, quantity, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
-                                [$reservation['id'], $dbService['id'], $dbService['name'], (float)$dbService['price'], $serviceQty]
+                                [$primaryReservationId, $dbService['id'], $dbService['name'], (float)$dbService['price'], $serviceQty]
                             );
                         }
                     }
@@ -9428,6 +9490,7 @@ try {
 
                 // Créer PaymentIntent Stripe
                 $amountCents = (int)round($totalAmount * 100);
+                $resNumbers = array_map(function($r) { return $r['reservation_number']; }, $reservations);
                 $ch = curl_init('https://api.stripe.com/v1/payment_intents');
                 curl_setopt_array($ch, [
                     CURLOPT_POST => true,
@@ -9436,12 +9499,13 @@ try {
                     CURLOPT_POSTFIELDS => http_build_query([
                         'amount' => $amountCents,
                         'currency' => 'eur',
-                        'metadata[reservation_id]' => $reservation['id'],
-                        'metadata[reservation_number]' => $reservation['reservation_number'],
+                        'metadata[reservation_ids]' => implode(',', $reservationIds),
+                        'metadata[reservation_numbers]' => implode(',', $resNumbers),
                         'metadata[hotel_id]' => $hotel['id'],
                         'metadata[type]' => 'walkin',
+                        'metadata[nb_rooms]' => $nbRooms,
                         'receipt_email' => $data['guest_email'],
-                        'description' => "Walk-in {$reservation['reservation_number']} - {$hotel['name']}"
+                        'description' => "Walk-in " . implode(', ', $resNumbers) . " ({$nbRooms} chambre(s)) - {$hotel['name']}"
                     ])
                 ]);
                 $stripeRaw = curl_exec($ch);
@@ -9454,16 +9518,21 @@ try {
                     json_error('Erreur paiement: ' . $stripeErr, 500);
                 }
 
-                db()->execute(
-                    "UPDATE selfcheckin_reservations SET stripe_payment_intent_id = ?, updated_at = NOW() WHERE id = ?",
-                    [$stripeResponse['id'], $reservation['id']]
-                );
+                // Stocker le payment_intent_id sur toutes les réservations
+                foreach ($reservationIds as $resId) {
+                    db()->execute(
+                        "UPDATE selfcheckin_reservations SET stripe_payment_intent_id = ?, updated_at = NOW() WHERE id = ?",
+                        [$stripeResponse['id'], $resId]
+                    );
+                }
 
                 json_out([
                     'client_secret' => $stripeResponse['client_secret'],
                     'payment_intent_id' => $stripeResponse['id'],
                     'amount' => $totalAmount,
-                    'reservation_id' => (int)$reservation['id'],
+                    'reservation_id' => (int)$primaryReservationId,
+                    'reservation_ids' => $reservationIds,
+                    'nb_rooms' => $nbRooms,
                     'pricing_detail' => [
                         'accommodation' => $accommodationPrice,
                         'tourist_tax' => $touristTaxTotal,
