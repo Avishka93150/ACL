@@ -855,7 +855,7 @@ function showCreateService(hotelId) {
                 <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Créer</button>
             </div>
         </form>
-    ');
+    `);
 }
 
 async function saveService(e, hotelId) {
