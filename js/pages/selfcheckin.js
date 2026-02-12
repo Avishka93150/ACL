@@ -8,6 +8,8 @@ let _scLockers = [];
 let _scRooms = [];
 let _scHotels = [];
 let _scFilterDate = new Date().toISOString().split('T')[0];
+let _scArchiveData = [];
+let _scArchiveStats = {};
 
 async function loadSelfcheckin(container) {
     showLoading(container);
@@ -44,6 +46,9 @@ async function loadSelfcheckin(container) {
                 </button>
                 <button class="tab-btn ${_scTab === 'pricing' ? 'active' : ''}" data-tab="pricing" onclick="scSwitchTab('pricing')">
                     <i class="fas fa-euro-sign"></i> Tarifs journaliers
+                </button>
+                <button class="tab-btn ${_scTab === 'archives' ? 'active' : ''}" data-tab="archives" onclick="scSwitchTab('archives')">
+                    <i class="fas fa-archive"></i> Archives des ventes
                 </button>
             </div>
 
@@ -108,6 +113,7 @@ async function scRenderTab() {
     switch (_scTab) {
         case 'reservations': await scRenderReservations(content); break;
         case 'pricing': await scRenderPricing(content); break;
+        case 'archives': await scRenderArchives(content); break;
     }
 }
 
@@ -200,7 +206,10 @@ function scFilterReservations() {
                     </tr>
                 </thead>
                 <tbody>
-                    ${filtered.map(r => `
+                    ${filtered.map(r => {
+                        const canDelete = !['confirmed', 'checked_in'].includes(r.status);
+                        const canReleaseLocker = r.locker_id && !['checked_in', 'checked_out', 'cancelled', 'no_show'].includes(r.status);
+                        return `
                         <tr>
                             <td><strong>${esc(r.reservation_number)}</strong></td>
                             <td><span class="badge badge-${r.type === 'pre_booked' ? 'primary' : 'warning'}">${r.type === 'pre_booked' ? 'Pré-enregistrée' : 'Walk-in'}</span></td>
@@ -213,13 +222,14 @@ function scFilterReservations() {
                             <td><strong>${formatMoney(r.remaining_amount || 0)}</strong></td>
                             <td>${scStatusBadge(r.status, r.payment_status)}</td>
                             <td>
-                                <div style="display:flex;gap:4px">
+                                <div style="display:flex;gap:4px;flex-wrap:wrap">
                                     <button class="btn btn-sm btn-outline" onclick="scEditReservation(${r.id})" title="Modifier"><i class="fas fa-edit"></i></button>
-                                    <button class="btn btn-sm btn-danger" onclick="scDeleteReservation(${r.id})" title="Supprimer"><i class="fas fa-trash"></i></button>
+                                    ${canReleaseLocker ? `<button class="btn btn-sm btn-outline" style="color:#F59E0B;border-color:#F59E0B" onclick="scReleaseLocker(${r.id})" title="Libérer le casier"><i class="fas fa-lock-open"></i></button>` : ''}
+                                    ${canDelete ? `<button class="btn btn-sm btn-danger" onclick="scDeleteReservation(${r.id})" title="Supprimer"><i class="fas fa-trash"></i></button>` : ''}
                                 </div>
                             </td>
                         </tr>
-                    `).join('')}
+                    `;}).join('')}
                 </tbody>
             </table>
         </div>
@@ -243,6 +253,22 @@ function scStatusBadge(status, paymentStatus) {
     }
     return badge;
 }
+
+// ==================== LIBERER CASIER ====================
+
+async function scReleaseLocker(reservationId) {
+    if (!confirm('Libérer le casier de cette réservation ? Le casier sera de nouveau disponible.')) return;
+    try {
+        await API.post(`selfcheckin/${reservationId}/release-locker`, {});
+        toast('Casier libéré avec succès', 'success');
+        await scLoadStats();
+        scRenderTab();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+// ==================== CREER / MODIFIER / SUPPRIMER ====================
 
 function scShowCreateReservation(type) {
     const isWalkin = type === 'walkin';
@@ -587,6 +613,11 @@ async function scUpdateReservation(e, id) {
 }
 
 async function scDeleteReservation(id) {
+    const reservation = _scReservations.find(r => r.id == id);
+    if (reservation && ['confirmed', 'checked_in'].includes(reservation.status)) {
+        toast('Impossible de supprimer une réservation confirmée ou checked-in. Vous pouvez l\'annuler à la place.', 'warning');
+        return;
+    }
     if (!confirm('Supprimer cette réservation ?')) return;
     try {
         await API.delete(`selfcheckin/${id}`);
@@ -599,6 +630,373 @@ async function scDeleteReservation(id) {
 }
 
 // Note: La gestion des casiers a été déplacée vers la page Hôtel (onglet Self Check-in)
+
+// ==================== ONGLET ARCHIVES DES VENTES ====================
+
+async function scRenderArchives(content) {
+    content.innerHTML = '<div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>';
+
+    // Dates par défaut : 30 derniers jours
+    const today = new Date().toISOString().split('T')[0];
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const defaultFrom = thirtyDaysAgo.toISOString().split('T')[0];
+
+    content.innerHTML = `
+        <div class="card" style="padding:16px;margin-bottom:16px">
+            <h4 style="margin-bottom:12px"><i class="fas fa-filter"></i> Filtres avancés</h4>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+                <div class="form-group" style="margin-bottom:0;min-width:140px">
+                    <label style="font-size:12px">Date début</label>
+                    <input type="date" id="sc-arch-from" class="form-control" value="${defaultFrom}">
+                </div>
+                <div class="form-group" style="margin-bottom:0;min-width:140px">
+                    <label style="font-size:12px">Date fin</label>
+                    <input type="date" id="sc-arch-to" class="form-control" value="${today}">
+                </div>
+                <div class="form-group" style="margin-bottom:0;min-width:130px">
+                    <label style="font-size:12px">Type</label>
+                    <select id="sc-arch-type" class="form-control">
+                        <option value="">Tous</option>
+                        <option value="pre_booked">Pré-enregistrées</option>
+                        <option value="walkin">Walk-in</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;min-width:130px">
+                    <label style="font-size:12px">Statut</label>
+                    <select id="sc-arch-status" class="form-control">
+                        <option value="">Tous</option>
+                        <option value="pending">En attente</option>
+                        <option value="confirmed">Confirmée</option>
+                        <option value="checked_in">Checked-in</option>
+                        <option value="checked_out">Checked-out</option>
+                        <option value="cancelled">Annulée</option>
+                        <option value="no_show">No-show</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;min-width:130px">
+                    <label style="font-size:12px">Paiement</label>
+                    <select id="sc-arch-payment" class="form-control">
+                        <option value="">Tous</option>
+                        <option value="paid">Payé</option>
+                        <option value="pending">En attente</option>
+                        <option value="partial">Partiel</option>
+                        <option value="failed">Échoué</option>
+                        <option value="refunded">Remboursé</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;min-width:180px">
+                    <label style="font-size:12px">Recherche</label>
+                    <input type="text" id="sc-arch-search" class="form-control" placeholder="Nom, prénom, n° résa...">
+                </div>
+                <button class="btn btn-primary" onclick="scLoadArchives()" style="height:38px">
+                    <i class="fas fa-search"></i> Rechercher
+                </button>
+                <button class="btn btn-outline" onclick="scResetArchiveFilters()" style="height:38px" title="Réinitialiser les filtres">
+                    <i class="fas fa-undo"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="sc-archive-stats" style="margin-bottom:16px"></div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div id="sc-archive-count" style="font-size:13px;color:var(--gray-500)"></div>
+            <button class="btn btn-outline" onclick="scExportArchivePDF()" id="sc-export-pdf-btn" style="display:none">
+                <i class="fas fa-file-pdf"></i> Exporter PDF
+            </button>
+        </div>
+
+        <div id="sc-archive-list"></div>
+    `;
+
+    await scLoadArchives();
+}
+
+function scResetArchiveFilters() {
+    const today = new Date().toISOString().split('T')[0];
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    document.getElementById('sc-arch-from').value = thirtyDaysAgo.toISOString().split('T')[0];
+    document.getElementById('sc-arch-to').value = today;
+    document.getElementById('sc-arch-type').value = '';
+    document.getElementById('sc-arch-status').value = '';
+    document.getElementById('sc-arch-payment').value = '';
+    document.getElementById('sc-arch-search').value = '';
+    scLoadArchives();
+}
+
+async function scLoadArchives() {
+    const list = document.getElementById('sc-archive-list');
+    if (!list) return;
+    list.innerHTML = '<div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>';
+
+    const dateFrom = document.getElementById('sc-arch-from')?.value || '';
+    const dateTo = document.getElementById('sc-arch-to')?.value || '';
+    const type = document.getElementById('sc-arch-type')?.value || '';
+    const status = document.getElementById('sc-arch-status')?.value || '';
+    const payment = document.getElementById('sc-arch-payment')?.value || '';
+    const search = document.getElementById('sc-arch-search')?.value || '';
+
+    let url = `selfcheckin/archives?hotel_id=${_scHotelId}`;
+    if (dateFrom) url += `&date_from=${dateFrom}`;
+    if (dateTo) url += `&date_to=${dateTo}`;
+    if (type) url += `&type=${encodeURIComponent(type)}`;
+    if (status) url += `&status=${encodeURIComponent(status)}`;
+    if (payment) url += `&payment_status=${encodeURIComponent(payment)}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+
+    try {
+        const res = await API.get(url);
+        _scArchiveData = res.reservations || [];
+        _scArchiveStats = res.stats || {};
+
+        scRenderArchiveStats();
+        scRenderArchiveList();
+    } catch (err) {
+        list.innerHTML = `<div class="alert alert-danger">${esc(err.message)}</div>`;
+    }
+}
+
+function scRenderArchiveStats() {
+    const el = document.getElementById('sc-archive-stats');
+    if (!el) return;
+    const s = _scArchiveStats;
+
+    el.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+            <div class="card" style="padding:14px;text-align:center">
+                <div style="font-size:22px;font-weight:700;color:var(--primary)">${s.total_reservations || 0}</div>
+                <div style="font-size:11px;color:var(--gray-500)">Total réservations</div>
+            </div>
+            <div class="card" style="padding:14px;text-align:center">
+                <div style="font-size:22px;font-weight:700;color:#16A34A">${s.total_paid || 0}</div>
+                <div style="font-size:11px;color:var(--gray-500)">Payées</div>
+            </div>
+            <div class="card" style="padding:14px;text-align:center">
+                <div style="font-size:22px;font-weight:700;color:#2563EB">${s.total_checkedin || 0}</div>
+                <div style="font-size:11px;color:var(--gray-500)">Checked-in</div>
+            </div>
+            <div class="card" style="padding:14px;text-align:center">
+                <div style="font-size:22px;font-weight:700;color:#DC2626">${s.total_cancelled || 0}</div>
+                <div style="font-size:11px;color:var(--gray-500)">Annulées</div>
+            </div>
+            <div class="card" style="padding:14px;text-align:center;background:linear-gradient(135deg,#F0FDF4,#DCFCE7)">
+                <div style="font-size:22px;font-weight:700;color:#16A34A">${formatMoney(s.revenue_total || 0)}</div>
+                <div style="font-size:11px;color:var(--gray-600)">CA total (payé)</div>
+            </div>
+            <div class="card" style="padding:14px;text-align:center">
+                <div style="font-size:18px;font-weight:700;color:#6366F1">${formatMoney(s.revenue_accommodation || 0)}</div>
+                <div style="font-size:11px;color:var(--gray-500)">Hébergement</div>
+            </div>
+            <div class="card" style="padding:14px;text-align:center">
+                <div style="font-size:18px;font-weight:700;color:#F59E0B">${formatMoney(s.revenue_breakfast || 0)}</div>
+                <div style="font-size:11px;color:var(--gray-500)">Petit-déjeuner</div>
+            </div>
+            <div class="card" style="padding:14px;text-align:center">
+                <div style="font-size:18px;font-weight:700;color:#8B5CF6">${formatMoney(s.revenue_tax || 0)}</div>
+                <div style="font-size:11px;color:var(--gray-500)">Taxe de séjour</div>
+            </div>
+        </div>
+    `;
+}
+
+function scRenderArchiveList() {
+    const list = document.getElementById('sc-archive-list');
+    const countEl = document.getElementById('sc-archive-count');
+    const exportBtn = document.getElementById('sc-export-pdf-btn');
+    if (!list) return;
+
+    if (countEl) countEl.textContent = `${_scArchiveData.length} réservation(s) trouvée(s)`;
+    if (exportBtn) exportBtn.style.display = _scArchiveData.length > 0 ? '' : 'none';
+
+    if (_scArchiveData.length === 0) {
+        list.innerHTML = '<div class="empty-state" style="padding:40px"><i class="fas fa-archive" style="font-size:36px;color:var(--gray-300);margin-bottom:12px"></i><p>Aucune réservation trouvée pour cette période</p></div>';
+        return;
+    }
+
+    list.innerHTML = `
+        <div class="table-responsive">
+            <table class="table" id="sc-archive-table">
+                <thead>
+                    <tr>
+                        <th>N° Résa</th>
+                        <th>Type</th>
+                        <th>Client</th>
+                        <th>Date</th>
+                        <th>Chambre</th>
+                        <th>Héberg.</th>
+                        <th>PDJ</th>
+                        <th>Taxe</th>
+                        <th>Total</th>
+                        <th>Arrhes</th>
+                        <th>Statut</th>
+                        <th>Paiement</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${_scArchiveData.map(r => `
+                        <tr>
+                            <td><strong>${esc(r.reservation_number)}</strong></td>
+                            <td><span class="badge badge-${r.type === 'pre_booked' ? 'primary' : 'warning'}" style="font-size:10px">${r.type === 'pre_booked' ? 'Pré-enr.' : 'Walk-in'}</span></td>
+                            <td>${r.guest_last_name ? esc((r.guest_first_name || '') + ' ' + r.guest_last_name) : '<em class="text-muted">-</em>'}</td>
+                            <td style="white-space:nowrap">${r.checkin_date ? formatDate(r.checkin_date) : '-'}</td>
+                            <td>${r.room_number || '-'}</td>
+                            <td>${formatMoney(r.accommodation_price || 0)}</td>
+                            <td>${r.breakfast_price > 0 ? formatMoney(r.breakfast_price) : '-'}</td>
+                            <td>${r.tourist_tax_amount > 0 ? formatMoney(r.tourist_tax_amount) : '-'}</td>
+                            <td><strong>${formatMoney(r.total_amount || 0)}</strong></td>
+                            <td>${r.deposit_amount > 0 ? formatMoney(r.deposit_amount) : '-'}</td>
+                            <td>${scStatusBadge(r.status, r.payment_status)}</td>
+                            <td>${scPaymentBadge(r.payment_status)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function scPaymentBadge(status) {
+    const map = {
+        'paid': { label: 'Payé', color: '#16A34A', bg: '#F0FDF4' },
+        'pending': { label: 'En attente', color: '#F59E0B', bg: '#FFFBEB' },
+        'partial': { label: 'Partiel', color: '#2563EB', bg: '#EFF6FF' },
+        'failed': { label: 'Échoué', color: '#DC2626', bg: '#FEF2F2' },
+        'refunded': { label: 'Remboursé', color: '#9333EA', bg: '#FAF5FF' },
+    };
+    const s = map[status] || { label: status || '-', color: '#6B7280', bg: '#F9FAFB' };
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;color:${s.color};background:${s.bg}">${s.label}</span>`;
+}
+
+// ==================== EXPORT PDF ====================
+
+async function scExportArchivePDF() {
+    if (_scArchiveData.length === 0) {
+        toast('Aucune donnée à exporter', 'warning');
+        return;
+    }
+
+    // Charger jsPDF dynamiquement si nécessaire
+    if (!window.jspdf) {
+        try {
+            await scLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+            await scLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+        } catch (err) {
+            toast('Erreur lors du chargement de la librairie PDF', 'error');
+            console.error(err);
+            return;
+        }
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('landscape', 'mm', 'a4');
+
+    const hotelName = _scHotels.find(h => h.id == _scHotelId)?.name || 'Hôtel';
+    const dateFrom = document.getElementById('sc-arch-from')?.value || '';
+    const dateTo = document.getElementById('sc-arch-to')?.value || '';
+
+    // Titre
+    doc.setFontSize(16);
+    doc.setFont(undefined, 'bold');
+    doc.text('Archives des ventes - Self Check-in', 14, 15);
+
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    doc.text(`${hotelName}`, 14, 22);
+
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    const periodText = dateFrom && dateTo ? `Période : ${dateFrom} au ${dateTo}` : 'Toutes les dates';
+    doc.text(periodText, 14, 28);
+    doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, 14, 33);
+
+    // Statistiques résumées
+    const s = _scArchiveStats;
+    doc.setFontSize(10);
+    doc.setTextColor(0);
+    doc.setFont(undefined, 'bold');
+    doc.text('Résumé :', 14, 41);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Réservations : ${s.total_reservations || 0}  |  Payées : ${s.total_paid || 0}  |  Checked-in : ${s.total_checkedin || 0}  |  Annulées : ${s.total_cancelled || 0}`, 14, 47);
+    doc.text(`CA total : ${scFormatMoneyPlain(s.revenue_total || 0)}  |  Hébergement : ${scFormatMoneyPlain(s.revenue_accommodation || 0)}  |  PDJ : ${scFormatMoneyPlain(s.revenue_breakfast || 0)}  |  Taxe séjour : ${scFormatMoneyPlain(s.revenue_tax || 0)}`, 14, 53);
+
+    // Tableau
+    const statusLabels = { pending: 'En attente', confirmed: 'Confirmée', checked_in: 'Checked-in', checked_out: 'Checked-out', cancelled: 'Annulée', no_show: 'No-show' };
+    const paymentLabels = { paid: 'Payé', pending: 'En attente', partial: 'Partiel', failed: 'Échoué', refunded: 'Remboursé' };
+
+    const tableData = _scArchiveData.map(r => [
+        r.reservation_number || '',
+        r.type === 'pre_booked' ? 'Pré-enr.' : 'Walk-in',
+        r.guest_last_name ? ((r.guest_first_name || '') + ' ' + r.guest_last_name).trim() : '-',
+        r.checkin_date || '-',
+        r.room_number || '-',
+        scFormatMoneyPlain(r.accommodation_price || 0),
+        r.breakfast_price > 0 ? scFormatMoneyPlain(r.breakfast_price) : '-',
+        r.tourist_tax_amount > 0 ? scFormatMoneyPlain(r.tourist_tax_amount) : '-',
+        scFormatMoneyPlain(r.total_amount || 0),
+        r.deposit_amount > 0 ? scFormatMoneyPlain(r.deposit_amount) : '-',
+        statusLabels[r.status] || r.status,
+        paymentLabels[r.payment_status] || r.payment_status
+    ]);
+
+    doc.autoTable({
+        startY: 58,
+        head: [['N° Résa', 'Type', 'Client', 'Date', 'Ch.', 'Héberg.', 'PDJ', 'Taxe', 'Total', 'Arrhes', 'Statut', 'Paiement']],
+        body: tableData,
+        styles: { fontSize: 7.5, cellPadding: 2 },
+        headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        columnStyles: {
+            0: { cellWidth: 25 },
+            5: { halign: 'right' },
+            6: { halign: 'right' },
+            7: { halign: 'right' },
+            8: { halign: 'right', fontStyle: 'bold' },
+            9: { halign: 'right' },
+        },
+        margin: { left: 14, right: 14 },
+        didParseCell: function(data) {
+            if (data.section === 'body' && data.column.index === 11) {
+                if (data.cell.raw === 'Payé') data.cell.styles.textColor = [22, 163, 74];
+                else if (data.cell.raw === 'Échoué') data.cell.styles.textColor = [220, 38, 38];
+            }
+        }
+    });
+
+    // Pied de page
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text(`Page ${i}/${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 10);
+        doc.text('ACL GESTION - Self Check-in', 14, doc.internal.pageSize.height - 10);
+    }
+
+    const filename = `archives_selfcheckin_${hotelName.replace(/\s+/g, '_')}_${dateFrom || 'all'}_${dateTo || 'all'}.pdf`;
+    doc.save(filename);
+    toast('PDF exporté avec succès', 'success');
+}
+
+function scFormatMoneyPlain(amount) {
+    return parseFloat(amount || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+}
+
+function scLoadScript(src) {
+    return new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) {
+            resolve();
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+}
 
 // ==================== ONGLET TARIFS ====================
 
