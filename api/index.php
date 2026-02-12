@@ -2098,6 +2098,7 @@ try {
                 if (isset($data['city'])) { $sets[] = "city = ?"; $params[] = $data['city']; }
                 if (isset($data['postal_code'])) { $sets[] = "postal_code = ?"; $params[] = $data['postal_code']; }
                 if (isset($data['phone'])) { $sets[] = "phone = ?"; $params[] = $data['phone']; }
+                if (isset($data['on_call_phone'])) { $sets[] = "on_call_phone = ?"; $params[] = $data['on_call_phone'] ?: null; }
                 if (isset($data['email'])) { $sets[] = "email = ?"; $params[] = $data['email']; }
                 if (isset($data['stars'])) { $sets[] = "stars = ?"; $params[] = $data['stars']; }
                 if (isset($data['total_floors'])) { $sets[] = "total_floors = ?"; $params[] = $data['total_floors']; }
