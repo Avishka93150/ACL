@@ -582,6 +582,169 @@ function sendLeaveNotificationEmail($toEmail, $toName, $employeeName, $typeLabel
     @mail($toEmail, $subject, $htmlBody, $headers);
 }
 
+/**
+ * Envoyer un email de confirmation de réservation au client (self check-in / walk-in)
+ */
+function sendBookingConfirmationEmail($reservations, $hotel) {
+    if (empty($reservations)) return;
+
+    $primary = $reservations[0];
+    $guestEmail = $primary['guest_email'];
+    if (empty($guestEmail) || !filter_var($guestEmail, FILTER_VALIDATE_EMAIL)) return;
+
+    $guestName = htmlspecialchars(trim(($primary['guest_first_name'] ?? '') . ' ' . ($primary['guest_last_name'] ?? '')));
+    $hotelName = htmlspecialchars($hotel['name'] ?? '');
+    $hotelAddress = htmlspecialchars(trim(($hotel['address'] ?? '') . ', ' . ($hotel['city'] ?? '')));
+    $checkinDate = date('d/m/Y', strtotime($primary['checkin_date']));
+    $checkoutDate = !empty($primary['checkout_date']) ? date('d/m/Y', strtotime($primary['checkout_date'])) : '';
+    $nbRooms = count($reservations);
+
+    // Construire la liste des chambres
+    $roomLines = '';
+    foreach ($reservations as $res) {
+        $roomNum = htmlspecialchars($res['room_number'] ?? '-');
+        $lockerNum = htmlspecialchars($res['locker_number'] ?? '-');
+        $lockerCode = htmlspecialchars($res['locker_code'] ?? '-');
+        $roomLines .= "
+            <tr>
+                <td style='padding: 8px 12px; border-bottom: 1px solid #eee;'>{$roomNum}</td>
+                <td style='padding: 8px 12px; border-bottom: 1px solid #eee;'>{$lockerNum}</td>
+                <td style='padding: 8px 12px; border-bottom: 1px solid #eee; font-weight: 700; color: #1E3A5F;'>{$lockerCode}</td>
+            </tr>";
+    }
+
+    // Tarification (basée sur la réservation primaire qui porte le total)
+    $accommodation = number_format((float)($primary['accommodation_price'] ?? 0), 2, ',', ' ');
+    $touristTax = number_format((float)($primary['tourist_tax_amount'] ?? 0), 2, ',', ' ');
+    $breakfast = number_format((float)($primary['breakfast_price'] ?? 0), 2, ',', ' ');
+    $total = number_format((float)($primary['total_amount'] ?? 0), 2, ',', ' ');
+    $breakfastIncluded = !empty($primary['breakfast_included']);
+
+    // Horaires petit-déjeuner
+    $breakfastInfo = '';
+    if ($breakfastIncluded) {
+        $bStart = !empty($hotel['breakfast_start']) ? substr($hotel['breakfast_start'], 0, 5) : '07:00';
+        $bEnd = !empty($hotel['breakfast_end']) ? substr($hotel['breakfast_end'], 0, 5) : '10:30';
+        $breakfastInfo = "
+            <div style='background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 15px; margin: 20px 0;'>
+                <strong>☕ Petit-déjeuner inclus</strong><br>
+                Servi de {$bStart} à {$bEnd}
+            </div>";
+    }
+
+    // Dates
+    $dateRow = "<div style='display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee;'>
+        <span style='color: #666;'>Date d'arrivée</span>
+        <span style='font-weight: 600; color: #333;'>{$checkinDate}</span>
+    </div>";
+    if ($checkoutDate) {
+        $dateRow .= "<div style='display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee;'>
+            <span style='color: #666;'>Date de départ</span>
+            <span style='font-weight: 600; color: #333;'>{$checkoutDate}</span>
+        </div>";
+    }
+
+    $resNumbers = array_map(function($r) { return $r['reservation_number']; }, $reservations);
+    $resNumStr = htmlspecialchars(implode(', ', $resNumbers));
+
+    $subject = "=?UTF-8?B?" . base64_encode("Confirmation de réservation - {$hotel['name']}") . "?=";
+
+    $htmlBody = "
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset='UTF-8'></head>
+    <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background: #f5f5f5;'>
+        <div style='max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);'>
+            <div style='background: linear-gradient(135deg, #1E3A5F, #0F2744); color: white; padding: 30px; text-align: center;'>
+                <div style='font-size: 48px; margin-bottom: 15px;'>✅</div>
+                <h1 style='margin: 0; font-size: 24px;'>Réservation confirmée</h1>
+                <p style='margin: 10px 0 0; opacity: 0.8;'>{$hotelName}</p>
+            </div>
+            <div style='padding: 30px;'>
+                <p>Bonjour {$guestName},</p>
+                <p>Votre réservation a été confirmée avec succès. Voici les détails de votre séjour :</p>
+
+                <div style='background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;'>
+                    <div style='display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee;'>
+                        <span style='color: #666;'>N° de réservation</span>
+                        <span style='font-weight: 600; color: #333;'>{$resNumStr}</span>
+                    </div>
+                    {$dateRow}
+                    <div style='display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee;'>
+                        <span style='color: #666;'>Adultes</span>
+                        <span style='font-weight: 600; color: #333;'>{$primary['nb_adults']}</span>
+                    </div>" . ((int)($primary['nb_children'] ?? 0) > 0 ? "
+                    <div style='display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee;'>
+                        <span style='color: #666;'>Enfants</span>
+                        <span style='font-weight: 600; color: #333;'>{$primary['nb_children']}</span>
+                    </div>" : "") . "
+                    <div style='display: flex; justify-content: space-between; padding: 10px 0;'>
+                        <span style='color: #666;'>Chambre(s)</span>
+                        <span style='font-weight: 600; color: #333;'>{$nbRooms}</span>
+                    </div>
+                </div>
+
+                <div style='background: #e8f5e9; border: 1px solid #4caf50; border-radius: 8px; padding: 15px; margin: 20px 0;'>
+                    <strong style='color: #2e7d32;'>🔑 Accès à votre chambre</strong>
+                    <p style='margin: 10px 0 0; font-size: 14px;'>Récupérez votre clé dans le casier indiqué ci-dessous :</p>
+                    <table style='width: 100%; border-collapse: collapse; margin-top: 10px;'>
+                        <thead>
+                            <tr style='background: rgba(0,0,0,0.05);'>
+                                <th style='padding: 8px 12px; text-align: left; font-size: 13px;'>Chambre</th>
+                                <th style='padding: 8px 12px; text-align: left; font-size: 13px;'>Casier</th>
+                                <th style='padding: 8px 12px; text-align: left; font-size: 13px;'>Code</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {$roomLines}
+                        </tbody>
+                    </table>
+                </div>
+
+                {$breakfastInfo}
+
+                <div style='background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;'>
+                    <h3 style='margin: 0 0 15px; color: #1E3A5F; font-size: 16px;'>Détail du paiement</h3>
+                    <div style='display: flex; justify-content: space-between; padding: 8px 0;'>
+                        <span style='color: #666;'>Hébergement</span>
+                        <span>{$accommodation} €</span>
+                    </div>
+                    <div style='display: flex; justify-content: space-between; padding: 8px 0;'>
+                        <span style='color: #666;'>Taxe de séjour</span>
+                        <span>{$touristTax} €</span>
+                    </div>" . ($breakfastIncluded ? "
+                    <div style='display: flex; justify-content: space-between; padding: 8px 0;'>
+                        <span style='color: #666;'>Petit-déjeuner</span>
+                        <span>{$breakfast} €</span>
+                    </div>" : "") . "
+                    <div style='display: flex; justify-content: space-between; padding: 12px 0; border-top: 2px solid #1E3A5F; margin-top: 8px; font-size: 18px; font-weight: 700; color: #1E3A5F;'>
+                        <span>Total payé</span>
+                        <span>{$total} €</span>
+                    </div>
+                </div>
+
+                <p style='margin-top: 25px; color: #666; font-size: 14px;'>
+                    📍 <strong>{$hotelName}</strong><br>
+                    {$hotelAddress}
+                </p>
+
+                <p style='color: #666; font-size: 14px;'>Nous vous souhaitons un excellent séjour !</p>
+            </div>
+            <div style='background: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px;'>
+                <p style='margin: 0;'>ACL GESTION - Plateforme de gestion hôtelière</p>
+                <p style='margin: 5px 0 0;'>Ceci est un message automatique, merci de ne pas y répondre.</p>
+            </div>
+        </div>
+    </body>
+    </html>";
+
+    $headers = "MIME-Version: 1.0\r\n";
+    $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+    $headers .= "From: " . htmlspecialchars($hotel['name']) . " <noreply@acl-gestion.com>\r\n";
+
+    @mail($guestEmail, $subject, $htmlBody, $headers);
+}
+
 // Notifier pour un ticket de maintenance (création, alerte retard)
 function notifyMaintenanceTicket($ticketId, $ticketData, $creator, $type = 'created') {
     $hotelId = $ticketData['hotel_id'];
@@ -9256,6 +9419,7 @@ try {
 
                 // Confirmer toutes les réservations et libérer les casiers
                 $confirmations = [];
+                $updatedReservations = [];
                 foreach ($allReservations as $reservation) {
                     db()->execute(
                         "UPDATE selfcheckin_reservations SET payment_status = 'paid', status = 'checked_in', stripe_charge_id = ?, updated_at = NOW() WHERE id = ?",
@@ -9269,8 +9433,12 @@ try {
 
                     // Rafraîchir les données
                     $updated = db()->queryOne("SELECT * FROM selfcheckin_reservations WHERE id = ?", [$reservation['id']]);
+                    $updatedReservations[] = $updated;
                     $confirmations[] = selfcheckin_format_confirmation($updated, $hotel);
                 }
+
+                // Envoyer l'email de confirmation au client
+                sendBookingConfirmationEmail($updatedReservations, $hotel);
 
                 // Pour rétrocompatibilité, 'reservation' contient la première (avec le total)
                 json_out([
