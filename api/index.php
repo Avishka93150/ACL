@@ -2285,10 +2285,15 @@ try {
                 if (isset($data['pms_password'])) { $sets[] = "pms_password = ?"; $params[] = $data['pms_password'] ?: null; }
                 if (isset($data['pms_connection_mode'])) { $sets[] = "pms_connection_mode = ?"; $params[] = in_array($data['pms_connection_mode'], ['direct', 'relay']) ? $data['pms_connection_mode'] : 'direct'; }
 
-                // Stripe fields
-                if (isset($data['stripe_public_key'])) { $sets[] = "stripe_public_key = ?"; $params[] = $data['stripe_public_key'] ?: null; }
-                if (isset($data['stripe_secret_key'])) { $sets[] = "stripe_secret_key = ?"; $params[] = $data['stripe_secret_key'] ?: null; }
-                if (isset($data['stripe_webhook_secret'])) { $sets[] = "stripe_webhook_secret = ?"; $params[] = $data['stripe_webhook_secret'] ?: null; }
+                // Stripe fields (requires hotels.stripe_manage permission)
+                if (isset($data['stripe_public_key']) || isset($data['stripe_secret_key']) || isset($data['stripe_webhook_secret'])) {
+                    if (!hasPermission($user['role'], 'hotels.stripe_manage')) {
+                        json_error('Permission refusée : gestion des clés Stripe', 403);
+                    }
+                    if (isset($data['stripe_public_key'])) { $sets[] = "stripe_public_key = ?"; $params[] = $data['stripe_public_key'] ?: null; }
+                    if (isset($data['stripe_secret_key'])) { $sets[] = "stripe_secret_key = ?"; $params[] = $data['stripe_secret_key'] ?: null; }
+                    if (isset($data['stripe_webhook_secret'])) { $sets[] = "stripe_webhook_secret = ?"; $params[] = $data['stripe_webhook_secret'] ?: null; }
+                }
                 if (isset($data['booking_enabled'])) { $sets[] = "booking_enabled = ?"; $params[] = !empty($data['booking_enabled']) ? 1 : 0; }
                 if (isset($data['booking_slug'])) {
                     // Vérifier unicité du slug

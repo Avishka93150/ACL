@@ -621,6 +621,7 @@ async function renderTabSelfcheckin(content, h) {
         </div>
 
         <!-- Stripe -->
+        ${hasPermission('hotels.stripe_manage') ? `
         <div class="card">
             <div class="card-header">
                 <h3 class="card-title"><i class="fab fa-stripe"></i> Stripe (Paiement en ligne)</h3>
@@ -642,6 +643,7 @@ async function renderTabSelfcheckin(content, h) {
                 </form>
             </div>
         </div>
+        ` : ''}
     `;
 
     // Charger les services complémentaires
