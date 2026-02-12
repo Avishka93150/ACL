@@ -381,7 +381,7 @@ async function refreshPermissions() {
 function getDefaultPermissions(role) {
     const defaults = {
         'groupe_manager': {
-            'hotels.view': true, 'hotels.create': false, 'hotels.edit': true, 'hotels.delete': false, 'rooms.manage': true,
+            'hotels.view': true, 'hotels.create': false, 'hotels.edit': true, 'hotels.delete': false, 'hotels.stripe_manage': false, 'rooms.manage': true,
             'users.view': true, 'users.manage': true,
             'dispatch.view': true, 'dispatch.create': true, 'dispatch.complete': true, 'dispatch.control': true,
             'linen.view': true, 'linen.manage': true, 'linen.config': true,
@@ -397,7 +397,7 @@ function getDefaultPermissions(role) {
             'permissions.manage': false
         },
         'hotel_manager': {
-            'hotels.view': true, 'hotels.create': false, 'hotels.edit': true, 'hotels.delete': false, 'rooms.manage': true,
+            'hotels.view': true, 'hotels.create': false, 'hotels.edit': true, 'hotels.delete': false, 'hotels.stripe_manage': true, 'rooms.manage': true,
             'users.view': true, 'users.manage': true,
             'dispatch.view': true, 'dispatch.create': true, 'dispatch.complete': true, 'dispatch.control': true,
             'linen.view': true, 'linen.manage': true, 'linen.config': true,
@@ -413,7 +413,7 @@ function getDefaultPermissions(role) {
             'permissions.manage': false
         },
         'comptabilite': {
-            'hotels.view': true, 'hotels.create': false, 'hotels.edit': false, 'hotels.delete': false, 'rooms.manage': false,
+            'hotels.view': true, 'hotels.create': false, 'hotels.edit': false, 'hotels.delete': false, 'hotels.stripe_manage': false, 'rooms.manage': false,
             'users.view': false, 'users.manage': false,
             'dispatch.view': true, 'dispatch.create': false, 'dispatch.complete': false, 'dispatch.control': false,
             'linen.view': true, 'linen.manage': false, 'linen.config': false,
@@ -429,7 +429,7 @@ function getDefaultPermissions(role) {
             'permissions.manage': false
         },
         'rh': {
-            'hotels.view': true, 'hotels.create': false, 'hotels.edit': false, 'hotels.delete': false, 'rooms.manage': false,
+            'hotels.view': true, 'hotels.create': false, 'hotels.edit': false, 'hotels.delete': false, 'hotels.stripe_manage': false, 'rooms.manage': false,
             'users.view': true, 'users.manage': true,
             'dispatch.view': false, 'dispatch.create': false, 'dispatch.complete': false, 'dispatch.control': false,
             'linen.view': false, 'linen.manage': false, 'linen.config': false,
@@ -445,7 +445,7 @@ function getDefaultPermissions(role) {
             'permissions.manage': false
         },
         'receptionniste': {
-            'hotels.view': true, 'hotels.create': false, 'hotels.edit': false, 'hotels.delete': false, 'rooms.manage': false,
+            'hotels.view': true, 'hotels.create': false, 'hotels.edit': false, 'hotels.delete': false, 'hotels.stripe_manage': false, 'rooms.manage': false,
             'users.view': false, 'users.manage': false,
             'dispatch.view': true, 'dispatch.create': true, 'dispatch.complete': true, 'dispatch.control': true,
             'linen.view': true, 'linen.manage': true, 'linen.config': false,
@@ -461,7 +461,7 @@ function getDefaultPermissions(role) {
             'permissions.manage': false
         },
         'employee': {
-            'hotels.view': true, 'hotels.create': false, 'hotels.edit': false, 'hotels.delete': false, 'rooms.manage': false,
+            'hotels.view': true, 'hotels.create': false, 'hotels.edit': false, 'hotels.delete': false, 'hotels.stripe_manage': false, 'rooms.manage': false,
             'users.view': false, 'users.manage': false,
             'dispatch.view': true, 'dispatch.create': false, 'dispatch.complete': true, 'dispatch.control': false,
             'linen.view': true, 'linen.manage': true, 'linen.config': false,
