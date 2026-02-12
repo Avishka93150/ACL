@@ -9146,11 +9146,12 @@ try {
                 // Si rien à payer (arrhes couvrent tout)
                 if ($remainingAmount <= 0) {
                     db()->execute(
-                        "UPDATE selfcheckin_reservations SET payment_status = 'paid', status = 'confirmed', updated_at = NOW() WHERE id = ?",
+                        "UPDATE selfcheckin_reservations SET payment_status = 'paid', status = 'checked_in', updated_at = NOW() WHERE id = ?",
                         [$reservation['id']]
                     );
+                    // Libérer le casier (le client a récupéré sa clé)
                     if ($reservation['locker_id']) {
-                        db()->execute("UPDATE hotel_lockers SET status = 'assigned', updated_at = NOW() WHERE id = ?", [$reservation['locker_id']]);
+                        db()->execute("UPDATE hotel_lockers SET status = 'available', updated_at = NOW() WHERE id = ?", [$reservation['locker_id']]);
                     }
                     json_out([
                         'no_payment_needed' => true,
@@ -9253,17 +9254,17 @@ try {
 
                 $chargeId = $piResponse['latest_charge'] ?? null;
 
-                // Confirmer toutes les réservations
+                // Confirmer toutes les réservations et libérer les casiers
                 $confirmations = [];
                 foreach ($allReservations as $reservation) {
                     db()->execute(
-                        "UPDATE selfcheckin_reservations SET payment_status = 'paid', status = 'confirmed', stripe_charge_id = ?, updated_at = NOW() WHERE id = ?",
+                        "UPDATE selfcheckin_reservations SET payment_status = 'paid', status = 'checked_in', stripe_charge_id = ?, updated_at = NOW() WHERE id = ?",
                         [$chargeId, $reservation['id']]
                     );
 
-                    // Marquer le casier comme assigné
+                    // Libérer le casier (le client a récupéré sa clé, le casier est réutilisable)
                     if ($reservation['locker_id']) {
-                        db()->execute("UPDATE hotel_lockers SET status = 'assigned', updated_at = NOW() WHERE id = ?", [$reservation['locker_id']]);
+                        db()->execute("UPDATE hotel_lockers SET status = 'available', updated_at = NOW() WHERE id = ?", [$reservation['locker_id']]);
                     }
 
                     // Rafraîchir les données
@@ -9645,7 +9646,7 @@ try {
             }
 
             // GET /selfcheckin/{id} - Détail d'une réservation
-            if ($method === 'GET' && $id && $id !== 'stats') {
+            if ($method === 'GET' && $id && $id !== 'stats' && $id !== 'archives') {
                 $reservation = db()->queryOne("SELECT * FROM selfcheckin_reservations WHERE id = ?", [$id]);
                 if (!$reservation) json_error('Réservation non trouvée', 404);
                 if (!in_array($reservation['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
@@ -9815,11 +9816,105 @@ try {
                 json_out(['message' => 'Réservation mise à jour']);
             }
 
+            // POST /selfcheckin/{id}/release-locker - Libérer manuellement le casier
+            if ($method === 'POST' && $id && $action === 'release-locker') {
+                $reservation = db()->queryOne("SELECT * FROM selfcheckin_reservations WHERE id = ?", [$id]);
+                if (!$reservation) json_error('Réservation non trouvée', 404);
+                if (!in_array($reservation['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                if (!$reservation['locker_id']) json_error('Aucun casier assigné à cette réservation');
+
+                // Libérer le casier
+                db()->execute("UPDATE hotel_lockers SET status = 'available', updated_at = NOW() WHERE id = ?", [$reservation['locker_id']]);
+
+                // Retirer le casier de la réservation
+                db()->execute(
+                    "UPDATE selfcheckin_reservations SET locker_id = NULL, locker_number = NULL, locker_code = NULL, updated_at = NOW() WHERE id = ?",
+                    [$reservation['id']]
+                );
+
+                json_out(['message' => 'Casier libéré avec succès']);
+            }
+
+            // GET /selfcheckin/archives - Archives des ventes avec filtres avancés
+            if ($method === 'GET' && $id === 'archives') {
+                $hotelId = $_GET['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $dateFrom = $_GET['date_from'] ?? null;
+                $dateTo = $_GET['date_to'] ?? null;
+                $status = $_GET['status'] ?? null;
+                $paymentStatus = $_GET['payment_status'] ?? null;
+                $type = $_GET['type'] ?? null;
+                $search = $_GET['search'] ?? null;
+
+                $sql = "SELECT r.*, l.locker_number as current_locker_number
+                        FROM selfcheckin_reservations r
+                        LEFT JOIN hotel_lockers l ON r.locker_id = l.id
+                        WHERE r.hotel_id = ?";
+                $params = [$hotelId];
+
+                if ($dateFrom) { $sql .= " AND r.checkin_date >= ?"; $params[] = $dateFrom; }
+                if ($dateTo) { $sql .= " AND r.checkin_date <= ?"; $params[] = $dateTo; }
+                if ($status) { $sql .= " AND r.status = ?"; $params[] = $status; }
+                if ($paymentStatus) { $sql .= " AND r.payment_status = ?"; $params[] = $paymentStatus; }
+                if ($type) { $sql .= " AND r.type = ?"; $params[] = $type; }
+                if ($search) {
+                    $sql .= " AND (r.guest_last_name LIKE ? OR r.guest_first_name LIKE ? OR r.reservation_number LIKE ?)";
+                    $searchTerm = "%$search%";
+                    $params[] = $searchTerm;
+                    $params[] = $searchTerm;
+                    $params[] = $searchTerm;
+                }
+
+                $sql .= " ORDER BY r.checkin_date DESC, r.created_at DESC LIMIT 500";
+                $reservations = db()->query($sql, $params);
+
+                // Calculer les statistiques d'archives
+                $sqlStats = "SELECT
+                    COUNT(*) as total_reservations,
+                    SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END) as total_paid,
+                    SUM(CASE WHEN status = 'checked_in' THEN 1 ELSE 0 END) as total_checkedin,
+                    SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as total_cancelled,
+                    COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN total_amount ELSE 0 END), 0) as revenue_total,
+                    COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN accommodation_price ELSE 0 END), 0) as revenue_accommodation,
+                    COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN breakfast_price ELSE 0 END), 0) as revenue_breakfast,
+                    COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN tourist_tax_amount ELSE 0 END), 0) as revenue_tax,
+                    COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN deposit_amount ELSE 0 END), 0) as total_deposits
+                    FROM selfcheckin_reservations WHERE hotel_id = ?";
+                $statsParams = [$hotelId];
+
+                if ($dateFrom) { $sqlStats .= " AND checkin_date >= ?"; $statsParams[] = $dateFrom; }
+                if ($dateTo) { $sqlStats .= " AND checkin_date <= ?"; $statsParams[] = $dateTo; }
+                if ($status) { $sqlStats .= " AND status = ?"; $statsParams[] = $status; }
+                if ($paymentStatus) { $sqlStats .= " AND payment_status = ?"; $statsParams[] = $paymentStatus; }
+                if ($type) { $sqlStats .= " AND type = ?"; $statsParams[] = $type; }
+                if ($search) {
+                    $sqlStats .= " AND (guest_last_name LIKE ? OR guest_first_name LIKE ? OR reservation_number LIKE ?)";
+                    $statsParams[] = "%$search%";
+                    $statsParams[] = "%$search%";
+                    $statsParams[] = "%$search%";
+                }
+
+                $stats = db()->queryOne($sqlStats, $statsParams);
+
+                json_out([
+                    'reservations' => $reservations,
+                    'stats' => $stats
+                ]);
+            }
+
             // DELETE /selfcheckin/{id} - Supprimer une réservation
             if ($method === 'DELETE' && $id) {
                 $reservation = db()->queryOne("SELECT * FROM selfcheckin_reservations WHERE id = ?", [$id]);
                 if (!$reservation) json_error('Réservation non trouvée', 404);
                 if (!in_array($reservation['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                // Interdire la suppression des réservations confirmées ou checked-in
+                if (in_array($reservation['status'], ['confirmed', 'checked_in'])) {
+                    json_error('Impossible de supprimer une réservation ' . ($reservation['status'] === 'confirmed' ? 'confirmée' : 'en cours (checked-in)') . '. Vous pouvez l\'annuler à la place.', 400);
+                }
 
                 // Libérer le casier
                 if ($reservation['locker_id']) {
