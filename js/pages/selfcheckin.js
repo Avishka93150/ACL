@@ -7,6 +7,7 @@ let _scReservations = [];
 let _scLockers = [];
 let _scRooms = [];
 let _scHotels = [];
+let _scFilterDate = new Date().toISOString().split('T')[0];
 
 async function loadSelfcheckin(container) {
     showLoading(container);
@@ -141,7 +142,7 @@ async function scRenderReservations(content) {
                         <option value="checked_in">Checked-in</option>
                         <option value="cancelled">Annulée</option>
                     </select>
-                    <input type="date" id="sc-filter-date" onchange="scFilterReservations()" class="form-control" style="width:auto" value="${new Date().toISOString().split('T')[0]}">
+                    <input type="date" id="sc-filter-date" onchange="scFilterReservations()" class="form-control" style="width:auto" value="${_scFilterDate}">
                 </div>
                 <div style="display:flex;gap:8px">
                     <button class="btn btn-primary" onclick="scShowCreateReservation('pre_booked')">
@@ -165,6 +166,7 @@ function scFilterReservations() {
     const type = document.getElementById('sc-filter-type')?.value || '';
     const status = document.getElementById('sc-filter-status')?.value || '';
     const date = document.getElementById('sc-filter-date')?.value || '';
+    _scFilterDate = date;
 
     let filtered = _scReservations;
     if (type) filtered = filtered.filter(r => r.type === type);

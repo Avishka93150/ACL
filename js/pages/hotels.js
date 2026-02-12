@@ -342,6 +342,12 @@ function renderTabGeneral(content, h) {
                     </div>
                     <div class="form-row">
                         <div class="form-group">
+                            <label>N° d'astreinte</label>
+                            <input type="tel" name="on_call_phone" value="${esc(h.on_call_phone || '')}" placeholder="Numéro d'urgence / astreinte">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
                             <label>${t('hotels.stars')}</label>
                             <select name="stars">
                                 ${[1,2,3,4,5].map(n => `<option value="${n}" ${h.stars == n ? 'selected' : ''}>${n} ⭐</option>`).join('')}
@@ -802,7 +808,7 @@ async function loadHotelServices(hotelId) {
                                         <i class="fas fa-${esc(s.icon || 'concierge-bell')}" style="color:${s.is_active ? '#2563EB' : '#9CA3AF'}"></i>
                                         ${esc(s.name)}
                                     </h4>
-                                    <p style="margin:4px 0 0;font-size:14px;font-weight:600;color:#2563EB">${formatCurrency(s.price)}</p>
+                                    <p style="margin:4px 0 0;font-size:14px;font-weight:600;color:#2563EB">${formatMoney(s.price)}</p>
                                 </div>
                                 <span style="padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;background:${s.is_active ? '#F0FDF4' : '#F3F4F6'};color:${s.is_active ? '#16A34A' : '#9CA3AF'}">
                                     ${s.is_active ? 'Actif' : 'Inactif'}

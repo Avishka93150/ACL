@@ -138,7 +138,10 @@
         <img id="hotel-logo" src="" alt="" onerror="this.style.display='none'">
         <div>
             <h1 id="hotel-name"></h1>
-            <span id="hotel-stars"></span>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span id="hotel-stars"></span>
+                <span id="hotel-address-header" style="font-size:12px;color:var(--gray-500)"></span>
+            </div>
         </div>
     </div>
 
@@ -237,6 +240,9 @@
             if (hotel.stars) {
                 document.getElementById('hotel-stars').innerHTML = Array(parseInt(hotel.stars)).fill('<i class="fas fa-star" style="color:#F59E0B;font-size:12px"></i>').join('');
             }
+            if (hotel.address || hotel.city) {
+                document.getElementById('hotel-address-header').innerHTML = '<i class="fas fa-map-marker-alt"></i> ' + esc((hotel.address || '') + (hotel.city ? ', ' + hotel.city : ''));
+            }
             document.title = `Self Check-in - ${hotel.name}`;
 
             showWelcome();
@@ -261,12 +267,28 @@
 
     function showWelcome() {
         currentStep = 'welcome';
+        const addressParts = [];
+        if (hotel.address) addressParts.push(esc(hotel.address));
+        if (hotel.city) addressParts.push(esc(hotel.city));
+        const fullAddress = addressParts.join(', ');
+
         document.getElementById('app').innerHTML = `
             <div class="card card-wide">
                 <div class="card-body" style="text-align:center;padding:40px">
                     <i class="fas fa-door-open" style="font-size:48px;color:var(--primary);margin-bottom:16px"></i>
                     <h2 style="margin-bottom:8px">Bienvenue !</h2>
-                    <p style="color:var(--gray-500);margin-bottom:32px">Self check-in ${esc(hotel.name)}</p>
+                    <p style="color:var(--gray-500);margin-bottom:8px">Self check-in ${esc(hotel.name)}</p>
+
+                    ${fullAddress ? `
+                    <p style="color:var(--gray-400);font-size:13px;margin-bottom:8px">
+                        <i class="fas fa-map-marker-alt"></i> ${fullAddress}
+                    </p>` : ''}
+
+                    ${hotel.on_call_phone ? `
+                    <div style="display:inline-flex;align-items:center;gap:6px;background:var(--warning-light);border:1px solid #FDE68A;border-radius:8px;padding:6px 14px;font-size:13px;color:var(--gray-700);margin-bottom:24px">
+                        <i class="fas fa-phone-alt" style="color:var(--warning)"></i>
+                        <span>N° d'astreinte : <strong>${esc(hotel.on_call_phone)}</strong></span>
+                    </div>` : '<div style="margin-bottom:16px"></div>'}
 
                     <div class="choice-grid" style="grid-template-columns: 1fr 1fr;">
                         <div class="choice-card" onclick="showLookup()">
@@ -285,6 +307,85 @@
                             <h3>Sans réservation</h3>
                             <p>Non disponible actuellement</p>
                         </div>`}
+                    </div>
+
+                    <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--gray-200)">
+                        <div class="choice-card" onclick="showUrgence()" style="border-color:#FECACA;background:#FEF2F2">
+                            <i class="fas fa-exclamation-triangle" style="color:var(--danger)"></i>
+                            <h3 style="color:var(--danger)">Urgence</h3>
+                            <p>Signaler un problème urgent ou contacter l'astreinte</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // ==================== URGENCE ====================
+
+    function showUrgence() {
+        currentStep = 'urgence';
+        const addressParts = [];
+        if (hotel.address) addressParts.push(esc(hotel.address));
+        if (hotel.city) addressParts.push(esc(hotel.city));
+        const fullAddress = addressParts.join(', ');
+
+        document.getElementById('app').innerHTML = `
+            <a href="javascript:showWelcome()" class="back-link"><i class="fas fa-arrow-left"></i> Retour</a>
+            <div class="card card-wide">
+                <div class="card-header" style="background:#FEF2F2;border-bottom-color:#FECACA">
+                    <h2 style="color:var(--danger)"><i class="fas fa-exclamation-triangle"></i> Urgence</h2>
+                </div>
+                <div class="card-body">
+                    <p style="color:var(--gray-600);margin-bottom:20px">
+                        Si vous rencontrez un problème urgent pendant votre séjour, veuillez contacter l'astreinte de l'hôtel.
+                    </p>
+
+                    ${hotel.on_call_phone ? `
+                    <div style="text-align:center;margin:24px 0">
+                        <div style="background:linear-gradient(135deg, #DC2626, #B91C1C);color:white;border-radius:16px;padding:32px;display:inline-block;min-width:280px">
+                            <i class="fas fa-phone-alt" style="font-size:36px;margin-bottom:12px;display:block"></i>
+                            <p style="font-size:14px;opacity:0.9;margin-bottom:8px">N° d'astreinte</p>
+                            <p style="font-size:28px;font-weight:800;letter-spacing:1px">${esc(hotel.on_call_phone)}</p>
+                            <a href="tel:${esc(hotel.on_call_phone)}" class="btn" style="background:white;color:var(--danger);margin-top:16px;font-weight:700">
+                                <i class="fas fa-phone"></i> Appeler maintenant
+                            </a>
+                        </div>
+                    </div>` : `
+                    <div class="info-box warning" style="text-align:center">
+                        <i class="fas fa-info-circle" style="font-size:24px;color:var(--warning);margin-bottom:8px;display:block"></i>
+                        <p>Aucun numéro d'astreinte n'est configuré pour cet établissement.</p>
+                    </div>`}
+
+                    ${hotel.phone ? `
+                    <div style="text-align:center;margin:16px 0">
+                        <p style="color:var(--gray-500);font-size:13px;margin-bottom:8px">Ou contactez la réception :</p>
+                        <a href="tel:${esc(hotel.phone)}" style="font-size:18px;font-weight:600;color:var(--primary);text-decoration:none">
+                            <i class="fas fa-concierge-bell"></i> ${esc(hotel.phone)}
+                        </a>
+                    </div>` : ''}
+
+                    ${fullAddress ? `
+                    <div class="info-box" style="margin-top:20px">
+                        <p style="font-weight:600;margin-bottom:4px"><i class="fas fa-map-marker-alt" style="color:var(--primary)"></i> Adresse de l'hôtel</p>
+                        <p style="color:var(--gray-600)">${fullAddress}</p>
+                    </div>` : ''}
+
+                    <div class="info-box" style="margin-top:16px">
+                        <p style="font-weight:600;margin-bottom:8px"><i class="fas fa-list" style="color:var(--primary)"></i> Types d'urgences courants</p>
+                        <ul style="list-style:none;padding:0;margin:0;font-size:14px;color:var(--gray-600)">
+                            <li style="padding:6px 0;border-bottom:1px solid var(--gray-100)"><i class="fas fa-key" style="color:var(--warning);width:20px"></i> Problème d'accès chambre / casier</li>
+                            <li style="padding:6px 0;border-bottom:1px solid var(--gray-100)"><i class="fas fa-bolt" style="color:var(--danger);width:20px"></i> Panne électrique / eau</li>
+                            <li style="padding:6px 0;border-bottom:1px solid var(--gray-100)"><i class="fas fa-tools" style="color:var(--gray-500);width:20px"></i> Problème technique dans la chambre</li>
+                            <li style="padding:6px 0;border-bottom:1px solid var(--gray-100)"><i class="fas fa-shield-alt" style="color:var(--primary);width:20px"></i> Problème de sécurité</li>
+                            <li style="padding:6px 0"><i class="fas fa-first-aid" style="color:var(--danger);width:20px"></i> Urgence médicale (appelez le 15 / 112)</li>
+                        </ul>
+                    </div>
+
+                    <div style="margin-top:20px;text-align:center">
+                        <button class="btn btn-outline" onclick="showWelcome()">
+                            <i class="fas fa-arrow-left"></i> Retour à l'accueil
+                        </button>
                     </div>
                 </div>
             </div>

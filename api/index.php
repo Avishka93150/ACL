@@ -8877,7 +8877,7 @@ try {
                     "SELECT id, name, address, city, stars, checkin_time, checkout_time, booking_slug,
                             stripe_public_key, logo_url, selfcheckin_enabled, walkin_enabled,
                             default_night_price, default_breakfast_price, default_tourist_tax,
-                            breakfast_start, breakfast_end, night_cutoff_hour
+                            breakfast_start, breakfast_end, night_cutoff_hour, phone, on_call_phone
                      FROM hotels WHERE booking_slug = ? AND selfcheckin_enabled = 1 AND status = 'active'",
                     [$id]
                 );
@@ -8917,6 +8917,8 @@ try {
                         'walkin_enabled' => (bool)$hotel['walkin_enabled'],
                         'breakfast_start' => $bfStart,
                         'breakfast_end' => $bfEnd,
+                        'phone' => $hotel['phone'],
+                        'on_call_phone' => $hotel['on_call_phone'],
                     ],
                     'pricing' => [
                         'date' => $effectiveDate,
