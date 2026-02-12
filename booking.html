@@ -539,7 +539,7 @@
                     <h3 style="margin:20px 0 12px"><i class="fas fa-receipt"></i> Détail de la réservation</h3>
                     <table class="summary-table">
                         <tr><td>Hébergement</td><td>${fmtPrice(r.accommodation_price)}</td></tr>
-                        <tr><td>Taxe de séjour</td><td>${fmtPrice(r.tourist_tax_amount)}</td></tr>
+                        <tr><td>Taxe de séjour (${r.nb_adults} pers.)</td><td>${fmtPrice(r.tourist_tax_amount)}</td></tr>
                         <tr><td>Petit-déjeuner ${r.breakfast_included ? '<i class="fas fa-check-circle" style="color:var(--success)"></i>' : '<span style="color:var(--gray-400)">(non inclus)</span>'}</td><td>${r.breakfast_included ? fmtPrice(r.breakfast_price) : '-'}</td></tr>
                         <tr class="total"><td>Total</td><td>${fmtPrice(r.total_amount)}</td></tr>
                         ${r.deposit_amount > 0 ? `<tr class="deposit"><td>Arrhes versées</td><td>- ${fmtPrice(r.deposit_amount)}</td></tr>` : ''}
@@ -1494,7 +1494,7 @@
                             <tr><td>Réservation</td><td>${esc(r.reservation_number)}</td></tr>
                             <tr><td>Client</td><td>${esc((r.guest_first_name || '') + ' ' + (r.guest_last_name || ''))}</td></tr>
                             <tr><td>Hébergement</td><td>${fmtPrice(r.accommodation_price)}</td></tr>
-                            <tr><td>Taxe de séjour</td><td>${fmtPrice(r.tourist_tax_amount)}</td></tr>
+                            <tr><td>Taxe de séjour (${r.nb_adults} pers.)</td><td>${fmtPrice(r.tourist_tax_amount)}</td></tr>
                             ${r.breakfast_included ? `<tr><td>Petit-déjeuner <i class="fas fa-check-circle" style="color:var(--success)"></i></td><td>${fmtPrice(r.breakfast_price)}</td></tr>` : ''}
                             <tr class="total"><td>Total payé</td><td>${fmtPrice(r.total_amount)}</td></tr>
                             ${r.deposit_amount > 0 ? `<tr class="deposit"><td>Dont arrhes</td><td>${fmtPrice(r.deposit_amount)}</td></tr>` : ''}
@@ -1560,7 +1560,7 @@
                             <tr><td>Réservation</td><td>${reservations.map(r => esc(r.reservation_number)).join(', ')}</td></tr>
                             <tr><td>Client</td><td>${esc((primary.guest_first_name || '') + ' ' + (primary.guest_last_name || ''))}</td></tr>
                             <tr><td>Hébergement (${nbRooms} chambres)</td><td>${fmtPrice(primary.accommodation_price)}</td></tr>
-                            <tr><td>Taxe de séjour</td><td>${fmtPrice(primary.tourist_tax_amount)}</td></tr>
+                            <tr><td>Taxe de séjour (${primary.nb_adults} pers.)</td><td>${fmtPrice(primary.tourist_tax_amount)}</td></tr>
                             ${primary.breakfast_included ? `<tr><td>Petit-déjeuner <i class="fas fa-check-circle" style="color:var(--success)"></i></td><td>${fmtPrice(primary.breakfast_price)}</td></tr>` : ''}
                             <tr class="total"><td>Total payé</td><td>${fmtPrice(primary.total_amount)}</td></tr>
                         </table>
@@ -1636,7 +1636,7 @@
 
         doc.setFontSize(11);
         addLine('Hebergement :', fmtPrice(r.accommodation_price));
-        addLine('Taxe de sejour :', fmtPrice(r.tourist_tax_amount));
+        addLine('Taxe de sejour (' + (r.nb_adults || 1) + ' pers.) :', fmtPrice(r.tourist_tax_amount));
         if (r.breakfast_included) {
             addLine('Petit-dejeuner :', fmtPrice(r.breakfast_price));
         }
