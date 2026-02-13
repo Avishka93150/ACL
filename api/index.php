@@ -10536,6 +10536,439 @@ try {
             }
             break;
 
+        // ==================== LIENS DE PAIEMENT STRIPE ====================
+        case 'payment-links':
+            $user = require_auth();
+            $userHotelIds = getManageableHotels($user);
+
+            // GET /payment-links?hotel_id=X - Liste des liens de paiement
+            if ($method === 'GET' && !$id) {
+                $hotelId = $_GET['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $status = $_GET['status'] ?? null;
+                $search = $_GET['search'] ?? null;
+
+                $sql = "SELECT pl.*, u.name as created_by_name
+                        FROM payment_links pl
+                        LEFT JOIN users u ON pl.created_by = u.id
+                        WHERE pl.hotel_id = ?";
+                $params = [$hotelId];
+
+                if ($status) { $sql .= " AND pl.payment_status = ?"; $params[] = $status; }
+                if ($search) {
+                    $sql .= " AND (pl.guest_last_name LIKE ? OR pl.guest_first_name LIKE ? OR pl.reservation_reference LIKE ? OR pl.guest_email LIKE ?)";
+                    $s = "%$search%";
+                    $params[] = $s; $params[] = $s; $params[] = $s; $params[] = $s;
+                }
+
+                $sql .= " ORDER BY pl.created_at DESC LIMIT 200";
+                $links = db()->query($sql, $params);
+
+                // Statistiques
+                $stats = db()->queryOne(
+                    "SELECT
+                        COUNT(*) as total,
+                        SUM(CASE WHEN payment_status = 'pending' THEN 1 ELSE 0 END) as total_pending,
+                        SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END) as total_paid,
+                        COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN total_amount ELSE 0 END), 0) as revenue_paid,
+                        COALESCE(SUM(CASE WHEN payment_status = 'pending' THEN total_amount ELSE 0 END), 0) as revenue_pending
+                    FROM payment_links WHERE hotel_id = ?",
+                    [$hotelId]
+                );
+
+                json_out(['payment_links' => $links, 'stats' => $stats]);
+            }
+
+            // GET /payment-links/{id} - Détail d'un lien
+            if ($method === 'GET' && $id && $id !== 'check-status') {
+                $link = db()->queryOne("SELECT * FROM payment_links WHERE id = ?", [$id]);
+                if (!$link) json_error('Lien de paiement non trouvé', 404);
+                if (!in_array($link['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                json_out($link);
+            }
+
+            // POST /payment-links - Créer un lien de paiement + envoyer email
+            if ($method === 'POST' && !$id) {
+                $data = get_input();
+                if (empty($data['hotel_id'])) json_error('hotel_id requis');
+                if (!in_array($data['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                // Validation
+                $required = ['guest_first_name', 'guest_last_name', 'guest_email', 'reservation_reference', 'checkin_date', 'total_amount'];
+                foreach ($required as $field) {
+                    if (empty($data[$field])) json_error("Le champ $field est requis");
+                }
+                if (!filter_var($data['guest_email'], FILTER_VALIDATE_EMAIL)) json_error('Email invalide');
+                if ((float)$data['total_amount'] <= 0) json_error('Le montant doit être supérieur à 0');
+
+                $hotelId = (int)$data['hotel_id'];
+                $totalAmount = (float)$data['total_amount'];
+                $amountCents = (int)round($totalAmount * 100);
+
+                // Vérifier que l'hôtel a Stripe configuré
+                $hotel = db()->queryOne("SELECT * FROM hotels WHERE id = ?", [$hotelId]);
+                if (!$hotel) json_error('Hôtel non trouvé', 404);
+                if (empty($hotel['stripe_secret_key'])) json_error('Stripe n\'est pas configuré pour cet hôtel. Configurez les clés Stripe dans Hôtels > Self Check-in.', 400);
+
+                $guestName = trim($data['guest_first_name'] . ' ' . $data['guest_last_name']);
+                $checkinDate = $data['checkin_date'];
+                $resRef = $data['reservation_reference'];
+
+                // Créer une Stripe Checkout Session en mode payment
+                $checkoutParams = [
+                    'mode' => 'payment',
+                    'success_url' => APP_URL . '/booking.html?payment=success&ref=' . urlencode($resRef),
+                    'cancel_url' => APP_URL . '/booking.html?payment=cancelled&ref=' . urlencode($resRef),
+                    'customer_email' => $data['guest_email'],
+                    'line_items[0][price_data][currency]' => 'eur',
+                    'line_items[0][price_data][product_data][name]' => 'Réservation ' . $resRef . ' - ' . $hotel['name'],
+                    'line_items[0][price_data][product_data][description]' => 'Séjour du ' . $checkinDate . ' - ' . $guestName,
+                    'line_items[0][price_data][unit_amount]' => $amountCents,
+                    'line_items[0][quantity]' => 1,
+                    'metadata[hotel_id]' => $hotelId,
+                    'metadata[reservation_reference]' => $resRef,
+                    'metadata[guest_name]' => $guestName,
+                    'metadata[type]' => 'payment_link',
+                    'payment_intent_data[metadata][hotel_id]' => $hotelId,
+                    'payment_intent_data[metadata][reservation_reference]' => $resRef,
+                    'payment_intent_data[description]' => 'Réservation ' . $resRef . ' - ' . $hotel['name'],
+                ];
+
+                $ch = curl_init('https://api.stripe.com/v1/checkout/sessions');
+                curl_setopt_array($ch, [
+                    CURLOPT_POST => true,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $hotel['stripe_secret_key']],
+                    CURLOPT_POSTFIELDS => http_build_query($checkoutParams)
+                ]);
+                $stripeRaw = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                $stripeResponse = json_decode($stripeRaw, true);
+                if ($httpCode !== 200 || empty($stripeResponse['url'])) {
+                    $stripeErr = $stripeResponse['error']['message'] ?? 'Erreur Stripe (HTTP ' . $httpCode . ')';
+                    json_error('Erreur Stripe : ' . $stripeErr, 500);
+                }
+
+                $paymentUrl = $stripeResponse['url'];
+                $sessionId = $stripeResponse['id'];
+                $paymentIntentId = $stripeResponse['payment_intent'] ?? null;
+
+                // Insérer en base
+                $insertId = db()->insert('payment_links', [
+                    'hotel_id' => $hotelId,
+                    'guest_first_name' => $data['guest_first_name'],
+                    'guest_last_name' => $data['guest_last_name'],
+                    'guest_email' => $data['guest_email'],
+                    'reservation_reference' => $resRef,
+                    'checkin_date' => $checkinDate,
+                    'total_amount' => $totalAmount,
+                    'currency' => 'eur',
+                    'stripe_checkout_session_id' => $sessionId,
+                    'stripe_payment_url' => $paymentUrl,
+                    'stripe_payment_intent_id' => $paymentIntentId,
+                    'payment_status' => 'pending',
+                    'notes' => $data['notes'] ?? null,
+                    'created_by' => $user['id'],
+                    'created_at' => date('Y-m-d H:i:s')
+                ]);
+
+                // Envoyer l'email au client
+                $emailSent = false;
+                $formattedAmount = number_format($totalAmount, 2, ',', ' ') . ' €';
+                $formattedDate = date('d/m/Y', strtotime($checkinDate));
+
+                $subject = "=?UTF-8?B?" . base64_encode("Lien de paiement - Réservation $resRef - " . $hotel['name']) . "?=";
+
+                $htmlBody = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333">';
+                $htmlBody .= '<div style="text-align:center;padding:20px 0;border-bottom:2px solid #2563EB">';
+                $htmlBody .= '<h1 style="color:#2563EB;margin:0;font-size:24px">' . htmlspecialchars($hotel['name']) . '</h1>';
+                $htmlBody .= '</div>';
+                $htmlBody .= '<div style="padding:30px 0">';
+                $htmlBody .= '<p>Bonjour <strong>' . htmlspecialchars($guestName) . '</strong>,</p>';
+                $htmlBody .= '<p>Veuillez trouver ci-dessous le récapitulatif de votre réservation ainsi que le lien pour procéder au paiement.</p>';
+                $htmlBody .= '<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:20px;margin:20px 0">';
+                $htmlBody .= '<h3 style="margin:0 0 15px 0;color:#1E293B">Récapitulatif</h3>';
+                $htmlBody .= '<table style="width:100%;border-collapse:collapse">';
+                $htmlBody .= '<tr><td style="padding:8px 0;color:#64748B">Référence</td><td style="padding:8px 0;font-weight:600;text-align:right">' . htmlspecialchars($resRef) . '</td></tr>';
+                $htmlBody .= '<tr><td style="padding:8px 0;color:#64748B">Client</td><td style="padding:8px 0;text-align:right">' . htmlspecialchars($guestName) . '</td></tr>';
+                $htmlBody .= '<tr><td style="padding:8px 0;color:#64748B">Date d\'arrivée</td><td style="padding:8px 0;text-align:right">' . $formattedDate . '</td></tr>';
+                $htmlBody .= '<tr style="border-top:2px solid #2563EB"><td style="padding:12px 0;font-weight:700;font-size:16px">Montant total</td><td style="padding:12px 0;font-weight:700;font-size:18px;color:#2563EB;text-align:right">' . $formattedAmount . '</td></tr>';
+                $htmlBody .= '</table></div>';
+                $htmlBody .= '<div style="text-align:center;margin:30px 0">';
+                $htmlBody .= '<a href="' . htmlspecialchars($paymentUrl) . '" style="display:inline-block;background:#2563EB;color:#ffffff;text-decoration:none;padding:14px 40px;border-radius:8px;font-size:16px;font-weight:600">Payer ' . $formattedAmount . '</a>';
+                $htmlBody .= '</div>';
+                $htmlBody .= '<p style="color:#64748B;font-size:13px">Ce lien de paiement est unique et sécurisé. Il expirera automatiquement après 24 heures.</p>';
+                $htmlBody .= '</div>';
+                $htmlBody .= '<div style="border-top:1px solid #E2E8F0;padding:15px 0;text-align:center;color:#94A3B8;font-size:12px">';
+                $htmlBody .= htmlspecialchars($hotel['name']);
+                if (!empty($hotel['address'])) $htmlBody .= ' - ' . htmlspecialchars($hotel['address']);
+                if (!empty($hotel['city'])) $htmlBody .= ', ' . htmlspecialchars($hotel['city']);
+                $htmlBody .= '</div></body></html>';
+
+                $headers = "From: " . ($hotel['name'] ? $hotel['name'] : APP_NAME) . " <noreply@" . parse_url(APP_URL, PHP_URL_HOST) . ">\r\n";
+                $headers .= "Reply-To: " . ($hotel['email'] ?? 'noreply@' . parse_url(APP_URL, PHP_URL_HOST)) . "\r\n";
+                $headers .= "MIME-Version: 1.0\r\n";
+                $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+
+                $emailSent = @mail($data['guest_email'], $subject, $htmlBody, $headers);
+
+                if ($emailSent) {
+                    db()->execute("UPDATE payment_links SET email_sent_at = NOW() WHERE id = ?", [$insertId]);
+                }
+
+                json_out([
+                    'id' => $insertId,
+                    'payment_url' => $paymentUrl,
+                    'email_sent' => $emailSent,
+                    'message' => $emailSent ? 'Lien de paiement créé et email envoyé' : 'Lien de paiement créé (échec envoi email)'
+                ], 201);
+            }
+
+            // PUT /payment-links/{id} - Modifier un lien (seulement si non payé)
+            if ($method === 'PUT' && $id) {
+                $link = db()->queryOne("SELECT * FROM payment_links WHERE id = ?", [$id]);
+                if (!$link) json_error('Lien de paiement non trouvé', 404);
+                if (!in_array($link['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                if ($link['payment_status'] === 'paid') json_error('Impossible de modifier un lien déjà payé', 400);
+
+                $data = get_input();
+                $fields = [];
+                $params = [];
+
+                $updatableFields = ['guest_first_name', 'guest_last_name', 'guest_email', 'reservation_reference', 'checkin_date', 'total_amount', 'notes'];
+                foreach ($updatableFields as $field) {
+                    if (isset($data[$field])) {
+                        $fields[] = "$field = ?";
+                        $params[] = $data[$field];
+                    }
+                }
+
+                if (empty($fields)) json_error('Rien à modifier');
+
+                // Si le montant change, il faut recréer la session Stripe
+                $needNewSession = isset($data['total_amount']) && (float)$data['total_amount'] != (float)$link['total_amount'];
+
+                if ($needNewSession) {
+                    $hotel = db()->queryOne("SELECT * FROM hotels WHERE id = ?", [$link['hotel_id']]);
+                    if (empty($hotel['stripe_secret_key'])) json_error('Stripe non configuré', 400);
+
+                    $newAmount = (float)$data['total_amount'];
+                    $amountCents = (int)round($newAmount * 100);
+                    $guestName = trim(($data['guest_first_name'] ?? $link['guest_first_name']) . ' ' . ($data['guest_last_name'] ?? $link['guest_last_name']));
+                    $resRef = $data['reservation_reference'] ?? $link['reservation_reference'];
+                    $checkinDate = $data['checkin_date'] ?? $link['checkin_date'];
+
+                    // Expirer l'ancienne session si possible
+                    if ($link['stripe_checkout_session_id']) {
+                        $chExpire = curl_init('https://api.stripe.com/v1/checkout/sessions/' . $link['stripe_checkout_session_id'] . '/expire');
+                        curl_setopt_array($chExpire, [
+                            CURLOPT_POST => true,
+                            CURLOPT_RETURNTRANSFER => true,
+                            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $hotel['stripe_secret_key']],
+                            CURLOPT_POSTFIELDS => ''
+                        ]);
+                        curl_exec($chExpire);
+                        curl_close($chExpire);
+                    }
+
+                    // Créer nouvelle session
+                    $checkoutParams = [
+                        'mode' => 'payment',
+                        'success_url' => APP_URL . '/booking.html?payment=success&ref=' . urlencode($resRef),
+                        'cancel_url' => APP_URL . '/booking.html?payment=cancelled&ref=' . urlencode($resRef),
+                        'customer_email' => $data['guest_email'] ?? $link['guest_email'],
+                        'line_items[0][price_data][currency]' => 'eur',
+                        'line_items[0][price_data][product_data][name]' => 'Réservation ' . $resRef . ' - ' . $hotel['name'],
+                        'line_items[0][price_data][product_data][description]' => 'Séjour du ' . $checkinDate . ' - ' . $guestName,
+                        'line_items[0][price_data][unit_amount]' => $amountCents,
+                        'line_items[0][quantity]' => 1,
+                        'metadata[hotel_id]' => $link['hotel_id'],
+                        'metadata[reservation_reference]' => $resRef,
+                        'metadata[guest_name]' => $guestName,
+                        'metadata[type]' => 'payment_link',
+                    ];
+
+                    $ch = curl_init('https://api.stripe.com/v1/checkout/sessions');
+                    curl_setopt_array($ch, [
+                        CURLOPT_POST => true,
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $hotel['stripe_secret_key']],
+                        CURLOPT_POSTFIELDS => http_build_query($checkoutParams)
+                    ]);
+                    $stripeRaw = curl_exec($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    curl_close($ch);
+
+                    $stripeResponse = json_decode($stripeRaw, true);
+                    if ($httpCode !== 200 || empty($stripeResponse['url'])) {
+                        $stripeErr = $stripeResponse['error']['message'] ?? 'Erreur Stripe';
+                        json_error('Erreur Stripe : ' . $stripeErr, 500);
+                    }
+
+                    $fields[] = "stripe_checkout_session_id = ?"; $params[] = $stripeResponse['id'];
+                    $fields[] = "stripe_payment_url = ?"; $params[] = $stripeResponse['url'];
+                    $fields[] = "stripe_payment_intent_id = ?"; $params[] = $stripeResponse['payment_intent'] ?? null;
+                }
+
+                $fields[] = "updated_at = NOW()";
+                $params[] = $id;
+
+                db()->execute(
+                    "UPDATE payment_links SET " . implode(', ', $fields) . " WHERE id = ?",
+                    $params
+                );
+
+                json_out([
+                    'message' => 'Lien de paiement mis à jour',
+                    'new_url' => $needNewSession ? ($stripeResponse['url'] ?? null) : null
+                ]);
+            }
+
+            // POST /payment-links/{id}/check-status - Vérifier le statut Stripe
+            if ($method === 'POST' && $id && $action === 'check-status') {
+                $link = db()->queryOne("SELECT * FROM payment_links WHERE id = ?", [$id]);
+                if (!$link) json_error('Lien de paiement non trouvé', 404);
+                if (!in_array($link['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                if ($link['payment_status'] === 'paid') {
+                    json_out(['payment_status' => 'paid', 'message' => 'Déjà payé']);
+                }
+
+                if (empty($link['stripe_checkout_session_id'])) {
+                    json_out(['payment_status' => $link['payment_status'], 'message' => 'Pas de session Stripe']);
+                }
+
+                $hotel = db()->queryOne("SELECT stripe_secret_key FROM hotels WHERE id = ?", [$link['hotel_id']]);
+                if (empty($hotel['stripe_secret_key'])) json_error('Stripe non configuré', 500);
+
+                // Récupérer la session Stripe
+                $ch = curl_init('https://api.stripe.com/v1/checkout/sessions/' . $link['stripe_checkout_session_id']);
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $hotel['stripe_secret_key']]
+                ]);
+                $stripeRaw = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                $session = json_decode($stripeRaw, true);
+                if ($httpCode !== 200) {
+                    json_error('Erreur lors de la vérification Stripe', 500);
+                }
+
+                $newStatus = $link['payment_status'];
+                if ($session['payment_status'] === 'paid') {
+                    $newStatus = 'paid';
+                    db()->execute(
+                        "UPDATE payment_links SET payment_status = 'paid', paid_at = NOW(), stripe_payment_intent_id = ?, updated_at = NOW() WHERE id = ?",
+                        [$session['payment_intent'] ?? $link['stripe_payment_intent_id'], $id]
+                    );
+                } elseif ($session['status'] === 'expired') {
+                    $newStatus = 'expired';
+                    db()->execute(
+                        "UPDATE payment_links SET payment_status = 'expired', updated_at = NOW() WHERE id = ?",
+                        [$id]
+                    );
+                }
+
+                json_out([
+                    'payment_status' => $newStatus,
+                    'stripe_status' => $session['status'] ?? null,
+                    'stripe_payment_status' => $session['payment_status'] ?? null
+                ]);
+            }
+
+            // POST /payment-links/{id}/resend - Renvoyer l'email
+            if ($method === 'POST' && $id && $action === 'resend') {
+                $link = db()->queryOne("SELECT * FROM payment_links WHERE id = ?", [$id]);
+                if (!$link) json_error('Lien de paiement non trouvé', 404);
+                if (!in_array($link['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                if ($link['payment_status'] === 'paid') json_error('Le paiement a déjà été effectué', 400);
+                if (empty($link['stripe_payment_url'])) json_error('Aucun lien de paiement disponible', 400);
+
+                $hotel = db()->queryOne("SELECT * FROM hotels WHERE id = ?", [$link['hotel_id']]);
+                $guestName = trim($link['guest_first_name'] . ' ' . $link['guest_last_name']);
+                $formattedAmount = number_format((float)$link['total_amount'], 2, ',', ' ') . ' €';
+                $formattedDate = date('d/m/Y', strtotime($link['checkin_date']));
+                $resRef = $link['reservation_reference'];
+
+                $subject = "=?UTF-8?B?" . base64_encode("Rappel - Lien de paiement réservation $resRef - " . $hotel['name']) . "?=";
+
+                $htmlBody = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333">';
+                $htmlBody .= '<div style="text-align:center;padding:20px 0;border-bottom:2px solid #2563EB">';
+                $htmlBody .= '<h1 style="color:#2563EB;margin:0;font-size:24px">' . htmlspecialchars($hotel['name']) . '</h1>';
+                $htmlBody .= '</div>';
+                $htmlBody .= '<div style="padding:30px 0">';
+                $htmlBody .= '<p>Bonjour <strong>' . htmlspecialchars($guestName) . '</strong>,</p>';
+                $htmlBody .= '<p>Ceci est un rappel pour le paiement de votre réservation. Veuillez trouver ci-dessous le récapitulatif et le lien de paiement.</p>';
+                $htmlBody .= '<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:20px;margin:20px 0">';
+                $htmlBody .= '<h3 style="margin:0 0 15px 0;color:#1E293B">Récapitulatif</h3>';
+                $htmlBody .= '<table style="width:100%;border-collapse:collapse">';
+                $htmlBody .= '<tr><td style="padding:8px 0;color:#64748B">Référence</td><td style="padding:8px 0;font-weight:600;text-align:right">' . htmlspecialchars($resRef) . '</td></tr>';
+                $htmlBody .= '<tr><td style="padding:8px 0;color:#64748B">Client</td><td style="padding:8px 0;text-align:right">' . htmlspecialchars($guestName) . '</td></tr>';
+                $htmlBody .= '<tr><td style="padding:8px 0;color:#64748B">Date d\'arrivée</td><td style="padding:8px 0;text-align:right">' . $formattedDate . '</td></tr>';
+                $htmlBody .= '<tr style="border-top:2px solid #2563EB"><td style="padding:12px 0;font-weight:700;font-size:16px">Montant total</td><td style="padding:12px 0;font-weight:700;font-size:18px;color:#2563EB;text-align:right">' . $formattedAmount . '</td></tr>';
+                $htmlBody .= '</table></div>';
+                $htmlBody .= '<div style="text-align:center;margin:30px 0">';
+                $htmlBody .= '<a href="' . htmlspecialchars($link['stripe_payment_url']) . '" style="display:inline-block;background:#2563EB;color:#ffffff;text-decoration:none;padding:14px 40px;border-radius:8px;font-size:16px;font-weight:600">Payer ' . $formattedAmount . '</a>';
+                $htmlBody .= '</div>';
+                $htmlBody .= '<p style="color:#64748B;font-size:13px">Ce lien de paiement est unique et sécurisé.</p>';
+                $htmlBody .= '</div>';
+                $htmlBody .= '<div style="border-top:1px solid #E2E8F0;padding:15px 0;text-align:center;color:#94A3B8;font-size:12px">';
+                $htmlBody .= htmlspecialchars($hotel['name']);
+                if (!empty($hotel['address'])) $htmlBody .= ' - ' . htmlspecialchars($hotel['address']);
+                if (!empty($hotel['city'])) $htmlBody .= ', ' . htmlspecialchars($hotel['city']);
+                $htmlBody .= '</div></body></html>';
+
+                $headers = "From: " . ($hotel['name'] ? $hotel['name'] : APP_NAME) . " <noreply@" . parse_url(APP_URL, PHP_URL_HOST) . ">\r\n";
+                $headers .= "Reply-To: " . ($hotel['email'] ?? 'noreply@' . parse_url(APP_URL, PHP_URL_HOST)) . "\r\n";
+                $headers .= "MIME-Version: 1.0\r\n";
+                $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+
+                $emailSent = @mail($link['guest_email'], $subject, $htmlBody, $headers);
+
+                if ($emailSent) {
+                    db()->execute("UPDATE payment_links SET email_sent_at = NOW(), updated_at = NOW() WHERE id = ?", [$id]);
+                }
+
+                json_out([
+                    'email_sent' => $emailSent,
+                    'message' => $emailSent ? 'Email renvoyé avec succès' : 'Échec de l\'envoi de l\'email'
+                ]);
+            }
+
+            // DELETE /payment-links/{id} - Supprimer un lien (seulement si non payé)
+            if ($method === 'DELETE' && $id) {
+                $link = db()->queryOne("SELECT * FROM payment_links WHERE id = ?", [$id]);
+                if (!$link) json_error('Lien de paiement non trouvé', 404);
+                if (!in_array($link['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                if ($link['payment_status'] === 'paid') json_error('Impossible de supprimer un lien déjà payé', 400);
+
+                // Expirer la session Stripe si possible
+                if ($link['stripe_checkout_session_id'] && $link['payment_status'] === 'pending') {
+                    $hotel = db()->queryOne("SELECT stripe_secret_key FROM hotels WHERE id = ?", [$link['hotel_id']]);
+                    if (!empty($hotel['stripe_secret_key'])) {
+                        $chExpire = curl_init('https://api.stripe.com/v1/checkout/sessions/' . $link['stripe_checkout_session_id'] . '/expire');
+                        curl_setopt_array($chExpire, [
+                            CURLOPT_POST => true,
+                            CURLOPT_RETURNTRANSFER => true,
+                            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $hotel['stripe_secret_key']],
+                            CURLOPT_POSTFIELDS => ''
+                        ]);
+                        curl_exec($chExpire);
+                        curl_close($chExpire);
+                    }
+                }
+
+                db()->execute("DELETE FROM payment_links WHERE id = ?", [$id]);
+                json_out(['message' => 'Lien de paiement supprimé']);
+            }
+            break;
+
         default:
             json_error('Endpoint non trouvé', 404);
     }

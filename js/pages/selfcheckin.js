@@ -11,6 +11,8 @@ let _scHotelData = {};
 let _scFilterDate = new Date().toISOString().split('T')[0];
 let _scArchiveData = [];
 let _scArchiveStats = {};
+let _scPaymentLinks = [];
+let _scPaymentStats = {};
 
 async function loadSelfcheckin(container) {
     showLoading(container);
@@ -50,6 +52,9 @@ async function loadSelfcheckin(container) {
                 </button>
                 <button class="tab-btn ${_scTab === 'archives' ? 'active' : ''}" data-tab="archives" onclick="scSwitchTab('archives')">
                     <i class="fas fa-archive"></i> Archives des ventes
+                </button>
+                <button class="tab-btn ${_scTab === 'payment_links' ? 'active' : ''}" data-tab="payment_links" onclick="scSwitchTab('payment_links')">
+                    <i class="fas fa-link"></i> Liens de paiement
                 </button>
             </div>
 
@@ -115,6 +120,7 @@ async function scRenderTab() {
         case 'reservations': await scRenderReservations(content); break;
         case 'pricing': await scRenderPricing(content); break;
         case 'archives': await scRenderArchives(content); break;
+        case 'payment_links': await scRenderPaymentLinks(content); break;
     }
 }
 
@@ -1275,6 +1281,409 @@ async function scSaveBulkPricing(e) {
     } catch (err) {
         toast(err.message, 'error');
     }
+}
+
+// ==================== ONGLET LIENS DE PAIEMENT ====================
+
+async function scRenderPaymentLinks(content) {
+    content.innerHTML = '<div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>';
+
+    try {
+        const res = await API.get(`payment-links?hotel_id=${_scHotelId}`);
+        _scPaymentLinks = res.payment_links || [];
+        _scPaymentStats = res.stats || {};
+
+        content.innerHTML = `
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px">
+                <div class="card" style="padding:14px;text-align:center">
+                    <div style="font-size:22px;font-weight:700;color:var(--primary)">${_scPaymentStats.total || 0}</div>
+                    <div style="font-size:11px;color:var(--gray-500)">Total liens</div>
+                </div>
+                <div class="card" style="padding:14px;text-align:center">
+                    <div style="font-size:22px;font-weight:700;color:#F59E0B">${_scPaymentStats.total_pending || 0}</div>
+                    <div style="font-size:11px;color:var(--gray-500)">En attente</div>
+                </div>
+                <div class="card" style="padding:14px;text-align:center">
+                    <div style="font-size:22px;font-weight:700;color:#16A34A">${_scPaymentStats.total_paid || 0}</div>
+                    <div style="font-size:11px;color:var(--gray-500)">Payés</div>
+                </div>
+                <div class="card" style="padding:14px;text-align:center;background:linear-gradient(135deg,#F0FDF4,#DCFCE7)">
+                    <div style="font-size:22px;font-weight:700;color:#16A34A">${formatMoney(_scPaymentStats.revenue_paid || 0)}</div>
+                    <div style="font-size:11px;color:var(--gray-600)">CA encaissé</div>
+                </div>
+                <div class="card" style="padding:14px;text-align:center">
+                    <div style="font-size:22px;font-weight:700;color:#6366F1">${formatMoney(_scPaymentStats.revenue_pending || 0)}</div>
+                    <div style="font-size:11px;color:var(--gray-500)">En attente</div>
+                </div>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <select id="sc-pl-filter-status" onchange="scFilterPaymentLinks()" class="form-control" style="width:auto">
+                        <option value="">Tous statuts</option>
+                        <option value="pending">En attente</option>
+                        <option value="paid">Payé</option>
+                        <option value="expired">Expiré</option>
+                        <option value="cancelled">Annulé</option>
+                    </select>
+                    <input type="text" id="sc-pl-search" class="form-control" style="width:auto;min-width:200px" placeholder="Rechercher nom, email, réf..." oninput="scFilterPaymentLinks()">
+                </div>
+                <div style="display:flex;gap:8px">
+                    <button class="btn btn-outline" onclick="scRefreshAllPaymentStatuses()" title="Rafraîchir les statuts Stripe">
+                        <i class="fas fa-sync-alt"></i> Vérifier statuts
+                    </button>
+                    <button class="btn btn-primary" onclick="scShowCreatePaymentLink()">
+                        <i class="fas fa-plus"></i> Générer un lien
+                    </button>
+                </div>
+            </div>
+
+            <div id="sc-pl-list"></div>
+        `;
+
+        scFilterPaymentLinks();
+    } catch (err) {
+        content.innerHTML = `<div class="alert alert-danger">${esc(err.message)}</div>`;
+    }
+}
+
+function scFilterPaymentLinks() {
+    const status = document.getElementById('sc-pl-filter-status')?.value || '';
+    const search = (document.getElementById('sc-pl-search')?.value || '').toLowerCase();
+
+    let filtered = _scPaymentLinks;
+    if (status) filtered = filtered.filter(l => l.payment_status === status);
+    if (search) filtered = filtered.filter(l =>
+        (l.guest_first_name || '').toLowerCase().includes(search) ||
+        (l.guest_last_name || '').toLowerCase().includes(search) ||
+        (l.guest_email || '').toLowerCase().includes(search) ||
+        (l.reservation_reference || '').toLowerCase().includes(search)
+    );
+
+    const list = document.getElementById('sc-pl-list');
+    if (!list) return;
+
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="empty-state" style="padding:40px"><i class="fas fa-link" style="font-size:36px;color:var(--gray-300);margin-bottom:12px"></i><p>Aucun lien de paiement</p></div>';
+        return;
+    }
+
+    list.innerHTML = `
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Référence</th>
+                        <th>Client</th>
+                        <th>Email</th>
+                        <th>Date d'arrivée</th>
+                        <th>Montant</th>
+                        <th>Statut</th>
+                        <th>Email envoyé</th>
+                        <th>Créé par</th>
+                        <th>Créé le</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${filtered.map(l => {
+                        const isPaid = l.payment_status === 'paid';
+                        const isPending = l.payment_status === 'pending';
+                        return `
+                        <tr style="${isPaid ? 'background:#F0FDF4' : l.payment_status === 'expired' ? 'background:#FEF2F2' : ''}">
+                            <td><strong>${esc(l.reservation_reference)}</strong></td>
+                            <td>${esc((l.guest_first_name || '') + ' ' + (l.guest_last_name || ''))}</td>
+                            <td><small>${esc(l.guest_email)}</small></td>
+                            <td>${l.checkin_date ? formatDate(l.checkin_date) : '-'}</td>
+                            <td><strong>${formatMoney(l.total_amount || 0)}</strong></td>
+                            <td>${scPaymentLinkStatusBadge(l.payment_status)}</td>
+                            <td>${l.email_sent_at ? '<i class="fas fa-check-circle" style="color:#16A34A" title="' + esc(l.email_sent_at) + '"></i>' : '<i class="fas fa-times-circle" style="color:#DC2626" title="Non envoyé"></i>'}</td>
+                            <td><small>${esc(l.created_by_name || '-')}</small></td>
+                            <td><small>${l.created_at ? formatDateTime(l.created_at) : '-'}</small></td>
+                            <td>
+                                <div style="display:flex;gap:4px;flex-wrap:wrap">
+                                    ${isPending ? `<button class="btn btn-sm btn-outline" onclick="scCheckPaymentStatus(${l.id})" title="Vérifier le statut"><i class="fas fa-sync-alt"></i></button>` : ''}
+                                    ${isPending ? `<button class="btn btn-sm btn-outline" style="color:#2563EB;border-color:#2563EB" onclick="scResendPaymentEmail(${l.id})" title="Renvoyer l'email"><i class="fas fa-envelope"></i></button>` : ''}
+                                    ${isPending ? `<button class="btn btn-sm btn-outline" onclick="scCopyPaymentUrl(${l.id})" title="Copier le lien"><i class="fas fa-copy"></i></button>` : ''}
+                                    ${!isPaid ? `<button class="btn btn-sm btn-outline" onclick="scEditPaymentLink(${l.id})" title="Modifier"><i class="fas fa-edit"></i></button>` : ''}
+                                    ${!isPaid ? `<button class="btn btn-sm btn-danger" onclick="scDeletePaymentLink(${l.id})" title="Supprimer"><i class="fas fa-trash"></i></button>` : ''}
+                                    ${isPaid ? `<span style="color:#16A34A;font-size:12px;font-weight:600"><i class="fas fa-check-circle"></i> Payé${l.paid_at ? ' le ' + formatDateTime(l.paid_at) : ''}</span>` : ''}
+                                </div>
+                            </td>
+                        </tr>
+                    `;}).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function scPaymentLinkStatusBadge(status) {
+    const map = {
+        'pending': { label: 'En attente', color: '#F59E0B', bg: '#FFFBEB' },
+        'paid': { label: 'Payé', color: '#16A34A', bg: '#F0FDF4' },
+        'expired': { label: 'Expiré', color: '#DC2626', bg: '#FEF2F2' },
+        'cancelled': { label: 'Annulé', color: '#6B7280', bg: '#F9FAFB' },
+    };
+    const s = map[status] || { label: status || '-', color: '#6B7280', bg: '#F9FAFB' };
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;color:${s.color};background:${s.bg}">${s.label}</span>`;
+}
+
+function scShowCreatePaymentLink() {
+    const modalContent = `
+        <form onsubmit="scSavePaymentLink(event)">
+            <input type="hidden" name="hotel_id" value="${_scHotelId}">
+
+            <p class="text-muted" style="margin-bottom:16px">
+                Remplissez les informations du client. Un lien de paiement Stripe sera généré et envoyé par email.
+            </p>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Nom *</label>
+                    <input type="text" name="guest_last_name" required placeholder="Dupont">
+                </div>
+                <div class="form-group">
+                    <label>Prénom *</label>
+                    <input type="text" name="guest_first_name" required placeholder="Jean">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Email *</label>
+                <input type="email" name="guest_email" required placeholder="client@email.com">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Référence de réservation *</label>
+                    <input type="text" name="reservation_reference" required placeholder="Ex: RES-2026-001">
+                </div>
+                <div class="form-group">
+                    <label>Date d'arrivée *</label>
+                    <input type="date" name="checkin_date" required value="${new Date().toISOString().split('T')[0]}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Montant total à payer (EUR) *</label>
+                <input type="number" name="total_amount" step="0.01" min="0.50" required placeholder="150.00" style="font-weight:700;font-size:16px">
+            </div>
+
+            <div class="form-group">
+                <label>Notes (optionnel)</label>
+                <textarea name="notes" rows="2" class="form-control" placeholder="Informations complémentaires..."></textarea>
+            </div>
+
+            <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px;margin:16px 0">
+                <p style="margin:0;font-size:13px;color:#1E40AF"><i class="fas fa-info-circle"></i> Un email avec le récapitulatif et le lien de paiement sécurisé sera envoyé automatiquement au client.</p>
+            </div>
+
+            <div style="text-align:right;margin-top:20px">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Générer et envoyer</button>
+            </div>
+        </form>
+    `;
+
+    openModal('Générer un lien de paiement', modalContent, 'modal-md');
+}
+
+async function scSavePaymentLink(e) {
+    e.preventDefault();
+    const form = e.target;
+    const data = Object.fromEntries(new FormData(form));
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération en cours...';
+
+    try {
+        const res = await API.post('payment-links', data);
+        closeModal();
+        if (res.email_sent) {
+            toast('Lien de paiement créé et email envoyé au client', 'success');
+        } else {
+            toast('Lien créé mais l\'email n\'a pas pu être envoyé. Vous pouvez le renvoyer manuellement.', 'warning');
+        }
+        scRenderTab();
+    } catch (err) {
+        toast(err.message, 'error');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }
+}
+
+async function scEditPaymentLink(id) {
+    try {
+        const link = await API.get(`payment-links/${id}`);
+        if (link.payment_status === 'paid') {
+            toast('Impossible de modifier un lien déjà payé', 'warning');
+            return;
+        }
+
+        const modalContent = `
+            <form onsubmit="scUpdatePaymentLink(event, ${id})">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nom *</label>
+                        <input type="text" name="guest_last_name" required value="${esc(link.guest_last_name || '')}">
+                    </div>
+                    <div class="form-group">
+                        <label>Prénom *</label>
+                        <input type="text" name="guest_first_name" required value="${esc(link.guest_first_name || '')}">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Email *</label>
+                    <input type="email" name="guest_email" required value="${esc(link.guest_email || '')}">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Référence de réservation *</label>
+                        <input type="text" name="reservation_reference" required value="${esc(link.reservation_reference || '')}">
+                    </div>
+                    <div class="form-group">
+                        <label>Date d'arrivée *</label>
+                        <input type="date" name="checkin_date" required value="${link.checkin_date || ''}">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Montant total (EUR) *</label>
+                    <input type="number" name="total_amount" step="0.01" min="0.50" required value="${link.total_amount || ''}" style="font-weight:700;font-size:16px">
+                    <small class="form-help">Si le montant change, un nouveau lien Stripe sera généré.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea name="notes" rows="2" class="form-control">${esc(link.notes || '')}</textarea>
+                </div>
+
+                <div style="text-align:right;margin-top:20px">
+                    <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
+                </div>
+            </form>
+        `;
+
+        openModal('Modifier le lien de paiement', modalContent, 'modal-md');
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function scUpdatePaymentLink(e, id) {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+
+    try {
+        const res = await API.put(`payment-links/${id}`, data);
+        closeModal();
+        toast(res.message || 'Lien mis à jour', 'success');
+        if (res.new_url) {
+            toast('Un nouveau lien Stripe a été généré. Pensez à renvoyer l\'email au client.', 'info');
+        }
+        scRenderTab();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function scDeletePaymentLink(id) {
+    const link = _scPaymentLinks.find(l => l.id == id);
+    if (link && link.payment_status === 'paid') {
+        toast('Impossible de supprimer un lien déjà payé', 'warning');
+        return;
+    }
+    if (!confirm('Supprimer ce lien de paiement ? Le lien Stripe sera invalidé.')) return;
+
+    try {
+        await API.delete(`payment-links/${id}`);
+        toast('Lien de paiement supprimé', 'success');
+        scRenderTab();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function scCheckPaymentStatus(id) {
+    try {
+        const res = await API.post(`payment-links/${id}/check-status`, {});
+        if (res.payment_status === 'paid') {
+            toast('Paiement confirmé !', 'success');
+        } else if (res.payment_status === 'expired') {
+            toast('La session de paiement a expiré', 'warning');
+        } else {
+            toast('Statut : ' + res.payment_status, 'info');
+        }
+        scRenderTab();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function scRefreshAllPaymentStatuses() {
+    const pendingLinks = _scPaymentLinks.filter(l => l.payment_status === 'pending');
+    if (pendingLinks.length === 0) {
+        toast('Aucun lien en attente à vérifier', 'info');
+        return;
+    }
+
+    toast(`Vérification de ${pendingLinks.length} lien(s)...`, 'info');
+
+    let updated = 0;
+    for (const link of pendingLinks) {
+        try {
+            const res = await API.post(`payment-links/${link.id}/check-status`, {});
+            if (res.payment_status !== 'pending') updated++;
+        } catch (e) {}
+    }
+
+    if (updated > 0) {
+        toast(`${updated} statut(s) mis à jour`, 'success');
+    } else {
+        toast('Aucun changement de statut', 'info');
+    }
+    scRenderTab();
+}
+
+async function scResendPaymentEmail(id) {
+    if (!confirm('Renvoyer l\'email de paiement au client ?')) return;
+    try {
+        const res = await API.post(`payment-links/${id}/resend`, {});
+        if (res.email_sent) {
+            toast('Email renvoyé avec succès', 'success');
+        } else {
+            toast('Échec de l\'envoi de l\'email', 'error');
+        }
+        scRenderTab();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+function scCopyPaymentUrl(id) {
+    const link = _scPaymentLinks.find(l => l.id == id);
+    if (!link || !link.stripe_payment_url) {
+        toast('Lien non disponible', 'error');
+        return;
+    }
+    navigator.clipboard.writeText(link.stripe_payment_url).then(() => {
+        toast('Lien copié dans le presse-papier', 'success');
+    }).catch(() => {
+        // Fallback
+        const input = document.createElement('input');
+        input.value = link.stripe_payment_url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        toast('Lien copié dans le presse-papier', 'success');
+    });
 }
 
 // ==================== STYLES ====================
