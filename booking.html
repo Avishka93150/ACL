@@ -296,9 +296,47 @@
             }
             document.title = `Self Check-in - ${hotel.name}`;
 
+            // Handle payment link redirect from Stripe Checkout
+            const paymentStatus = new URLSearchParams(window.location.search).get('payment');
+            const paymentRef = new URLSearchParams(window.location.search).get('ref');
+            if (paymentStatus === 'success') {
+                showPaymentLinkResult('success', paymentRef);
+                return;
+            } else if (paymentStatus === 'cancelled') {
+                showPaymentLinkResult('cancelled', paymentRef);
+                return;
+            }
+
             showWelcome();
         } catch (err) {
             showError(err.message);
+        }
+    }
+
+    function showPaymentLinkResult(status, ref) {
+        const app = document.getElementById('app');
+        if (status === 'success') {
+            app.innerHTML = `
+                <div class="card">
+                    <div class="card-body" style="text-align:center;padding:48px">
+                        <i class="fas fa-check-circle" style="font-size:64px;color:var(--success);margin-bottom:16px"></i>
+                        <h2 style="margin-bottom:8px">Paiement confirmé !</h2>
+                        <p style="color:var(--gray-500);margin-bottom:16px">Votre paiement pour la réservation <strong>${esc(ref || '')}</strong> a bien été enregistré.</p>
+                        <p style="color:var(--gray-500)">Merci et à bientôt à <strong>${esc(hotel.name)}</strong> !</p>
+                    </div>
+                </div>
+            `;
+        } else {
+            app.innerHTML = `
+                <div class="card">
+                    <div class="card-body" style="text-align:center;padding:48px">
+                        <i class="fas fa-times-circle" style="font-size:64px;color:var(--danger);margin-bottom:16px"></i>
+                        <h2 style="margin-bottom:8px">Paiement annulé</h2>
+                        <p style="color:var(--gray-500);margin-bottom:16px">Le paiement pour la réservation <strong>${esc(ref || '')}</strong> a été annulé.</p>
+                        <p style="color:var(--gray-500)">Si vous souhaitez réessayer, veuillez utiliser le lien de paiement envoyé par email.</p>
+                    </div>
+                </div>
+            `;
         }
     }
 

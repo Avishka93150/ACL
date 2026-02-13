@@ -10550,7 +10550,7 @@ try {
                 $status = $_GET['status'] ?? null;
                 $search = $_GET['search'] ?? null;
 
-                $sql = "SELECT pl.*, u.name as created_by_name
+                $sql = "SELECT pl.*, CONCAT(u.first_name, ' ', u.last_name) as created_by_name
                         FROM payment_links pl
                         LEFT JOIN users u ON pl.created_by = u.id
                         WHERE pl.hotel_id = ?";
@@ -10617,10 +10617,11 @@ try {
                 $resRef = $data['reservation_reference'];
 
                 // Créer une Stripe Checkout Session en mode payment
+                $bookingSlug = $hotel['booking_slug'] ?? '';
                 $checkoutParams = [
                     'mode' => 'payment',
-                    'success_url' => APP_URL . '/booking.html?payment=success&ref=' . urlencode($resRef),
-                    'cancel_url' => APP_URL . '/booking.html?payment=cancelled&ref=' . urlencode($resRef),
+                    'success_url' => APP_URL . '/booking.html?hotel=' . urlencode($bookingSlug) . '&payment=success&ref=' . urlencode($resRef),
+                    'cancel_url' => APP_URL . '/booking.html?hotel=' . urlencode($bookingSlug) . '&payment=cancelled&ref=' . urlencode($resRef),
                     'customer_email' => $data['guest_email'],
                     'line_items[0][price_data][currency]' => 'eur',
                     'line_items[0][price_data][product_data][name]' => 'Réservation ' . $resRef . ' - ' . $hotel['name'],
@@ -10776,10 +10777,11 @@ try {
                     }
 
                     // Créer nouvelle session
+                    $bookingSlug = $hotel['booking_slug'] ?? '';
                     $checkoutParams = [
                         'mode' => 'payment',
-                        'success_url' => APP_URL . '/booking.html?payment=success&ref=' . urlencode($resRef),
-                        'cancel_url' => APP_URL . '/booking.html?payment=cancelled&ref=' . urlencode($resRef),
+                        'success_url' => APP_URL . '/booking.html?hotel=' . urlencode($bookingSlug) . '&payment=success&ref=' . urlencode($resRef),
+                        'cancel_url' => APP_URL . '/booking.html?hotel=' . urlencode($bookingSlug) . '&payment=cancelled&ref=' . urlencode($resRef),
                         'customer_email' => $data['guest_email'] ?? $link['guest_email'],
                         'line_items[0][price_data][currency]' => 'eur',
                         'line_items[0][price_data][product_data][name]' => 'Réservation ' . $resRef . ' - ' . $hotel['name'],
