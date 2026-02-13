@@ -100,6 +100,9 @@ const API = {
     // Modules Config
     getModulesConfig() { return this.get('modules'); },
     saveModulesConfig(modules) { return this.put('modules', modules); },
+    getHotelModulesConfig(hotelId) { return this.get(`modules/hotel/${hotelId}`); },
+    saveHotelModulesConfig(hotelId, modules) { return this.put(`modules/hotel/${hotelId}`, modules); },
+    getAllHotelModulesConfig() { return this.get('modules/hotels'); },
 
     // Maintenance
     getMaintenanceStats() { return this.get('maintenance/stats'); },

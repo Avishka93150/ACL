@@ -1725,56 +1725,154 @@ try {
 
         // --- MODULES CONFIG ---
         case 'modules':
-            // Récupérer la config des modules - GET /modules
-            if ($method === 'GET' && !$id) {
+            // Récupérer la config des modules - GET /modules ou GET /modules/hotel/{hotel_id}
+            if ($method === 'GET') {
                 require_auth();
-                $modules = new stdClass(); // Objet vide par défaut
-                
-                try {
-                    // Essayer de créer la table si elle n'existe pas
-                    db()->execute("CREATE TABLE IF NOT EXISTS system_config (
-                        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                        config_key VARCHAR(100) UNIQUE NOT NULL,
-                        config_value TEXT,
-                        created_at DATETIME,
-                        updated_at DATETIME
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
-                    
-                    $config = db()->queryOne("SELECT config_value FROM system_config WHERE config_key = 'modules'");
-                    if ($config && !empty($config['config_value'])) {
-                        $decoded = json_decode($config['config_value']);
-                        if ($decoded !== null) {
-                            $modules = $decoded;
+
+                // GET /modules/hotel/{hotel_id} - Config modules par hôtel
+                if ($id === 'hotel' && $action) {
+                    $hotelId = (int)$action;
+
+                    try {
+                        db()->execute("CREATE TABLE IF NOT EXISTS hotel_modules (
+                            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                            hotel_id INT UNSIGNED NOT NULL,
+                            module_key VARCHAR(50) NOT NULL,
+                            enabled TINYINT(1) DEFAULT 1,
+                            updated_at DATETIME,
+                            UNIQUE KEY uk_hotel_module (hotel_id, module_key),
+                            INDEX idx_hotel (hotel_id)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+                        $rows = db()->query(
+                            "SELECT module_key, enabled FROM hotel_modules WHERE hotel_id = ?",
+                            [$hotelId]
+                        );
+                        $modules = new stdClass();
+                        foreach ($rows as $row) {
+                            $modules->{$row['module_key']} = (bool)$row['enabled'];
                         }
+                    } catch (Exception $e) {
+                        error_log("Hotel modules GET error: " . $e->getMessage());
+                        $modules = new stdClass();
+                    }
+                    json_out(['success' => true, 'modules' => $modules, 'hotel_id' => $hotelId]);
+                }
+
+                // GET /modules/hotels - Config modules de tous les hôtels
+                if ($id === 'hotels') {
+                    $user = require_auth();
+
+                    try {
+                        db()->execute("CREATE TABLE IF NOT EXISTS hotel_modules (
+                            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                            hotel_id INT UNSIGNED NOT NULL,
+                            module_key VARCHAR(50) NOT NULL,
+                            enabled TINYINT(1) DEFAULT 1,
+                            updated_at DATETIME,
+                            UNIQUE KEY uk_hotel_module (hotel_id, module_key),
+                            INDEX idx_hotel (hotel_id)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+                        $rows = db()->query("SELECT hotel_id, module_key, enabled FROM hotel_modules");
+                        $hotelModules = [];
+                        foreach ($rows as $row) {
+                            $hid = (int)$row['hotel_id'];
+                            if (!isset($hotelModules[$hid])) $hotelModules[$hid] = new stdClass();
+                            $hotelModules[$hid]->{$row['module_key']} = (bool)$row['enabled'];
+                        }
+                    } catch (Exception $e) {
+                        error_log("All hotel modules GET error: " . $e->getMessage());
+                        $hotelModules = [];
+                    }
+                    json_out(['success' => true, 'hotel_modules' => $hotelModules]);
+                }
+
+                // GET /modules - Config globale (rétrocompatibilité)
+                if (!$id) {
+                    $modules = new stdClass();
+
+                    try {
+                        db()->execute("CREATE TABLE IF NOT EXISTS system_config (
+                            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                            config_key VARCHAR(100) UNIQUE NOT NULL,
+                            config_value TEXT,
+                            created_at DATETIME,
+                            updated_at DATETIME
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+
+                        $config = db()->queryOne("SELECT config_value FROM system_config WHERE config_key = 'modules'");
+                        if ($config && !empty($config['config_value'])) {
+                            $decoded = json_decode($config['config_value']);
+                            if ($decoded !== null) {
+                                $modules = $decoded;
+                            }
+                        }
+                    } catch (Exception $e) {
+                        error_log("Modules GET error: " . $e->getMessage());
+                    }
+                    json_out(['success' => true, 'modules' => $modules]);
+                }
+            }
+
+            // PUT /modules/hotel/{hotel_id} - Sauvegarder config modules par hôtel
+            if ($method === 'PUT' && $id === 'hotel' && $action) {
+                $user = require_auth();
+                if ($user['role'] !== 'admin') {
+                    json_error('Accès refusé', 403);
+                }
+
+                $hotelId = (int)$action;
+                $data = get_input();
+
+                if (empty($data) || !is_array($data)) {
+                    json_error('Données invalides');
+                }
+
+                try {
+                    db()->execute("CREATE TABLE IF NOT EXISTS hotel_modules (
+                        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                        hotel_id INT UNSIGNED NOT NULL,
+                        module_key VARCHAR(50) NOT NULL,
+                        enabled TINYINT(1) DEFAULT 1,
+                        updated_at DATETIME,
+                        UNIQUE KEY uk_hotel_module (hotel_id, module_key),
+                        INDEX idx_hotel (hotel_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+                    foreach ($data as $moduleKey => $enabled) {
+                        $enabledVal = ($enabled === true || $enabled === 'true' || $enabled === 1) ? 1 : 0;
+                        db()->execute(
+                            "INSERT INTO hotel_modules (hotel_id, module_key, enabled, updated_at)
+                             VALUES (?, ?, ?, NOW())
+                             ON DUPLICATE KEY UPDATE enabled = ?, updated_at = NOW()",
+                            [$hotelId, $moduleKey, $enabledVal, $enabledVal]
+                        );
                     }
                 } catch (Exception $e) {
-                    // Log error for debugging
-                    error_log("Modules GET error: " . $e->getMessage());
+                    error_log("Hotel modules PUT error: " . $e->getMessage());
+                    json_error('Erreur sauvegarde: ' . $e->getMessage());
                 }
-                json_out(['success' => true, 'modules' => $modules]);
+
+                json_out(['success' => true, 'saved' => $data, 'hotel_id' => $hotelId]);
             }
-            
-            // Sauvegarder la config des modules - PUT /modules
+
+            // Sauvegarder la config des modules - PUT /modules (global, rétrocompatibilité)
             if ($method === 'PUT' && !$id) {
                 $user = require_auth();
                 if ($user['role'] !== 'admin') {
                     json_error('Accès refusé', 403);
                 }
-                
-                // Utiliser get_input() qui cache l'input
+
                 $data = get_input();
-                error_log("Modules PUT data: " . print_r($data, true));
-                
+
                 if (empty($data) || !is_array($data)) {
                     json_error('Données invalides');
                 }
-                
-                // Encoder en JSON
+
                 $modulesJson = json_encode($data, JSON_FORCE_OBJECT);
-                error_log("Modules JSON to save: " . $modulesJson);
-                
+
                 try {
-                    // Créer la table si elle n'existe pas
                     db()->execute("CREATE TABLE IF NOT EXISTS system_config (
                         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
                         config_key VARCHAR(100) UNIQUE NOT NULL,
@@ -1782,25 +1880,22 @@ try {
                         created_at DATETIME,
                         updated_at DATETIME
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
-                    
-                    // Utiliser INSERT ON DUPLICATE KEY UPDATE
+
                     db()->execute(
-                        "INSERT INTO system_config (config_key, config_value, created_at, updated_at) 
+                        "INSERT INTO system_config (config_key, config_value, created_at, updated_at)
                          VALUES ('modules', ?, NOW(), NOW())
                          ON DUPLICATE KEY UPDATE config_value = ?, updated_at = NOW()",
                         [$modulesJson, $modulesJson]
                     );
-                    
-                    error_log("Modules saved successfully");
-                    
+
                 } catch (Exception $e) {
                     error_log("Modules PUT error: " . $e->getMessage());
                     json_error('Erreur sauvegarde: ' . $e->getMessage());
                 }
-                
+
                 json_out(['success' => true, 'saved' => $data]);
             }
-            
+
             break;
         
         // --- DASHBOARD ---
@@ -9416,8 +9511,11 @@ try {
 
                 if (empty($piResponse['status']) || $piResponse['status'] !== 'succeeded') {
                     foreach ($reservationIds as $resId) {
+                        // Échec paiement : libérer le hold walk-in pour rendre le slot disponible
                         db()->execute(
-                            "UPDATE selfcheckin_reservations SET payment_status = 'failed', updated_at = NOW() WHERE id = ?",
+                            "UPDATE selfcheckin_reservations SET payment_status = 'failed',
+                             walkin_guest_data = NULL, walkin_hold_until = NULL,
+                             stripe_payment_intent_id = NULL, updated_at = NOW() WHERE id = ?",
                             [$resId]
                         );
                     }
@@ -9426,14 +9524,75 @@ try {
 
                 $chargeId = $piResponse['latest_charge'] ?? null;
 
+                // Pour les walk-in : appliquer les infos client maintenant que le paiement est confirmé
+                $primaryGuestData = null;
+                if (!empty($allReservations[0]['walkin_guest_data'])) {
+                    $primaryGuestData = json_decode($allReservations[0]['walkin_guest_data'], true);
+                }
+
                 // Confirmer toutes les réservations et libérer les casiers
                 $confirmations = [];
                 $updatedReservations = [];
-                foreach ($allReservations as $reservation) {
-                    db()->execute(
-                        "UPDATE selfcheckin_reservations SET payment_status = 'paid', status = 'checked_in', stripe_charge_id = ?, updated_at = NOW() WHERE id = ?",
-                        [$chargeId, $reservation['id']]
-                    );
+                foreach ($allReservations as $idx => $reservation) {
+                    $isPrimary = ($idx === 0);
+
+                    // Walk-in : insérer les infos client + pricing maintenant
+                    if ($primaryGuestData && $reservation['type'] === 'walkin') {
+                        $pricing = $primaryGuestData['pricing'] ?? [];
+                        $nbRooms = (int)($pricing['nb_rooms'] ?? 1);
+
+                        db()->execute(
+                            "UPDATE selfcheckin_reservations SET
+                                guest_first_name = ?, guest_last_name = ?,
+                                guest_email = ?, guest_phone = ?,
+                                nb_adults = ?, nb_children = ?, breakfast_included = ?,
+                                accommodation_price = ?, tourist_tax_amount = ?, breakfast_price = ?,
+                                total_amount = ?, remaining_amount = 0, deposit_amount = 0,
+                                id_document_path = ?,
+                                payment_status = 'paid', status = 'checked_in',
+                                stripe_charge_id = ?,
+                                walkin_guest_data = NULL, walkin_hold_until = NULL,
+                                updated_at = NOW()
+                             WHERE id = ?",
+                            [
+                                $primaryGuestData['guest_first_name'], $primaryGuestData['guest_last_name'],
+                                $primaryGuestData['guest_email'], $primaryGuestData['guest_phone'],
+                                (int)$primaryGuestData['nb_adults'], (int)($primaryGuestData['nb_children'] ?? 0),
+                                (int)($primaryGuestData['breakfast_included'] ?? 0),
+                                $isPrimary ? (float)($pricing['accommodation_price'] ?? 0) : (float)($pricing['night_price'] ?? 0),
+                                $isPrimary ? (float)($pricing['tourist_tax_total'] ?? 0) : 0,
+                                $isPrimary ? (float)($pricing['breakfast_total'] ?? 0) : 0,
+                                $isPrimary ? (float)($pricing['total_amount'] ?? 0) : (float)($pricing['night_price'] ?? 0),
+                                $primaryGuestData['id_document_path'] ?? null,
+                                $chargeId,
+                                $reservation['id']
+                            ]
+                        );
+
+                        // Enregistrer les services complémentaires sur la réservation primaire
+                        if ($isPrimary && !empty($primaryGuestData['services'])) {
+                            foreach ($primaryGuestData['services'] as $svc) {
+                                $serviceId = (int)($svc['id'] ?? 0);
+                                $serviceQty = max(1, (int)($svc['quantity'] ?? 1));
+                                $dbService = db()->queryOne(
+                                    "SELECT * FROM hotel_selfcheckin_services WHERE id = ? AND hotel_id = ? AND is_active = 1",
+                                    [$serviceId, $hotel['id']]
+                                );
+                                if ($dbService) {
+                                    db()->insert(
+                                        "INSERT INTO selfcheckin_reservation_services (reservation_id, service_id, service_name, service_price, quantity, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
+                                        [$reservation['id'], $dbService['id'], $dbService['name'], (float)$dbService['price'], $serviceQty]
+                                    );
+                                }
+                            }
+                        }
+                    } else {
+                        // Réservation classique (pre_booked) : mise à jour simple
+                        db()->execute(
+                            "UPDATE selfcheckin_reservations SET payment_status = 'paid', status = 'checked_in', stripe_charge_id = ?, updated_at = NOW() WHERE id = ?",
+                            [$chargeId, $reservation['id']]
+                        );
+                    }
 
                     // Libérer le casier (le client a récupéré sa clé, le casier est réutilisable)
                     if ($reservation['locker_id']) {
@@ -9470,13 +9629,14 @@ try {
                 $nbPersonsFilter = isset($_GET['nb_persons']) ? (int)$_GET['nb_persons'] : (isset($_GET['nb_adults']) ? (int)$_GET['nb_adults'] : null);
 
                 // Récupérer TOUS les slots walk-in disponibles (sans info client = pas encore pris)
-                // Joindre avec rooms pour obtenir la capacité
+                // Exclure aussi les slots temporairement réservés (walkin_hold_until non expiré)
                 $sql = "SELECT r.id, r.reservation_number, r.checkin_date, r.room_id,
                                rm.room_type, rm.bed_type, rm.max_adults
                         FROM selfcheckin_reservations r
                         LEFT JOIN rooms rm ON rm.id = r.room_id
                         WHERE r.hotel_id = ? AND r.type = 'walkin' AND r.status = 'pending'
-                           AND r.guest_last_name IS NULL AND r.checkin_date = ?";
+                           AND r.guest_last_name IS NULL AND r.checkin_date = ?
+                           AND (r.walkin_hold_until IS NULL OR r.walkin_hold_until < NOW())";
                 $params = [$hotel['id'], $effectiveDate];
 
                 $sql .= " ORDER BY rm.max_adults DESC, r.room_number";
@@ -9558,12 +9718,12 @@ try {
                 }
                 if (!filter_var($data['guest_email'], FILTER_VALIDATE_EMAIL)) json_error('Email invalide');
 
-                // Vérifier tous les slots walk-in
+                // Vérifier tous les slots walk-in (exclure ceux avec un hold actif non expiré)
                 $reservations = [];
                 $totalCapacity = 0;
                 foreach ($reservationIds as $resId) {
                     $reservation = db()->queryOne(
-                        "SELECT r.*, rm.max_adults as room_max_adults FROM selfcheckin_reservations r LEFT JOIN rooms rm ON rm.id = r.room_id WHERE r.id = ? AND r.hotel_id = ? AND r.type = 'walkin' AND r.status = 'pending' AND r.guest_last_name IS NULL",
+                        "SELECT r.*, rm.max_adults as room_max_adults FROM selfcheckin_reservations r LEFT JOIN rooms rm ON rm.id = r.room_id WHERE r.id = ? AND r.hotel_id = ? AND r.type = 'walkin' AND r.status = 'pending' AND r.guest_last_name IS NULL AND (r.walkin_hold_until IS NULL OR r.walkin_hold_until < NOW())",
                         [$resId, $hotel['id']]
                     );
                     if (!$reservation) json_error('Une des chambres sélectionnées n\'est plus disponible', 404);
@@ -9626,49 +9786,40 @@ try {
 
                 $totalAmount = $accommodationPrice + $touristTaxTotal + $breakfastTotal + $servicesTotal;
 
-                // Mettre à jour toutes les réservations avec les infos client
+                // Stocker les infos client temporairement (sans modifier la réservation)
+                // La réservation ne sera modifiée qu'après confirmation du paiement
                 $primaryReservationId = $reservations[0]['id'];
-                foreach ($reservations as $idx => $res) {
-                    $isPrimary = ($idx === 0);
+                $guestData = [
+                    'guest_first_name' => $data['guest_first_name'],
+                    'guest_last_name' => $data['guest_last_name'],
+                    'guest_email' => $data['guest_email'],
+                    'guest_phone' => $data['guest_phone'],
+                    'nb_adults' => $nbAdults,
+                    'nb_children' => $nbChildren,
+                    'breakfast_included' => $wantsBreakfast ? 1 : 0,
+                    'id_document_path' => $data['id_document_path'] ?? null,
+                    'services' => $selectedServices ?? [],
+                    'pricing' => [
+                        'accommodation_price' => $accommodationPrice,
+                        'night_price' => $nightPrice,
+                        'tourist_tax_total' => $touristTaxTotal,
+                        'breakfast_total' => $breakfastTotal,
+                        'services_total' => $servicesTotal,
+                        'total_amount' => $totalAmount,
+                        'nb_rooms' => $nbRooms,
+                    ]
+                ];
+                $guestDataJson = json_encode($guestData, JSON_UNESCAPED_UNICODE);
+
+                // Réserver temporairement les slots (hold de 15 minutes)
+                $holdUntil = date('Y-m-d H:i:s', time() + 900); // 15 min
+                foreach ($reservations as $res) {
                     db()->execute(
                         "UPDATE selfcheckin_reservations SET
-                            guest_first_name = ?, guest_last_name = ?, guest_email = ?, guest_phone = ?,
-                            nb_adults = ?, nb_children = ?, breakfast_included = ?,
-                            accommodation_price = ?, tourist_tax_amount = ?, breakfast_price = ?,
-                            total_amount = ?, remaining_amount = ?, deposit_amount = 0,
-                            id_document_path = ?, updated_at = NOW()
+                            walkin_guest_data = ?, walkin_hold_until = ?, updated_at = NOW()
                          WHERE id = ?",
-                        [
-                            $data['guest_first_name'], $data['guest_last_name'],
-                            $data['guest_email'], $data['guest_phone'],
-                            $nbAdults, $nbChildren, $wantsBreakfast ? 1 : 0,
-                            $isPrimary ? $accommodationPrice : $nightPrice,
-                            $isPrimary ? $touristTaxTotal : 0,
-                            $isPrimary ? $breakfastTotal : 0,
-                            $isPrimary ? $totalAmount : $nightPrice,
-                            $isPrimary ? $totalAmount : 0,
-                            $data['id_document_path'] ?? null,
-                            $res['id']
-                        ]
+                        [$guestDataJson, $holdUntil, $res['id']]
                     );
-                }
-
-                // Enregistrer les services complémentaires sur la réservation primaire
-                if (!empty($selectedServices) && is_array($selectedServices)) {
-                    foreach ($selectedServices as $svc) {
-                        $serviceId = (int)($svc['id'] ?? 0);
-                        $serviceQty = max(1, (int)($svc['quantity'] ?? 1));
-                        $dbService = db()->queryOne(
-                            "SELECT * FROM hotel_selfcheckin_services WHERE id = ? AND hotel_id = ? AND is_active = 1",
-                            [$serviceId, $hotel['id']]
-                        );
-                        if ($dbService) {
-                            db()->insert(
-                                "INSERT INTO selfcheckin_reservation_services (reservation_id, service_id, service_name, service_price, quantity, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
-                                [$primaryReservationId, $dbService['id'], $dbService['name'], (float)$dbService['price'], $serviceQty]
-                            );
-                        }
-                    }
                 }
 
                 // Créer PaymentIntent Stripe
@@ -9697,6 +9848,13 @@ try {
 
                 $stripeResponse = json_decode($stripeRaw, true);
                 if ($httpCode !== 200 || empty($stripeResponse['client_secret'])) {
+                    // Erreur Stripe : libérer le hold sur les slots
+                    foreach ($reservationIds as $resId) {
+                        db()->execute(
+                            "UPDATE selfcheckin_reservations SET walkin_guest_data = NULL, walkin_hold_until = NULL, updated_at = NOW() WHERE id = ?",
+                            [$resId]
+                        );
+                    }
                     $stripeErr = $stripeResponse['error']['message'] ?? 'Erreur Stripe';
                     json_error('Erreur paiement: ' . $stripeErr, 500);
                 }
