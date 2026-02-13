@@ -314,6 +314,156 @@ function createNotification($userId, $type, $title, $message = null) {
     }
 }
 
+// === SMTP EMAIL ===
+function getSmtpConfig() {
+    static $smtpConfig = null;
+    if ($smtpConfig !== null) return $smtpConfig;
+
+    try {
+        db()->execute("CREATE TABLE IF NOT EXISTS system_config (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            config_key VARCHAR(100) UNIQUE NOT NULL,
+            config_value TEXT,
+            created_at DATETIME,
+            updated_at DATETIME
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+
+        $row = db()->queryOne("SELECT config_value FROM system_config WHERE config_key = 'smtp'");
+        if ($row && !empty($row['config_value'])) {
+            $smtpConfig = json_decode($row['config_value'], true);
+            if (!is_array($smtpConfig)) $smtpConfig = [];
+        } else {
+            $smtpConfig = [];
+        }
+    } catch (Exception $e) {
+        error_log("SMTP config error: " . $e->getMessage());
+        $smtpConfig = [];
+    }
+    return $smtpConfig;
+}
+
+/**
+ * Envoyer un email via SMTP (socket direct) ou fallback mail()
+ * Supporte TLS (port 587) et SSL (port 465)
+ */
+function sendMail($toEmail, $subject, $htmlBody, $fromEmail = null, $fromName = null) {
+    $smtp = getSmtpConfig();
+
+    if (!empty($smtp['enabled']) && !empty($smtp['host']) && !empty($smtp['username'])) {
+        return sendViaSMTP($toEmail, $subject, $htmlBody, $smtp, $fromEmail, $fromName);
+    }
+
+    // Fallback: mail() natif PHP
+    $from = ($fromName ? $fromName : ($smtp['from_name'] ?? 'ACL GESTION'))
+          . ' <' . ($fromEmail ? $fromEmail : ($smtp['from_email'] ?? 'noreply@acl-gestion.com')) . '>';
+    $headers = "MIME-Version: 1.0\r\n";
+    $headers .= "Content-type: text/html; charset=UTF-8\r\n";
+    $headers .= "From: $from\r\n";
+    return @mail($toEmail, $subject, $htmlBody, $headers);
+}
+
+function sendViaSMTP($toEmail, $subject, $htmlBody, $smtp, $fromEmail = null, $fromName = null) {
+    $host = $smtp['host'];
+    $port = (int)($smtp['port'] ?? 587);
+    $encryption = $smtp['encryption'] ?? 'tls';
+    $username = $smtp['username'];
+    $password = $smtp['password'] ?? '';
+    $senderEmail = $fromEmail ?: ($smtp['from_email'] ?? $username);
+    $senderName = $fromName ?: ($smtp['from_name'] ?? 'ACL GESTION');
+
+    try {
+        $connectHost = ($encryption === 'ssl') ? 'ssl://' . $host : $host;
+        $socket = @fsockopen($connectHost, $port, $errno, $errstr, 10);
+        if (!$socket) {
+            error_log("SMTP connect failed: $errstr ($errno)");
+            return false;
+        }
+        stream_set_timeout($socket, 10);
+
+        $response = fgets($socket, 512);
+        if (substr($response, 0, 3) !== '220') { fclose($socket); return false; }
+
+        // EHLO
+        fwrite($socket, "EHLO " . gethostname() . "\r\n");
+        $ehloResponse = '';
+        while ($line = fgets($socket, 512)) {
+            $ehloResponse .= $line;
+            if (substr($line, 3, 1) === ' ') break;
+        }
+
+        // STARTTLS si nécessaire
+        if ($encryption === 'tls') {
+            fwrite($socket, "STARTTLS\r\n");
+            $resp = fgets($socket, 512);
+            if (substr($resp, 0, 3) !== '220') { fclose($socket); return false; }
+            if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT)) {
+                // Fallback TLS 1.1/1.0
+                stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+            }
+            // Re-EHLO after STARTTLS
+            fwrite($socket, "EHLO " . gethostname() . "\r\n");
+            while ($line = fgets($socket, 512)) {
+                if (substr($line, 3, 1) === ' ') break;
+            }
+        }
+
+        // AUTH LOGIN
+        fwrite($socket, "AUTH LOGIN\r\n");
+        $resp = fgets($socket, 512);
+        if (substr($resp, 0, 3) !== '334') { fclose($socket); return false; }
+
+        fwrite($socket, base64_encode($username) . "\r\n");
+        $resp = fgets($socket, 512);
+        if (substr($resp, 0, 3) !== '334') { fclose($socket); return false; }
+
+        fwrite($socket, base64_encode($password) . "\r\n");
+        $resp = fgets($socket, 512);
+        if (substr($resp, 0, 3) !== '235') {
+            error_log("SMTP auth failed: $resp");
+            fclose($socket);
+            return false;
+        }
+
+        // MAIL FROM
+        fwrite($socket, "MAIL FROM:<$senderEmail>\r\n");
+        $resp = fgets($socket, 512);
+        if (substr($resp, 0, 3) !== '250') { fclose($socket); return false; }
+
+        // RCPT TO
+        fwrite($socket, "RCPT TO:<$toEmail>\r\n");
+        $resp = fgets($socket, 512);
+        if (substr($resp, 0, 3) !== '250') { fclose($socket); return false; }
+
+        // DATA
+        fwrite($socket, "DATA\r\n");
+        $resp = fgets($socket, 512);
+        if (substr($resp, 0, 3) !== '354') { fclose($socket); return false; }
+
+        // Construire le message
+        $boundary = md5(uniqid(time()));
+        $message = "From: =?UTF-8?B?" . base64_encode($senderName) . "?= <$senderEmail>\r\n";
+        $message .= "To: $toEmail\r\n";
+        $message .= "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n";
+        $message .= "MIME-Version: 1.0\r\n";
+        $message .= "Content-Type: text/html; charset=UTF-8\r\n";
+        $message .= "Content-Transfer-Encoding: base64\r\n";
+        $message .= "\r\n";
+        $message .= chunk_split(base64_encode($htmlBody));
+        $message .= "\r\n.\r\n";
+
+        fwrite($socket, $message);
+        $resp = fgets($socket, 512);
+
+        fwrite($socket, "QUIT\r\n");
+        fclose($socket);
+
+        return substr($resp, 0, 3) === '250';
+    } catch (Exception $e) {
+        error_log("SMTP error: " . $e->getMessage());
+        return false;
+    }
+}
+
 // Hiérarchie des rôles (qui peut gérer qui)
 function getRoleHierarchy() {
     return [
@@ -499,9 +649,6 @@ function notifyManagersForLeaveRequest($employee, $leaveId, $startDate, $endDate
 }
 
 function sendLeaveNotificationEmail($toEmail, $toName, $employeeName, $typeLabel, $dateRange, $days, $leaveType) {
-    // Vérifier si les mails sont activés
-    $config = @include(__DIR__ . '/config.php');
-    if (empty($config['smtp_host'])) return;
     
     $isUrgent = $leaveType === 'maladie';
     
@@ -574,12 +721,7 @@ function sendLeaveNotificationEmail($toEmail, $toName, $employeeName, $typeLabel
     </html>
     ";
     
-    // Envoyer avec mail() ou SMTP selon config
-    $headers = "MIME-Version: 1.0\r\n";
-    $headers .= "Content-type: text/html; charset=UTF-8\r\n";
-    $headers .= "From: ACL GESTION <noreply@acl-gestion.com>\r\n";
-    
-    @mail($toEmail, $subject, $htmlBody, $headers);
+    sendMail($toEmail, $subject, $htmlBody);
 }
 
 /**
@@ -738,11 +880,7 @@ function sendBookingConfirmationEmail($reservations, $hotel) {
     </body>
     </html>";
 
-    $headers = "MIME-Version: 1.0\r\n";
-    $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-    $headers .= "From: " . htmlspecialchars($hotel['name']) . " <noreply@acl-gestion.com>\r\n";
-
-    @mail($guestEmail, $subject, $htmlBody, $headers);
+    sendMail($guestEmail, $subject, $htmlBody, null, htmlspecialchars($hotel['name']));
 }
 
 // Notifier pour un ticket de maintenance (création, alerte retard)
@@ -899,11 +1037,7 @@ function notifyMaintenanceTicket($ticketId, $ticketData, $creator, $type = 'crea
         
         // 3. Email
         if (!empty($manager['email'])) {
-            $headers = "MIME-Version: 1.0\r\n";
-            $headers .= "Content-type: text/html; charset=UTF-8\r\n";
-            $headers .= "From: ACL GESTION <noreply@acl-gestion.com>\r\n";
-            
-            @mail($manager['email'], $emailSubject, $emailBody, $headers);
+            sendMail($manager['email'], $emailSubject, $emailBody);
         }
     }
 }
@@ -1300,12 +1434,7 @@ try {
 </body>
 </html>";
                 
-                $adminHeaders = "MIME-Version: 1.0\r\n";
-                $adminHeaders .= "Content-Type: text/html; charset=UTF-8\r\n";
-                $adminHeaders .= "From: ACL GESTION <noreply@acl-gestion.com>\r\n";
-                $adminHeaders .= "Reply-To: {$data['email']}\r\n";
-                
-                @mail('avishka@acl-gestion.com', $adminSubject, $adminBody, $adminHeaders);
+                sendMail('avishka@acl-gestion.com', $adminSubject, $adminBody);
                 
                 // Email de confirmation au prospect
                 $prospectSubject = "=?UTF-8?B?" . base64_encode("Merci pour votre demande - ACL GESTION") . "?=";
@@ -1348,11 +1477,7 @@ try {
 </body>
 </html>";
                 
-                $prospectHeaders = "MIME-Version: 1.0\r\n";
-                $prospectHeaders .= "Content-Type: text/html; charset=UTF-8\r\n";
-                $prospectHeaders .= "From: ACL GESTION <noreply@acl-gestion.com>\r\n";
-                
-                @mail($data['email'], $prospectSubject, $prospectBody, $prospectHeaders);
+                sendMail($data['email'], $prospectSubject, $prospectBody);
                 
                 json_out(['success' => true, 'id' => $contactId], 201);
             }
@@ -10710,12 +10835,7 @@ try {
                 if (!empty($hotel['city'])) $htmlBody .= ', ' . htmlspecialchars($hotel['city']);
                 $htmlBody .= '</div></body></html>';
 
-                $headers = "From: " . ($hotel['name'] ? $hotel['name'] : APP_NAME) . " <noreply@" . parse_url(APP_URL, PHP_URL_HOST) . ">\r\n";
-                $headers .= "Reply-To: " . ($hotel['email'] ?? 'noreply@' . parse_url(APP_URL, PHP_URL_HOST)) . "\r\n";
-                $headers .= "MIME-Version: 1.0\r\n";
-                $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-
-                $emailSent = @mail($data['guest_email'], $subject, $htmlBody, $headers);
+                $emailSent = sendMail($data['guest_email'], $subject, $htmlBody, null, $hotel['name'] ?: APP_NAME);
 
                 if ($emailSent) {
                     db()->execute("UPDATE payment_links SET email_sent_at = NOW() WHERE id = ?", [$insertId]);
@@ -10926,12 +11046,7 @@ try {
                 if (!empty($hotel['city'])) $htmlBody .= ', ' . htmlspecialchars($hotel['city']);
                 $htmlBody .= '</div></body></html>';
 
-                $headers = "From: " . ($hotel['name'] ? $hotel['name'] : APP_NAME) . " <noreply@" . parse_url(APP_URL, PHP_URL_HOST) . ">\r\n";
-                $headers .= "Reply-To: " . ($hotel['email'] ?? 'noreply@' . parse_url(APP_URL, PHP_URL_HOST)) . "\r\n";
-                $headers .= "MIME-Version: 1.0\r\n";
-                $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-
-                $emailSent = @mail($link['guest_email'], $subject, $htmlBody, $headers);
+                $emailSent = sendMail($link['guest_email'], $subject, $htmlBody, null, $hotel['name'] ?: APP_NAME);
 
                 if ($emailSent) {
                     db()->execute("UPDATE payment_links SET email_sent_at = NOW(), updated_at = NOW() WHERE id = ?", [$id]);
@@ -10969,6 +11084,135 @@ try {
                 db()->execute("DELETE FROM payment_links WHERE id = ?", [$id]);
                 json_out(['message' => 'Lien de paiement supprimé']);
             }
+            break;
+
+        // --- SMTP CONFIG ---
+        case 'smtp':
+            $user = require_auth();
+            if ($user['role'] !== 'admin') json_error('Accès réservé aux administrateurs', 403);
+
+            // GET /smtp - Récupérer la config SMTP
+            if ($method === 'GET' && !$id) {
+                $config = getSmtpConfig();
+                // Ne jamais renvoyer le mot de passe en clair
+                if (!empty($config['password'])) {
+                    $config['password'] = '••••••••';
+                }
+                json_out(['smtp' => $config]);
+            }
+
+            // PUT /smtp - Sauvegarder la config SMTP
+            if ($method === 'PUT' && !$id) {
+                $data = get_input();
+
+                // Valider les champs
+                $allowed = ['enabled', 'host', 'port', 'encryption', 'username', 'password', 'from_email', 'from_name'];
+                $config = [];
+                foreach ($allowed as $field) {
+                    if (isset($data[$field])) {
+                        $config[$field] = $data[$field];
+                    }
+                }
+
+                // Si le mot de passe est masqué, conserver l'ancien
+                if (isset($config['password']) && $config['password'] === '••••••••') {
+                    $existing = getSmtpConfig();
+                    $config['password'] = $existing['password'] ?? '';
+                }
+
+                // Valider le port
+                if (isset($config['port'])) {
+                    $config['port'] = (int)$config['port'];
+                    if ($config['port'] < 1 || $config['port'] > 65535) {
+                        json_error('Port SMTP invalide (1-65535)');
+                    }
+                }
+
+                // Valider le chiffrement
+                if (isset($config['encryption']) && !in_array($config['encryption'], ['tls', 'ssl', 'none'])) {
+                    json_error('Chiffrement invalide (tls, ssl ou none)');
+                }
+
+                // Valider l'email expéditeur
+                if (!empty($config['from_email']) && !filter_var($config['from_email'], FILTER_VALIDATE_EMAIL)) {
+                    json_error('Email expéditeur invalide');
+                }
+
+                $configJson = json_encode($config);
+
+                db()->execute("CREATE TABLE IF NOT EXISTS system_config (
+                    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    config_key VARCHAR(100) UNIQUE NOT NULL,
+                    config_value TEXT,
+                    created_at DATETIME,
+                    updated_at DATETIME
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+
+                db()->execute(
+                    "INSERT INTO system_config (config_key, config_value, created_at, updated_at)
+                     VALUES ('smtp', ?, NOW(), NOW())
+                     ON DUPLICATE KEY UPDATE config_value = ?, updated_at = NOW()",
+                    [$configJson, $configJson]
+                );
+
+                // Réinitialiser le cache statique
+                $smtpConfig = null;
+
+                json_out(['success' => true, 'message' => 'Configuration SMTP sauvegardée']);
+            }
+
+            // POST /smtp/test - Envoyer un email de test
+            if ($method === 'POST' && $id === 'test') {
+                $data = get_input();
+                $testEmail = $data['email'] ?? '';
+
+                if (empty($testEmail) || !filter_var($testEmail, FILTER_VALIDATE_EMAIL)) {
+                    json_error('Adresse email de test invalide');
+                }
+
+                $smtp = getSmtpConfig();
+                if (empty($smtp['enabled']) || empty($smtp['host'])) {
+                    json_error('SMTP non configuré ou désactivé. Sauvegardez d\'abord la configuration.');
+                }
+
+                $subject = 'Test SMTP - ACL GESTION';
+                $htmlBody = '
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family: Inter, Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px;">
+    <div style="max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        <div style="background: #1E3A5F; color: white; padding: 30px; text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 15px;">✉️</div>
+            <h1 style="margin: 0; font-size: 24px;">Test Email SMTP</h1>
+        </div>
+        <div style="padding: 30px;">
+            <p>Bonjour,</p>
+            <p>Si vous recevez cet email, la configuration SMTP de votre plateforme <strong>ACL GESTION</strong> fonctionne correctement.</p>
+            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin: 20px 0;">
+                <p style="margin: 0; color: #166534;"><strong>&#10004; Configuration SMTP valide</strong></p>
+                <p style="margin: 8px 0 0; color: #166534; font-size: 14px;">Serveur : ' . htmlspecialchars($smtp['host'] ?? '') . ':' . intval($smtp['port'] ?? 587) . '</p>
+                <p style="margin: 4px 0 0; color: #166534; font-size: 14px;">Chiffrement : ' . strtoupper(htmlspecialchars($smtp['encryption'] ?? 'tls')) . '</p>
+            </div>
+            <p style="color: #666; font-size: 13px;">Date du test : ' . date('d/m/Y H:i:s') . '</p>
+        </div>
+        <div style="background: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px;">
+            <p style="margin: 0;">ACL GESTION - Plateforme de gestion hôtelière</p>
+        </div>
+    </div>
+</body>
+</html>';
+
+                $result = sendViaSMTP($testEmail, $subject, $htmlBody, $smtp);
+
+                if ($result) {
+                    json_out(['success' => true, 'message' => 'Email de test envoyé avec succès à ' . $testEmail]);
+                } else {
+                    json_error('Échec de l\'envoi. Vérifiez les paramètres SMTP (hôte, port, identifiants, chiffrement).', 500);
+                }
+            }
+
+            json_error('Endpoint SMTP non trouvé', 404);
             break;
 
         default:
