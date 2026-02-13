@@ -104,6 +104,11 @@ const API = {
     saveHotelModulesConfig(hotelId, modules) { return this.put(`modules/hotel/${hotelId}`, modules); },
     getAllHotelModulesConfig() { return this.get('modules/hotels'); },
 
+    // SMTP Config
+    getSmtpConfig() { return this.get('smtp'); },
+    saveSmtpConfig(config) { return this.put('smtp', config); },
+    testSmtp(email) { return this.post('smtp/test', { email }); },
+
     // Maintenance
     getMaintenanceStats() { return this.get('maintenance/stats'); },
     getTickets(params = {}) { 

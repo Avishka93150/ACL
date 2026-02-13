@@ -279,6 +279,9 @@ async function loadSettings(container) {
                 <button class="settings-tab" data-tab="notifications" onclick="switchSettingsTab('notifications')">
                     <i class="fas fa-bell"></i> Notifications
                 </button>
+                <button class="settings-tab" data-tab="smtp" onclick="switchSettingsTab('smtp')">
+                    <i class="fas fa-envelope"></i> Email SMTP
+                </button>
             </div>
 
             <div id="settings-tab-content"></div>
@@ -311,6 +314,9 @@ function switchSettingsTab(tab) {
             break;
         case 'notifications':
             renderSettingsNotifications(content);
+            break;
+        case 'smtp':
+            renderSettingsSMTP(content);
             break;
     }
 }
@@ -456,6 +462,201 @@ function renderSettingsNotifications(content) {
         loadNotificationManager(content);
     } else {
         content.innerHTML = '<div class="card"><p class="text-muted" style="padding:24px">Module de notifications non disponible.</p></div>';
+    }
+}
+
+// ============================================================
+// ONGLET SMTP
+// ============================================================
+
+let _smtpConfig = {};
+
+async function renderSettingsSMTP(content) {
+    content.innerHTML = '<div style="text-align:center;padding:48px"><span class="spinner"></span> Chargement de la configuration SMTP...</div>';
+
+    try {
+        const result = await API.getSmtpConfig();
+        _smtpConfig = result.smtp || {};
+    } catch (err) {
+        _smtpConfig = {};
+    }
+
+    content.innerHTML = `
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-envelope"></i> Configuration SMTP</h3>
+            </div>
+            <p class="text-muted" style="padding:0 24px 8px">
+                Configurez le serveur SMTP pour l'envoi des emails (notifications congés, confirmations réservation, liens de paiement, alertes maintenance...).
+                <br>Sans configuration SMTP, les emails utilisent la fonction <code>mail()</code> native de PHP (souvent bloquée ou en spam).
+            </p>
+
+            <div style="padding:0 24px 24px">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;padding:16px;background:var(--gray-50, #f9fafb);border-radius:8px">
+                    <label class="switch">
+                        <input type="checkbox" id="smtp-enabled" ${_smtpConfig.enabled ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                    <div>
+                        <strong>Activer l'envoi SMTP</strong>
+                        <p class="text-muted" style="margin:2px 0 0;font-size:13px">Quand désactivé, le système utilise mail() natif PHP</p>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-server"></i> Serveur SMTP</label>
+                        <input type="text" class="form-control" id="smtp-host" value="${esc(_smtpConfig.host || '')}" placeholder="smtp.gmail.com">
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                        <div class="form-group">
+                            <label class="form-label"><i class="fas fa-hashtag"></i> Port</label>
+                            <input type="number" class="form-control" id="smtp-port" value="${_smtpConfig.port || 587}" min="1" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label"><i class="fas fa-lock"></i> Chiffrement</label>
+                            <select class="form-control" id="smtp-encryption">
+                                <option value="tls" ${(_smtpConfig.encryption || 'tls') === 'tls' ? 'selected' : ''}>TLS (587)</option>
+                                <option value="ssl" ${_smtpConfig.encryption === 'ssl' ? 'selected' : ''}>SSL (465)</option>
+                                <option value="none" ${_smtpConfig.encryption === 'none' ? 'selected' : ''}>Aucun (25)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-user"></i> Identifiant / Email</label>
+                        <input type="text" class="form-control" id="smtp-username" value="${esc(_smtpConfig.username || '')}" placeholder="votre@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-key"></i> Mot de passe</label>
+                        <input type="password" class="form-control" id="smtp-password" value="${esc(_smtpConfig.password || '')}" placeholder="Mot de passe ou app password">
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-at"></i> Email expéditeur</label>
+                        <input type="email" class="form-control" id="smtp-from-email" value="${esc(_smtpConfig.from_email || '')}" placeholder="noreply@acl-gestion.com">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-signature"></i> Nom expéditeur</label>
+                        <input type="text" class="form-control" id="smtp-from-name" value="${esc(_smtpConfig.from_name || '')}" placeholder="ACL GESTION">
+                    </div>
+                </div>
+
+                <div style="margin-top:24px;display:flex;gap:10px;flex-wrap:wrap">
+                    <button class="btn btn-primary" onclick="saveSmtpConfig()">
+                        <i class="fas fa-save"></i> Sauvegarder
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-paper-plane"></i> Tester l'envoi</h3>
+            </div>
+            <p class="text-muted" style="padding:0 24px 8px">
+                Envoyez un email de test pour vérifier que la configuration SMTP fonctionne correctement.
+                <br><span class="text-warning"><i class="fas fa-info-circle"></i> Sauvegardez d'abord la configuration avant de tester.</span>
+            </p>
+            <div style="padding:0 24px 24px">
+                <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+                    <div class="form-group" style="flex:1;min-width:250px;margin-bottom:0">
+                        <label class="form-label">Adresse email de test</label>
+                        <input type="email" class="form-control" id="smtp-test-email" placeholder="test@example.com">
+                    </div>
+                    <button class="btn btn-outline" onclick="testSmtpSend()" id="smtp-test-btn" style="height:42px">
+                        <i class="fas fa-paper-plane"></i> Envoyer le test
+                    </button>
+                </div>
+                <div id="smtp-test-result" style="margin-top:12px"></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-info-circle"></i> Aide à la configuration</h3>
+            </div>
+            <div style="padding:0 24px 24px">
+                <table class="table" style="font-size:13px">
+                    <thead>
+                        <tr><th>Fournisseur</th><th>Serveur SMTP</th><th>Port</th><th>Chiffrement</th><th>Notes</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Gmail</strong></td><td>smtp.gmail.com</td><td>587</td><td>TLS</td><td>Utiliser un "mot de passe d'application"</td></tr>
+                        <tr><td><strong>OVH</strong></td><td>ssl0.ovh.net</td><td>587</td><td>TLS</td><td>Identifiant = adresse email complète</td></tr>
+                        <tr><td><strong>Outlook / Office 365</strong></td><td>smtp.office365.com</td><td>587</td><td>TLS</td><td>Authentification moderne requise</td></tr>
+                        <tr><td><strong>Ionos</strong></td><td>smtp.ionos.fr</td><td>587</td><td>TLS</td><td>Identifiant = adresse email</td></tr>
+                        <tr><td><strong>SendGrid</strong></td><td>smtp.sendgrid.net</td><td>587</td><td>TLS</td><td>Identifiant = "apikey", mot de passe = clé API</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+async function saveSmtpConfig() {
+    const config = {
+        enabled: document.getElementById('smtp-enabled').checked,
+        host: document.getElementById('smtp-host').value.trim(),
+        port: parseInt(document.getElementById('smtp-port').value) || 587,
+        encryption: document.getElementById('smtp-encryption').value,
+        username: document.getElementById('smtp-username').value.trim(),
+        password: document.getElementById('smtp-password').value,
+        from_email: document.getElementById('smtp-from-email').value.trim(),
+        from_name: document.getElementById('smtp-from-name').value.trim()
+    };
+
+    if (config.enabled && !config.host) {
+        toast('Le serveur SMTP est requis quand SMTP est activé', 'warning');
+        return;
+    }
+    if (config.enabled && !config.username) {
+        toast('L\'identifiant SMTP est requis', 'warning');
+        return;
+    }
+
+    try {
+        await API.saveSmtpConfig(config);
+        _smtpConfig = config;
+        toast('Configuration SMTP sauvegardée', 'success');
+    } catch (error) {
+        toast('Erreur : ' + error.message, 'error');
+    }
+}
+
+async function testSmtpSend() {
+    const email = document.getElementById('smtp-test-email').value.trim();
+    if (!email) {
+        toast('Veuillez saisir une adresse email de test', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('smtp-test-btn');
+    const resultDiv = document.getElementById('smtp-test-result');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner" style="width:16px;height:16px"></span> Envoi en cours...';
+    resultDiv.innerHTML = '';
+
+    try {
+        const result = await API.testSmtp(email);
+        resultDiv.innerHTML = `
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;color:#166534">
+                <i class="fas fa-check-circle"></i> ${esc(result.message)}
+            </div>
+        `;
+    } catch (error) {
+        resultDiv.innerHTML = `
+            <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px;color:#991b1b">
+                <i class="fas fa-times-circle"></i> ${esc(error.message)}
+            </div>
+        `;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Envoyer le test';
     }
 }
 
