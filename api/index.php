@@ -9914,6 +9914,44 @@ try {
                 ]);
             }
 
+            // POST /booking/{slug}/release-hold - Libérer le hold walk-in (client abandonne avant paiement)
+            if ($method === 'POST' && $id && $action === 'release-hold') {
+                $hotel = db()->queryOne(
+                    "SELECT id FROM hotels WHERE booking_slug = ? AND selfcheckin_enabled = 1 AND status = 'active'",
+                    [$id]
+                );
+                if (!$hotel) json_error('Hôtel non trouvé', 404);
+
+                $data = get_input();
+
+                // Support multi-room: reservation_ids (array) ou reservation_id (single)
+                $reservationIds = [];
+                if (!empty($data['reservation_ids']) && is_array($data['reservation_ids'])) {
+                    $reservationIds = array_map('intval', $data['reservation_ids']);
+                } elseif (!empty($data['reservation_id'])) {
+                    $reservationIds = [(int)$data['reservation_id']];
+                }
+                if (empty($reservationIds)) json_error('Données manquantes');
+
+                $released = 0;
+                foreach ($reservationIds as $resId) {
+                    // Ne libérer que les slots walk-in encore en hold (pas encore payés/confirmés)
+                    $res = db()->queryOne(
+                        "SELECT id FROM selfcheckin_reservations WHERE id = ? AND hotel_id = ? AND type = 'walkin' AND status = 'pending' AND guest_last_name IS NULL AND walkin_hold_until IS NOT NULL",
+                        [$resId, $hotel['id']]
+                    );
+                    if ($res) {
+                        db()->execute(
+                            "UPDATE selfcheckin_reservations SET walkin_guest_data = NULL, walkin_hold_until = NULL, stripe_payment_intent_id = NULL, updated_at = NOW() WHERE id = ?",
+                            [$resId]
+                        );
+                        $released++;
+                    }
+                }
+
+                json_out(['released' => $released]);
+            }
+
             // GET /booking/{slug}/services - Services complémentaires disponibles (public)
             if ($method === 'GET' && $id && $action === 'services') {
                 $hotel = db()->queryOne(
