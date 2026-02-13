@@ -570,6 +570,10 @@ async function applyModulesToAllHotels() {
             await API.saveHotelModulesConfig(hotel.id, currentHotelModules);
         }
         toast(`Modules appliqués à ${_settingsHotels.length} hôtel(s)`, 'success');
+
+        if (typeof updateSidebarForHotelModules === 'function') {
+            updateSidebarForHotelModules();
+        }
     } catch (error) {
         toast(t('common.error') + ': ' + error.message, 'error');
     }
@@ -641,14 +645,10 @@ async function saveModulesConfig() {
 }
 
 function updateSidebarModulesFromSettings() {
-    document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
-        const page = item.dataset.page;
-        if (page) {
-            const globalDisabled = currentModules[page] === false || currentModules[page] === 'false';
-            const hotelDisabled = typeof hotelEnabledModules !== 'undefined' && (hotelEnabledModules[page] === false || hotelEnabledModules[page] === 'false');
-            item.style.display = (globalDisabled || hotelDisabled) ? 'none' : '';
-        }
-    });
+    // Mettre à jour enabledModules global avec les changements
+    if (typeof updateSidebarModules === 'function') {
+        updateSidebarModules();
+    }
 }
 
 // ============================================================
