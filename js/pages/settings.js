@@ -643,11 +643,25 @@ async function testSmtpSend() {
 
     try {
         const result = await API.testSmtp(email);
-        resultDiv.innerHTML = `
-            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;color:#166534">
-                <i class="fas fa-check-circle"></i> ${esc(result.message)}
-            </div>
-        `;
+        const diagHtml = (result.diag && result.diag.length)
+            ? `<div style="margin-top:10px;padding:10px;background:rgba(0,0,0,0.04);border-radius:6px;font-family:monospace;font-size:12px;line-height:1.8">${result.diag.map(d => esc(d)).join('<br>')}</div>`
+            : '';
+
+        if (result.success) {
+            resultDiv.innerHTML = `
+                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;color:#166534">
+                    <i class="fas fa-check-circle"></i> ${esc(result.message)}
+                    ${diagHtml}
+                </div>
+            `;
+        } else {
+            resultDiv.innerHTML = `
+                <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px;color:#991b1b">
+                    <i class="fas fa-times-circle"></i> ${esc(result.message)}
+                    ${diagHtml}
+                </div>
+            `;
+        }
     } catch (error) {
         resultDiv.innerHTML = `
             <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px;color:#991b1b">
