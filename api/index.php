@@ -362,7 +362,7 @@ function sendMail($toEmail, $subject, $htmlBody, $fromEmail = null, $fromName = 
     return @mail($toEmail, $subject, $htmlBody, $headers);
 }
 
-function sendViaSMTP($toEmail, $subject, $htmlBody, $smtp, $fromEmail = null, $fromName = null) {
+function sendViaSMTP($toEmail, $subject, $htmlBody, $smtp, $fromEmail = null, $fromName = null, $returnDiag = false) {
     $host = $smtp['host'];
     $port = (int)($smtp['port'] ?? 587);
     $encryption = $smtp['encryption'] ?? 'tls';
@@ -371,35 +371,59 @@ function sendViaSMTP($toEmail, $subject, $htmlBody, $smtp, $fromEmail = null, $f
     $senderEmail = $fromEmail ?: ($smtp['from_email'] ?? $username);
     $senderName = $fromName ?: ($smtp['from_name'] ?? 'ACL GESTION');
 
+    $diag = []; // Journal diagnostic étape par étape
+
+    $fail = function($step, $detail = '') use (&$diag, $returnDiag) {
+        $diag[] = "❌ $step" . ($detail ? " : $detail" : '');
+        error_log("SMTP fail @ $step" . ($detail ? " : $detail" : ''));
+        if ($returnDiag) return ['success' => false, 'diag' => $diag];
+        return false;
+    };
+
     try {
+        // 1. Connexion
         $connectHost = ($encryption === 'ssl') ? 'ssl://' . $host : $host;
+        $diag[] = "Connexion à $connectHost:$port...";
         $socket = @fsockopen($connectHost, $port, $errno, $errstr, 10);
         if (!$socket) {
-            error_log("SMTP connect failed: $errstr ($errno)");
-            return false;
+            return $fail('Connexion', "$errstr (code $errno) — Vérifiez l'hôte et le port");
         }
         stream_set_timeout($socket, 10);
 
         $response = fgets($socket, 512);
-        if (substr($response, 0, 3) !== '220') { fclose($socket); return false; }
+        if (substr($response, 0, 3) !== '220') {
+            fclose($socket);
+            return $fail('Bannière serveur', "Réponse inattendue : " . trim($response));
+        }
+        $diag[] = "✔ Connecté — " . trim($response);
 
-        // EHLO
+        // 2. EHLO
         fwrite($socket, "EHLO " . gethostname() . "\r\n");
         $ehloResponse = '';
         while ($line = fgets($socket, 512)) {
             $ehloResponse .= $line;
             if (substr($line, 3, 1) === ' ') break;
         }
+        $diag[] = "✔ EHLO accepté";
 
-        // STARTTLS si nécessaire
+        // 3. STARTTLS si nécessaire
         if ($encryption === 'tls') {
             fwrite($socket, "STARTTLS\r\n");
             $resp = fgets($socket, 512);
-            if (substr($resp, 0, 3) !== '220') { fclose($socket); return false; }
-            if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT)) {
-                // Fallback TLS 1.1/1.0
-                stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+            if (substr($resp, 0, 3) !== '220') {
+                fclose($socket);
+                return $fail('STARTTLS', "Réponse : " . trim($resp));
             }
+            $cryptoOk = @stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT);
+            if (!$cryptoOk) {
+                // Fallback TLS 1.1/1.0
+                $cryptoOk = @stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+            }
+            if (!$cryptoOk) {
+                fclose($socket);
+                return $fail('TLS handshake', "Impossible d'activer le chiffrement TLS");
+            }
+            $diag[] = "✔ TLS activé";
             // Re-EHLO after STARTTLS
             fwrite($socket, "EHLO " . gethostname() . "\r\n");
             while ($line = fgets($socket, 512)) {
@@ -407,43 +431,61 @@ function sendViaSMTP($toEmail, $subject, $htmlBody, $smtp, $fromEmail = null, $f
             }
         }
 
-        // AUTH LOGIN
+        // 4. AUTH LOGIN
         fwrite($socket, "AUTH LOGIN\r\n");
         $resp = fgets($socket, 512);
-        if (substr($resp, 0, 3) !== '334') { fclose($socket); return false; }
+        if (substr($resp, 0, 3) !== '334') {
+            fclose($socket);
+            return $fail('AUTH LOGIN', "Le serveur ne supporte pas AUTH LOGIN — Réponse : " . trim($resp));
+        }
 
         fwrite($socket, base64_encode($username) . "\r\n");
         $resp = fgets($socket, 512);
-        if (substr($resp, 0, 3) !== '334') { fclose($socket); return false; }
+        if (substr($resp, 0, 3) !== '334') {
+            fclose($socket);
+            return $fail('Identifiant SMTP', "Identifiant refusé — Réponse : " . trim($resp));
+        }
 
         fwrite($socket, base64_encode($password) . "\r\n");
         $resp = fgets($socket, 512);
         if (substr($resp, 0, 3) !== '235') {
-            error_log("SMTP auth failed: $resp");
             fclose($socket);
-            return false;
+            return $fail('Mot de passe SMTP', "Authentification échouée — Réponse : " . trim($resp) . " — Vérifiez identifiant/mot de passe");
         }
+        $diag[] = "✔ Authentification réussie";
 
-        // MAIL FROM
+        // 5. MAIL FROM
         fwrite($socket, "MAIL FROM:<$senderEmail>\r\n");
         $resp = fgets($socket, 512);
-        if (substr($resp, 0, 3) !== '250') { fclose($socket); return false; }
+        if (substr($resp, 0, 3) !== '250') {
+            fclose($socket);
+            return $fail('MAIL FROM', "Expéditeur <$senderEmail> refusé — Réponse : " . trim($resp));
+        }
+        $diag[] = "✔ Expéditeur accepté ($senderEmail)";
 
-        // RCPT TO
+        // 6. RCPT TO
         fwrite($socket, "RCPT TO:<$toEmail>\r\n");
         $resp = fgets($socket, 512);
-        if (substr($resp, 0, 3) !== '250') { fclose($socket); return false; }
+        if (substr($resp, 0, 3) !== '250') {
+            fclose($socket);
+            return $fail('RCPT TO', "Destinataire <$toEmail> refusé — Réponse : " . trim($resp));
+        }
+        $diag[] = "✔ Destinataire accepté ($toEmail)";
 
-        // DATA
+        // 7. DATA
         fwrite($socket, "DATA\r\n");
         $resp = fgets($socket, 512);
-        if (substr($resp, 0, 3) !== '354') { fclose($socket); return false; }
+        if (substr($resp, 0, 3) !== '354') {
+            fclose($socket);
+            return $fail('DATA', "Réponse : " . trim($resp));
+        }
 
         // Construire le message
-        $boundary = md5(uniqid(time()));
         $message = "From: =?UTF-8?B?" . base64_encode($senderName) . "?= <$senderEmail>\r\n";
         $message .= "To: $toEmail\r\n";
         $message .= "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n";
+        $message .= "Date: " . date('r') . "\r\n";
+        $message .= "Message-ID: <" . uniqid('acl_') . "@" . gethostname() . ">\r\n";
         $message .= "MIME-Version: 1.0\r\n";
         $message .= "Content-Type: text/html; charset=UTF-8\r\n";
         $message .= "Content-Transfer-Encoding: base64\r\n";
@@ -457,9 +499,19 @@ function sendViaSMTP($toEmail, $subject, $htmlBody, $smtp, $fromEmail = null, $f
         fwrite($socket, "QUIT\r\n");
         fclose($socket);
 
-        return substr($resp, 0, 3) === '250';
+        $sent = substr($resp, 0, 3) === '250';
+        if ($sent) {
+            $diag[] = "✔ Email envoyé avec succès";
+        } else {
+            $diag[] = "❌ Envoi échoué — Réponse serveur : " . trim($resp);
+        }
+
+        if ($returnDiag) return ['success' => $sent, 'diag' => $diag];
+        return $sent;
     } catch (Exception $e) {
         error_log("SMTP error: " . $e->getMessage());
+        $diag[] = "❌ Exception : " . $e->getMessage();
+        if ($returnDiag) return ['success' => false, 'diag' => $diag];
         return false;
     }
 }
@@ -11155,9 +11207,6 @@ try {
                     [$configJson, $configJson]
                 );
 
-                // Réinitialiser le cache statique
-                $smtpConfig = null;
-
                 json_out(['success' => true, 'message' => 'Configuration SMTP sauvegardée']);
             }
 
@@ -11203,13 +11252,16 @@ try {
 </body>
 </html>';
 
-                $result = sendViaSMTP($testEmail, $subject, $htmlBody, $smtp);
+                $result = sendViaSMTP($testEmail, $subject, $htmlBody, $smtp, null, null, true);
 
-                if ($result) {
-                    json_out(['success' => true, 'message' => 'Email de test envoyé avec succès à ' . $testEmail]);
-                } else {
-                    json_error('Échec de l\'envoi. Vérifiez les paramètres SMTP (hôte, port, identifiants, chiffrement).', 500);
-                }
+                // Toujours retourner 200 pour que le frontend reçoive les diagnostics
+                json_out([
+                    'success' => $result['success'],
+                    'message' => $result['success']
+                        ? 'Email de test envoyé avec succès à ' . $testEmail
+                        : 'Échec de l\'envoi. Consultez le diagnostic ci-dessous.',
+                    'diag' => $result['diag'] ?? []
+                ]);
             }
 
             json_error('Endpoint SMTP non trouvé', 404);
