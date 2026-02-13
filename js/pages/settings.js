@@ -220,7 +220,10 @@ const DEFAULT_PERMISSIONS = {
 
 let currentPermissions = {};
 let currentModules = {};
+let currentHotelModules = {};
 let _settingsActiveTab = 'modules';
+let _settingsHotels = [];
+let _settingsSelectedHotelId = null;
 
 async function loadSettings(container) {
     if (API.user.role !== 'admin') {
@@ -231,13 +234,18 @@ async function loadSettings(container) {
     showLoading(container);
 
     try {
-        const [permResult, modulesResult] = await Promise.all([
+        const [permResult, modulesResult, mgmtResult] = await Promise.all([
             API.getAllPermissions(),
-            API.getModulesConfig()
+            API.getModulesConfig(),
+            API.getManagementInfo()
         ]);
 
         currentPermissions = permResult.permissions || {};
         currentModules = modulesResult.modules || {};
+        _settingsHotels = mgmtResult.manageable_hotels || [];
+        if (_settingsHotels.length > 0 && !_settingsSelectedHotelId) {
+            _settingsSelectedHotelId = _settingsHotels[0].id;
+        }
 
         // Initialiser modules par défaut (tous actifs) SEULEMENT si undefined
         for (const moduleId of Object.keys(SYSTEM_MODULES)) {
@@ -312,14 +320,47 @@ function switchSettingsTab(tab) {
 // ============================================================
 
 function renderSettingsModules(content) {
+    const hotelOptions = _settingsHotels.map(h =>
+        `<option value="${h.id}" ${h.id === _settingsSelectedHotelId ? 'selected' : ''}>${esc(h.name)}</option>`
+    ).join('');
+
     content.innerHTML = `
         <div class="card">
-            <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-puzzle-piece"></i> Modules du système</h3>
+            <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+                <h3 class="card-title" style="margin:0"><i class="fas fa-puzzle-piece"></i> Modules par hôtel</h3>
+                ${_settingsHotels.length > 0 ? `
+                <div style="display:flex;align-items:center;gap:8px">
+                    <label style="font-size:14px;font-weight:500;white-space:nowrap"><i class="fas fa-building"></i> Hôtel :</label>
+                    <select class="form-control" style="min-width:200px" onchange="switchSettingsHotel(parseInt(this.value))">
+                        ${hotelOptions}
+                    </select>
+                </div>` : ''}
             </div>
             <p class="text-muted" style="padding:0 24px 8px">
-                Activez ou désactivez les modules selon vos besoins. Les modules désactivés disparaîtront du menu pour tous les utilisateurs.
+                Activez ou désactivez les modules pour chaque hôtel. Les modules désactivés disparaîtront du menu pour les utilisateurs de cet hôtel.
                 <br><span class="text-warning"><i class="fas fa-lock"></i> Les modules essentiels ne peuvent pas être désactivés.</span>
+            </p>
+
+            <div class="modules-grid" style="padding:0 24px 24px" id="hotel-modules-grid">
+                <div style="text-align:center;padding:24px"><span class="spinner"></span> Chargement...</div>
+            </div>
+
+            <div style="padding:0 24px 24px;display:flex;gap:10px;flex-wrap:wrap">
+                <button class="btn btn-primary" onclick="saveHotelModulesConfig()">
+                    <i class="fas fa-save"></i> ${t('common.save')}
+                </button>
+                <button class="btn btn-outline" onclick="applyModulesToAllHotels()">
+                    <i class="fas fa-copy"></i> Appliquer à tous les hôtels
+                </button>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-globe"></i> Modules globaux (système)</h3>
+            </div>
+            <p class="text-muted" style="padding:0 24px 8px">
+                Configuration globale des modules. Un module désactivé ici sera masqué pour tous les hôtels.
             </p>
 
             <div class="modules-grid" style="padding:0 24px 24px">
@@ -328,11 +369,15 @@ function renderSettingsModules(content) {
 
             <div style="padding:0 24px 24px">
                 <button class="btn btn-primary" onclick="saveModulesConfig()">
-                    <i class="fas fa-save"></i> ${t('common.save')}
+                    <i class="fas fa-save"></i> Sauvegarder config globale
                 </button>
             </div>
         </div>
     `;
+
+    if (_settingsSelectedHotelId) {
+        loadHotelModulesForSettings(_settingsSelectedHotelId);
+    }
 }
 
 // ============================================================
@@ -418,6 +463,118 @@ function renderSettingsNotifications(content) {
 // FONCTIONS MODULES
 // ============================================================
 
+async function switchSettingsHotel(hotelId) {
+    _settingsSelectedHotelId = hotelId;
+    await loadHotelModulesForSettings(hotelId);
+}
+
+async function loadHotelModulesForSettings(hotelId) {
+    const grid = document.getElementById('hotel-modules-grid');
+    if (!grid) return;
+    grid.innerHTML = '<div style="text-align:center;padding:24px"><span class="spinner"></span> Chargement...</div>';
+
+    try {
+        const result = await API.getHotelModulesConfig(hotelId);
+        currentHotelModules = {};
+        const serverModules = result.modules || {};
+
+        // Initialiser : par défaut tous actifs sauf si configuré
+        for (const moduleId of Object.keys(SYSTEM_MODULES)) {
+            if (serverModules[moduleId] !== undefined) {
+                currentHotelModules[moduleId] = serverModules[moduleId];
+            } else {
+                currentHotelModules[moduleId] = true;
+            }
+        }
+
+        grid.innerHTML = renderHotelModulesGrid();
+    } catch (err) {
+        grid.innerHTML = '<div class="alert alert-danger">Erreur de chargement</div>';
+        console.error(err);
+    }
+}
+
+function renderHotelModulesGrid() {
+    return Object.entries(SYSTEM_MODULES).map(([moduleId, module]) => {
+        const isEnabled = currentHotelModules[moduleId] !== false && currentHotelModules[moduleId] !== 'false';
+        const isCore = module.core === true;
+        // Vérifier si le module est désactivé globalement
+        const isGloballyDisabled = currentModules[moduleId] === false || currentModules[moduleId] === 'false';
+
+        return `
+            <div class="module-card ${!isEnabled || isGloballyDisabled ? 'inactive' : 'active'} ${isCore ? 'core' : ''}">
+                <div class="module-toggle">
+                    <label class="switch">
+                        <input type="checkbox"
+                            ${isEnabled && !isGloballyDisabled ? 'checked' : ''}
+                            ${isCore || isGloballyDisabled ? 'disabled' : ''}
+                            onchange="toggleHotelModule('${moduleId}', this.checked)"
+                            id="hotel-module-${moduleId}">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="module-icon">
+                    <i class="fas ${module.icon}"></i>
+                </div>
+                <div class="module-info">
+                    <h4>${module.name} ${isCore ? '<span class="badge badge-gray">Essentiel</span>' : ''}${isGloballyDisabled ? '<span class="badge badge-gray" style="background:#fee2e2;color:#dc2626">Désactivé globalement</span>' : ''}</h4>
+                    <p>${module.description}</p>
+                </div>
+                <div class="module-status">
+                    ${isGloballyDisabled ? '<span class="status-inactive"><i class="fas fa-ban"></i> Global off</span>' : (isEnabled ? '<span class="status-active"><i class="fas fa-check-circle"></i> Actif</span>' : '<span class="status-inactive"><i class="fas fa-times-circle"></i> Inactif</span>')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function toggleHotelModule(moduleId, enabled) {
+    currentHotelModules[moduleId] = enabled;
+
+    const card = document.querySelector(`#hotel-module-${moduleId}`).closest('.module-card');
+    if (enabled) {
+        card.classList.remove('inactive');
+        card.classList.add('active');
+        card.querySelector('.module-status').innerHTML = '<span class="status-active"><i class="fas fa-check-circle"></i> Actif</span>';
+    } else {
+        card.classList.remove('active');
+        card.classList.add('inactive');
+        card.querySelector('.module-status').innerHTML = '<span class="status-inactive"><i class="fas fa-times-circle"></i> Inactif</span>';
+    }
+}
+
+async function saveHotelModulesConfig() {
+    if (!_settingsSelectedHotelId) {
+        toast('Aucun hôtel sélectionné', 'warning');
+        return;
+    }
+    try {
+        await API.saveHotelModulesConfig(_settingsSelectedHotelId, currentHotelModules);
+        const hotel = _settingsHotels.find(h => h.id === _settingsSelectedHotelId);
+        toast(`Modules sauvegardés pour ${hotel ? hotel.name : 'l\'hôtel'}`, 'success');
+
+        // Mettre à jour la sidebar si l'hôtel courant est celui modifié
+        if (typeof updateSidebarForHotelModules === 'function') {
+            updateSidebarForHotelModules();
+        }
+    } catch (error) {
+        toast(t('common.error') + ': ' + error.message, 'error');
+    }
+}
+
+async function applyModulesToAllHotels() {
+    if (!confirm('Appliquer la configuration de modules actuelle à TOUS les hôtels ?\n\nCette action va écraser les configurations individuelles.')) return;
+
+    try {
+        for (const hotel of _settingsHotels) {
+            await API.saveHotelModulesConfig(hotel.id, currentHotelModules);
+        }
+        toast(`Modules appliqués à ${_settingsHotels.length} hôtel(s)`, 'success');
+    } catch (error) {
+        toast(t('common.error') + ': ' + error.message, 'error');
+    }
+}
+
 function renderModulesGrid() {
     return Object.entries(SYSTEM_MODULES).map(([moduleId, module]) => {
         const moduleValue = currentModules[moduleId];
@@ -487,8 +644,9 @@ function updateSidebarModulesFromSettings() {
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
         const page = item.dataset.page;
         if (page) {
-            const isDisabled = currentModules[page] === false || currentModules[page] === 'false';
-            item.style.display = isDisabled ? 'none' : '';
+            const globalDisabled = currentModules[page] === false || currentModules[page] === 'false';
+            const hotelDisabled = typeof hotelEnabledModules !== 'undefined' && (hotelEnabledModules[page] === false || hotelEnabledModules[page] === 'false');
+            item.style.display = (globalDisabled || hotelDisabled) ? 'none' : '';
         }
     });
 }
