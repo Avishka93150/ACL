@@ -1774,12 +1774,17 @@ try {
                             INDEX idx_hotel (hotel_id)
                         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-                        $rows = db()->query("SELECT hotel_id, module_key, enabled FROM hotel_modules");
+                        // Filtrer par les hôtels de l'utilisateur
+                        $hotel_ids = $user['hotel_ids'] ?? [];
                         $hotelModules = [];
-                        foreach ($rows as $row) {
-                            $hid = (int)$row['hotel_id'];
-                            if (!isset($hotelModules[$hid])) $hotelModules[$hid] = new stdClass();
-                            $hotelModules[$hid]->{$row['module_key']} = (bool)$row['enabled'];
+                        if (!empty($hotel_ids)) {
+                            $placeholders = implode(',', array_fill(0, count($hotel_ids), '?'));
+                            $rows = db()->query("SELECT hotel_id, module_key, enabled FROM hotel_modules WHERE hotel_id IN ($placeholders)", $hotel_ids);
+                            foreach ($rows as $row) {
+                                $hid = (int)$row['hotel_id'];
+                                if (!isset($hotelModules[$hid])) $hotelModules[$hid] = new stdClass();
+                                $hotelModules[$hid]->{$row['module_key']} = (bool)$row['enabled'];
+                            }
                         }
                     } catch (Exception $e) {
                         error_log("All hotel modules GET error: " . $e->getMessage());

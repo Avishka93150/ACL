@@ -428,7 +428,8 @@ function updateMenuByPermissions() {
 
 // Load modules configuration and update sidebar
 let enabledModules = {};
-let hotelEnabledModules = {};
+let allHotelModules = {};   // { hotelId: { moduleKey: true/false, ... }, ... }
+let userHotelIds = [];       // IDs des hôtels de l'utilisateur
 
 async function loadModulesConfig() {
     try {
@@ -439,18 +440,19 @@ async function loadModulesConfig() {
         enabledModules = {};
     }
 
-    // Charger la config par hôtel si l'utilisateur a un hôtel courant
+    // Charger la config modules de TOUS les hôtels de l'utilisateur
     try {
         const mgmt = await API.getManagementInfo();
         const hotels = mgmt.manageable_hotels || [];
-        const currentHotelId = (hotels.length > 0) ? hotels[0].id : null;
-        if (currentHotelId) {
-            const hotelResult = await API.getHotelModulesConfig(currentHotelId);
-            hotelEnabledModules = hotelResult.modules || {};
+        userHotelIds = hotels.map(h => h.id);
+
+        if (userHotelIds.length > 0) {
+            const allResult = await API.getAllHotelModulesConfig();
+            allHotelModules = allResult.hotel_modules || {};
         }
     } catch (error) {
         console.log('Hotel modules config not available');
-        hotelEnabledModules = {};
+        allHotelModules = {};
     }
 
     updateSidebarModules();
@@ -463,8 +465,23 @@ function updateSidebarModules() {
 
         // Module désactivé globalement
         const globalDisabled = enabledModules[page] === false || enabledModules[page] === 'false';
-        // Module désactivé pour l'hôtel courant (seulement si configuré explicitement)
-        const hotelDisabled = hotelEnabledModules[page] === false || hotelEnabledModules[page] === 'false';
+
+        // Module désactivé par hôtel : masquer seulement si désactivé dans TOUS les hôtels de l'utilisateur
+        let hotelDisabled = false;
+        if (userHotelIds.length > 0) {
+            const hasExplicitConfig = userHotelIds.some(hid => {
+                const cfg = allHotelModules[hid];
+                return cfg && (page in cfg);
+            });
+            if (hasExplicitConfig) {
+                // Désactivé seulement si AUCUN hôtel ne l'a activé
+                hotelDisabled = !userHotelIds.some(hid => {
+                    const cfg = allHotelModules[hid];
+                    if (!cfg || !(page in cfg)) return true; // Pas configuré = activé par défaut
+                    return cfg[page] === true || cfg[page] === 'true';
+                });
+            }
+        }
 
         if (globalDisabled || hotelDisabled) {
             item.style.display = 'none';
@@ -477,15 +494,10 @@ function updateSidebarModules() {
 // Appelé depuis settings.js après modification des modules par hôtel
 async function updateSidebarForHotelModules() {
     try {
-        const mgmt = await API.getManagementInfo();
-        const hotels = mgmt.manageable_hotels || [];
-        const currentHotelId = (hotels.length > 0) ? hotels[0].id : null;
-        if (currentHotelId) {
-            const hotelResult = await API.getHotelModulesConfig(currentHotelId);
-            hotelEnabledModules = hotelResult.modules || {};
-        }
+        const allResult = await API.getAllHotelModulesConfig();
+        allHotelModules = allResult.hotel_modules || {};
     } catch (error) {
-        hotelEnabledModules = {};
+        allHotelModules = {};
     }
     updateSidebarModules();
 }
