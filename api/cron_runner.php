@@ -31,7 +31,7 @@ if ($useDirectInclude) {
     
     try {
         // Connexion à la base de données
-        $db = Database::getInstance();
+        $db = Database::get();
         
         $now = new DateTime();
         $currentTime = $now->format('H:i');
