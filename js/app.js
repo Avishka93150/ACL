@@ -412,6 +412,7 @@ function updateMenuByPermissions() {
         'hotels': 'hotels.view',
         'revenue': 'revenue.view',
         'selfcheckin': 'selfcheckin.view',
+        'welcome': 'welcome.view',
         'settings': 'permissions.manage',
         'reports': 'reports.access'
     };
@@ -518,6 +519,7 @@ function navigateTo(page) {
         'hotels': 'hotels.view',
         'revenue': 'revenue.view',
         'selfcheckin': 'selfcheckin.view',
+        'welcome': 'welcome.view',
         'settings': 'permissions.manage',
         'reports': 'reports.access'
     };
@@ -555,6 +557,7 @@ function navigateTo(page) {
         messages: 'Messagerie',
         users: 'Utilisateurs',
         selfcheckin: 'Self Check-in',
+        welcome: 'Livret d\'accueil',
         settings: 'Paramètres'
     };
     document.getElementById('page-title').textContent = titles[page] || page;
@@ -582,6 +585,7 @@ function loadPage(page) {
         case 'messages': loadMessages(container); break;
         case 'users': loadUsers(container); break;
         case 'selfcheckin': loadSelfcheckin(container); break;
+        case 'welcome': loadWelcome(container); break;
         case 'settings': loadSettings(container); break;
         default: container.innerHTML = '<div class="card"><p>Page non trouvée</p></div>';
     }

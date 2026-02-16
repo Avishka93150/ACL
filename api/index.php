@@ -11267,6 +11267,499 @@ try {
             json_error('Endpoint SMTP non trouvé', 404);
             break;
 
+        // ==================== LIVRET D'ACCUEIL NUMERIQUE ====================
+        case 'welcome':
+
+            // --- PUBLIC : GET /welcome/public/{slug} (pas d'auth) ---
+            if ($method === 'GET' && $id === 'public' && $action) {
+                $slug = $action;
+                $config = db()->queryOne(
+                    "SELECT wc.*, h.name as hotel_name, h.stars, h.city
+                     FROM hotel_welcome_config wc
+                     JOIN hotels h ON h.id = wc.hotel_id
+                     WHERE wc.slug = ? AND wc.is_published = 1",
+                    [$slug]
+                );
+                if (!$config) json_error('Livret non trouvé ou non publié', 404);
+
+                $tabs = db()->query(
+                    "SELECT id, name, icon, description, banner_path, sort_order
+                     FROM hotel_welcome_tabs
+                     WHERE hotel_id = ? AND is_active = 1
+                     ORDER BY sort_order, id",
+                    [$config['hotel_id']]
+                );
+
+                foreach ($tabs as &$tab) {
+                    $tab['items'] = db()->query(
+                        "SELECT id, title, description, photo_path, price, schedule, external_link, sort_order
+                         FROM hotel_welcome_items
+                         WHERE tab_id = ? AND is_active = 1
+                         ORDER BY sort_order, id",
+                        [$tab['id']]
+                    );
+                }
+                unset($tab);
+
+                $infos = db()->query(
+                    "SELECT id, info_type, title, content, icon, sort_order
+                     FROM hotel_welcome_infos
+                     WHERE hotel_id = ? AND is_active = 1
+                     ORDER BY sort_order, id",
+                    [$config['hotel_id']]
+                );
+
+                // Retirer les données sensibles
+                unset($config['id']);
+                $hotelId = $config['hotel_id'];
+                unset($config['hotel_id']);
+
+                json_out([
+                    'config' => $config,
+                    'tabs' => $tabs,
+                    'infos' => $infos
+                ]);
+            }
+
+            // --- Tous les autres endpoints nécessitent auth ---
+            $user = require_auth();
+            $userHotelIds = getManageableHotels($user);
+
+            // GET /welcome/config?hotel_id=X
+            if ($method === 'GET' && $id === 'config') {
+                $hotelId = $_GET['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $config = db()->queryOne(
+                    "SELECT * FROM hotel_welcome_config WHERE hotel_id = ?",
+                    [$hotelId]
+                );
+
+                json_out(['config' => $config ?: null]);
+            }
+
+            // PUT /welcome/config - Sauvegarder config
+            if ($method === 'PUT' && $id === 'config') {
+                $data = get_input();
+                $hotelId = $data['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $slug = trim($data['slug'] ?? '');
+                if (!$slug) json_error('Le slug est requis');
+                if (!preg_match('/^[a-z0-9\-]+$/', $slug)) json_error('Le slug ne doit contenir que des lettres minuscules, chiffres et tirets');
+
+                // Vérifier unicité du slug (hors cet hôtel)
+                $existing = db()->queryOne(
+                    "SELECT id FROM hotel_welcome_config WHERE slug = ? AND hotel_id != ?",
+                    [$slug, $hotelId]
+                );
+                if ($existing) json_error('Ce slug est déjà utilisé par un autre hôtel');
+
+                $config = db()->queryOne("SELECT id FROM hotel_welcome_config WHERE hotel_id = ?", [$hotelId]);
+
+                $fields = [
+                    'slug' => $slug,
+                    'is_published' => (int)($data['is_published'] ?? 0),
+                    'primary_color' => $data['primary_color'] ?? '#1a56db',
+                    'secondary_color' => $data['secondary_color'] ?? '#f3f4f6',
+                    'font_family' => $data['font_family'] ?? 'Inter',
+                    'welcome_title' => $data['welcome_title'] ?? null,
+                    'welcome_text' => $data['welcome_text'] ?? null,
+                    'phone' => $data['phone'] ?? null,
+                    'email' => $data['email'] ?? null,
+                    'address' => $data['address'] ?? null,
+                    'google_maps_url' => $data['google_maps_url'] ?? null,
+                    'facebook_url' => $data['facebook_url'] ?? null,
+                    'instagram_url' => $data['instagram_url'] ?? null,
+                    'website_url' => $data['website_url'] ?? null,
+                    'wifi_name' => $data['wifi_name'] ?? null,
+                    'wifi_password' => $data['wifi_password'] ?? null,
+                    'checkin_time' => $data['checkin_time'] ?? '15:00:00',
+                    'checkout_time' => $data['checkout_time'] ?? '11:00:00',
+                    'updated_at' => date('Y-m-d H:i:s')
+                ];
+
+                if ($config) {
+                    $sets = [];
+                    $params = [];
+                    foreach ($fields as $k => $v) {
+                        $sets[] = "$k = ?";
+                        $params[] = $v;
+                    }
+                    $params[] = $config['id'];
+                    db()->execute("UPDATE hotel_welcome_config SET " . implode(', ', $sets) . " WHERE id = ?", $params);
+                    json_out(['message' => 'Configuration mise à jour', 'id' => $config['id']]);
+                } else {
+                    $fields['hotel_id'] = $hotelId;
+                    $fields['created_at'] = date('Y-m-d H:i:s');
+                    $insertId = db()->insert('hotel_welcome_config', $fields);
+                    json_out(['message' => 'Configuration créée', 'id' => $insertId], 201);
+                }
+            }
+
+            // POST /welcome/config/logo ou /welcome/config/banner - Upload images config
+            if ($method === 'POST' && $id === 'config' && in_array($action, ['logo', 'banner'])) {
+                $hotelId = $_POST['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                if (!isset($_FILES['file'])) json_error('Aucun fichier envoyé');
+
+                $ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
+                if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) json_error('Format non autorisé (JPG, PNG, WEBP uniquement)');
+                if ($_FILES['file']['size'] > 5 * 1024 * 1024) json_error('Fichier trop volumineux (max 5 Mo)');
+
+                $filename = $action . '_' . $hotelId . '_' . uniqid() . '.' . $ext;
+                $uploadDir = __DIR__ . '/../uploads/welcome/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0775, true);
+                $path = $uploadDir . $filename;
+
+                if (!move_uploaded_file($_FILES['file']['tmp_name'], $path)) {
+                    json_error('Erreur lors de l\'upload');
+                }
+
+                $column = $action . '_path';
+                $relativePath = 'uploads/welcome/' . $filename;
+
+                // Supprimer l'ancien fichier
+                $config = db()->queryOne("SELECT id, {$column} FROM hotel_welcome_config WHERE hotel_id = ?", [$hotelId]);
+                if ($config && $config[$column]) {
+                    $oldFile = __DIR__ . '/../' . $config[$column];
+                    if (file_exists($oldFile)) unlink($oldFile);
+                }
+
+                if ($config) {
+                    db()->execute("UPDATE hotel_welcome_config SET {$column} = ?, updated_at = NOW() WHERE id = ?", [$relativePath, $config['id']]);
+                } else {
+                    db()->insert('hotel_welcome_config', [
+                        'hotel_id' => $hotelId,
+                        'slug' => 'hotel-' . $hotelId,
+                        $column => $relativePath,
+                        'created_at' => date('Y-m-d H:i:s')
+                    ]);
+                }
+
+                json_out(['path' => $relativePath, 'message' => ucfirst($action) . ' uploadé']);
+            }
+
+            // --- ONGLETS (tabs) ---
+
+            // GET /welcome/tabs?hotel_id=X
+            if ($method === 'GET' && $id === 'tabs' && !$action) {
+                $hotelId = $_GET['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $tabs = db()->query(
+                    "SELECT * FROM hotel_welcome_tabs WHERE hotel_id = ? ORDER BY sort_order, id",
+                    [$hotelId]
+                );
+
+                json_out(['tabs' => $tabs]);
+            }
+
+            // POST /welcome/tabs - Créer un onglet
+            if ($method === 'POST' && $id === 'tabs' && !$action) {
+                $data = get_input();
+                $hotelId = $data['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+                if (empty($data['name'])) json_error('Le nom de l\'onglet est requis');
+
+                $maxOrder = db()->queryOne("SELECT MAX(sort_order) as m FROM hotel_welcome_tabs WHERE hotel_id = ?", [$hotelId]);
+
+                $insertId = db()->insert('hotel_welcome_tabs', [
+                    'hotel_id' => $hotelId,
+                    'name' => $data['name'],
+                    'icon' => $data['icon'] ?? 'concierge-bell',
+                    'description' => $data['description'] ?? null,
+                    'sort_order' => ($maxOrder['m'] ?? 0) + 1,
+                    'is_active' => 1,
+                    'created_at' => date('Y-m-d H:i:s')
+                ]);
+
+                json_out(['message' => 'Onglet créé', 'id' => $insertId], 201);
+            }
+
+            // PUT /welcome/tabs/{tabId}
+            if ($method === 'PUT' && $id === 'tabs' && $action && $action !== 'reorder') {
+                $tabId = (int)$action;
+                $data = get_input();
+
+                $tab = db()->queryOne("SELECT * FROM hotel_welcome_tabs WHERE id = ?", [$tabId]);
+                if (!$tab) json_error('Onglet non trouvé', 404);
+                if (!in_array($tab['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $sets = [];
+                $params = [];
+                foreach (['name', 'icon', 'description', 'is_active', 'sort_order'] as $field) {
+                    if (isset($data[$field])) {
+                        $sets[] = "$field = ?";
+                        $params[] = $data[$field];
+                    }
+                }
+                if (empty($sets)) json_error('Rien à modifier');
+
+                $sets[] = "updated_at = NOW()";
+                $params[] = $tabId;
+                db()->execute("UPDATE hotel_welcome_tabs SET " . implode(', ', $sets) . " WHERE id = ?", $params);
+
+                json_out(['message' => 'Onglet mis à jour']);
+            }
+
+            // PUT /welcome/tabs/reorder - Réordonner les onglets
+            if ($method === 'PUT' && $id === 'tabs' && $action === 'reorder') {
+                $data = get_input();
+                $hotelId = $data['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $order = $data['order'] ?? [];
+                foreach ($order as $i => $tabId) {
+                    db()->execute("UPDATE hotel_welcome_tabs SET sort_order = ? WHERE id = ? AND hotel_id = ?", [$i, $tabId, $hotelId]);
+                }
+
+                json_out(['message' => 'Ordre mis à jour']);
+            }
+
+            // DELETE /welcome/tabs/{tabId}
+            if ($method === 'DELETE' && $id === 'tabs' && $action) {
+                $tabId = (int)$action;
+                $tab = db()->queryOne("SELECT * FROM hotel_welcome_tabs WHERE id = ?", [$tabId]);
+                if (!$tab) json_error('Onglet non trouvé', 404);
+                if (!in_array($tab['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                db()->execute("DELETE FROM hotel_welcome_tabs WHERE id = ?", [$tabId]);
+                json_out(['message' => 'Onglet supprimé']);
+            }
+
+            // POST /welcome/tabs/{tabId}/banner - Upload bannière onglet
+            if ($method === 'POST' && $id === 'tabs' && $action && $subId === 'banner') {
+                $tabId = (int)$action;
+                $tab = db()->queryOne("SELECT * FROM hotel_welcome_tabs WHERE id = ?", [$tabId]);
+                if (!$tab) json_error('Onglet non trouvé', 404);
+                if (!in_array($tab['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                if (!isset($_FILES['file'])) json_error('Aucun fichier envoyé');
+                $ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
+                if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) json_error('Format non autorisé');
+                if ($_FILES['file']['size'] > 5 * 1024 * 1024) json_error('Fichier trop volumineux (max 5 Mo)');
+
+                $filename = 'tab_' . $tabId . '_' . uniqid() . '.' . $ext;
+                $uploadDir = __DIR__ . '/../uploads/welcome/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0775, true);
+
+                if ($tab['banner_path']) {
+                    $old = __DIR__ . '/../' . $tab['banner_path'];
+                    if (file_exists($old)) unlink($old);
+                }
+
+                move_uploaded_file($_FILES['file']['tmp_name'], $uploadDir . $filename);
+                $path = 'uploads/welcome/' . $filename;
+                db()->execute("UPDATE hotel_welcome_tabs SET banner_path = ?, updated_at = NOW() WHERE id = ?", [$path, $tabId]);
+
+                json_out(['path' => $path, 'message' => 'Bannière uploadée']);
+            }
+
+            // --- ITEMS (contenu des onglets) ---
+
+            // GET /welcome/items?tab_id=X
+            if ($method === 'GET' && $id === 'items') {
+                $tabId = $_GET['tab_id'] ?? null;
+                if (!$tabId) json_error('tab_id requis');
+
+                $tab = db()->queryOne("SELECT hotel_id FROM hotel_welcome_tabs WHERE id = ?", [$tabId]);
+                if (!$tab) json_error('Onglet non trouvé', 404);
+                if (!in_array($tab['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $items = db()->query(
+                    "SELECT * FROM hotel_welcome_items WHERE tab_id = ? ORDER BY sort_order, id",
+                    [$tabId]
+                );
+
+                json_out(['items' => $items]);
+            }
+
+            // POST /welcome/items - Créer un item
+            if ($method === 'POST' && $id === 'items' && !$action) {
+                $data = get_input();
+                $tabId = $data['tab_id'] ?? null;
+                if (!$tabId) json_error('tab_id requis');
+                if (empty($data['title'])) json_error('Le titre est requis');
+
+                $tab = db()->queryOne("SELECT hotel_id FROM hotel_welcome_tabs WHERE id = ?", [$tabId]);
+                if (!$tab) json_error('Onglet non trouvé', 404);
+                if (!in_array($tab['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $maxOrder = db()->queryOne("SELECT MAX(sort_order) as m FROM hotel_welcome_items WHERE tab_id = ?", [$tabId]);
+
+                $insertId = db()->insert('hotel_welcome_items', [
+                    'tab_id' => $tabId,
+                    'hotel_id' => $tab['hotel_id'],
+                    'title' => $data['title'],
+                    'description' => $data['description'] ?? null,
+                    'price' => $data['price'] ?? null,
+                    'schedule' => $data['schedule'] ?? null,
+                    'external_link' => $data['external_link'] ?? null,
+                    'sort_order' => ($maxOrder['m'] ?? 0) + 1,
+                    'is_active' => 1,
+                    'created_at' => date('Y-m-d H:i:s')
+                ]);
+
+                json_out(['message' => 'Élément créé', 'id' => $insertId], 201);
+            }
+
+            // PUT /welcome/items/{itemId}
+            if ($method === 'PUT' && $id === 'items' && $action) {
+                $itemId = (int)$action;
+                $data = get_input();
+
+                $item = db()->queryOne("SELECT * FROM hotel_welcome_items WHERE id = ?", [$itemId]);
+                if (!$item) json_error('Élément non trouvé', 404);
+                if (!in_array($item['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $sets = [];
+                $params = [];
+                foreach (['title', 'description', 'price', 'schedule', 'external_link', 'is_active', 'sort_order'] as $field) {
+                    if (isset($data[$field])) {
+                        $sets[] = "$field = ?";
+                        $params[] = $data[$field];
+                    }
+                }
+                if (empty($sets)) json_error('Rien à modifier');
+
+                $sets[] = "updated_at = NOW()";
+                $params[] = $itemId;
+                db()->execute("UPDATE hotel_welcome_items SET " . implode(', ', $sets) . " WHERE id = ?", $params);
+
+                json_out(['message' => 'Élément mis à jour']);
+            }
+
+            // DELETE /welcome/items/{itemId}
+            if ($method === 'DELETE' && $id === 'items' && $action) {
+                $itemId = (int)$action;
+                $item = db()->queryOne("SELECT * FROM hotel_welcome_items WHERE id = ?", [$itemId]);
+                if (!$item) json_error('Élément non trouvé', 404);
+                if (!in_array($item['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                if ($item['photo_path']) {
+                    $old = __DIR__ . '/../' . $item['photo_path'];
+                    if (file_exists($old)) unlink($old);
+                }
+
+                db()->execute("DELETE FROM hotel_welcome_items WHERE id = ?", [$itemId]);
+                json_out(['message' => 'Élément supprimé']);
+            }
+
+            // POST /welcome/items/{itemId}/photo - Upload photo item
+            if ($method === 'POST' && $id === 'items' && $action && $subId === 'photo') {
+                $itemId = (int)$action;
+                $item = db()->queryOne("SELECT * FROM hotel_welcome_items WHERE id = ?", [$itemId]);
+                if (!$item) json_error('Élément non trouvé', 404);
+                if (!in_array($item['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                if (!isset($_FILES['file'])) json_error('Aucun fichier envoyé');
+                $ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
+                if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) json_error('Format non autorisé');
+                if ($_FILES['file']['size'] > 5 * 1024 * 1024) json_error('Fichier trop volumineux (max 5 Mo)');
+
+                $filename = 'item_' . $itemId . '_' . uniqid() . '.' . $ext;
+                $uploadDir = __DIR__ . '/../uploads/welcome/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0775, true);
+
+                if ($item['photo_path']) {
+                    $old = __DIR__ . '/../' . $item['photo_path'];
+                    if (file_exists($old)) unlink($old);
+                }
+
+                move_uploaded_file($_FILES['file']['tmp_name'], $uploadDir . $filename);
+                $path = 'uploads/welcome/' . $filename;
+                db()->execute("UPDATE hotel_welcome_items SET photo_path = ?, updated_at = NOW() WHERE id = ?", [$path, $itemId]);
+
+                json_out(['path' => $path, 'message' => 'Photo uploadée']);
+            }
+
+            // --- INFOS PRATIQUES ---
+
+            // GET /welcome/infos?hotel_id=X
+            if ($method === 'GET' && $id === 'infos') {
+                $hotelId = $_GET['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $infos = db()->query(
+                    "SELECT * FROM hotel_welcome_infos WHERE hotel_id = ? ORDER BY sort_order, id",
+                    [$hotelId]
+                );
+
+                json_out(['infos' => $infos]);
+            }
+
+            // POST /welcome/infos - Créer une info
+            if ($method === 'POST' && $id === 'infos' && !$action) {
+                $data = get_input();
+                $hotelId = $data['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+                if (empty($data['title']) || empty($data['content'])) json_error('Titre et contenu requis');
+
+                $maxOrder = db()->queryOne("SELECT MAX(sort_order) as m FROM hotel_welcome_infos WHERE hotel_id = ?", [$hotelId]);
+
+                $insertId = db()->insert('hotel_welcome_infos', [
+                    'hotel_id' => $hotelId,
+                    'info_type' => $data['info_type'] ?? 'other',
+                    'title' => $data['title'],
+                    'content' => $data['content'],
+                    'icon' => $data['icon'] ?? 'info-circle',
+                    'sort_order' => ($maxOrder['m'] ?? 0) + 1,
+                    'is_active' => 1,
+                    'created_at' => date('Y-m-d H:i:s')
+                ]);
+
+                json_out(['message' => 'Info créée', 'id' => $insertId], 201);
+            }
+
+            // PUT /welcome/infos/{infoId}
+            if ($method === 'PUT' && $id === 'infos' && $action) {
+                $infoId = (int)$action;
+                $data = get_input();
+
+                $info = db()->queryOne("SELECT * FROM hotel_welcome_infos WHERE id = ?", [$infoId]);
+                if (!$info) json_error('Info non trouvée', 404);
+                if (!in_array($info['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $sets = [];
+                $params = [];
+                foreach (['info_type', 'title', 'content', 'icon', 'is_active', 'sort_order'] as $field) {
+                    if (isset($data[$field])) {
+                        $sets[] = "$field = ?";
+                        $params[] = $data[$field];
+                    }
+                }
+                if (empty($sets)) json_error('Rien à modifier');
+
+                $params[] = $infoId;
+                db()->execute("UPDATE hotel_welcome_infos SET " . implode(', ', $sets) . " WHERE id = ?", $params);
+
+                json_out(['message' => 'Info mise à jour']);
+            }
+
+            // DELETE /welcome/infos/{infoId}
+            if ($method === 'DELETE' && $id === 'infos' && $action) {
+                $infoId = (int)$action;
+                $info = db()->queryOne("SELECT * FROM hotel_welcome_infos WHERE id = ?", [$infoId]);
+                if (!$info) json_error('Info non trouvée', 404);
+                if (!in_array($info['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                db()->execute("DELETE FROM hotel_welcome_infos WHERE id = ?", [$infoId]);
+                json_out(['message' => 'Info supprimée']);
+            }
+
+            json_error('Endpoint welcome non trouvé', 404);
+            break;
+
         default:
             json_error('Endpoint non trouvé', 404);
     }

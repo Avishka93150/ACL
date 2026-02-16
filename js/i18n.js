@@ -20,6 +20,7 @@ const I18N = {
             'nav.tasks': 'Taches',
             'nav.evaluations': 'Evaluations',
             'nav.audit': 'Audits',
+            'nav.welcome': 'Livret d\'accueil',
             'nav.users': 'Utilisateurs',
             'nav.messages': 'Messages',
             'nav.settings': 'Parametres',
@@ -713,6 +714,7 @@ const I18N = {
             'nav.tasks': 'Tasks',
             'nav.evaluations': 'Evaluations',
             'nav.audit': 'Audits',
+            'nav.welcome': 'Welcome Book',
             'nav.users': 'Users',
             'nav.messages': 'Messages',
             'nav.settings': 'Settings',
@@ -1405,6 +1407,7 @@ const I18N = {
             'nav.tasks': 'Tareas',
             'nav.evaluations': 'Evaluaciones',
             'nav.audit': 'Auditorias',
+            'nav.welcome': 'Libro de bienvenida',
             'nav.users': 'Usuarios',
             'nav.messages': 'Mensajes',
             'nav.settings': 'Ajustes',
@@ -2157,6 +2160,7 @@ function updateNavLabels() {
         'tasks': 'nav.tasks',
         'evaluations': 'nav.evaluations',
         'audit': 'nav.audit',
+        'welcome': 'nav.welcome',
         'users': 'nav.users'
     };
 
