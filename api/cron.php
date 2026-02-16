@@ -395,12 +395,17 @@ function checkMaintenanceAlerts() {
         $message .= "Pris en charge le: {$t['assigned_at']}\n\n";
         $message .= "Ce ticket nécessite une intervention immédiate.";
         
-        // Notifier tous les admins
-        $admins = db()->query("SELECT id, email FROM users WHERE role = 'admin' AND status = 'active'");
+        // Notifier les admins liés à cet hôtel
+        $admins = db()->query(
+            "SELECT DISTINCT u.id, u.email FROM users u
+             JOIN user_hotels uh ON u.id = uh.user_id
+             WHERE uh.hotel_id = ? AND u.role = 'admin' AND u.status = 'active'",
+            [$t['hotel_id']]
+        );
         foreach ($admins as $a) {
             sendNotification($a['id'], $a['email'], $subject, $message);
         }
-        
+
         echo "    → Ticket #{$t['id']} en retard grave ({$t['days_in_progress']} jours)\n";
     }
 }
@@ -414,60 +419,87 @@ function checkMaintenanceAlerts() {
  * Alerte urgente pour les congés dont le départ est dans moins de 5 semaines.
  */
 function sendLeavesReminder() {
-    // Congés en attente de validation
+    // Congés en attente de validation avec l'hôtel de l'employé
     $pendingLeaves = db()->query(
-        "SELECT l.*, CONCAT(u.first_name, ' ', u.last_name) as employee_name
+        "SELECT l.*, CONCAT(u.first_name, ' ', u.last_name) as employee_name,
+                uh.hotel_id, h.name as hotel_name
          FROM leave_requests l
          JOIN users u ON l.employee_id = u.id
+         LEFT JOIN user_hotels uh ON u.id = uh.user_id
+         LEFT JOIN hotels h ON uh.hotel_id = h.id
          WHERE l.status = 'pending'
-         ORDER BY l.start_date ASC"
+         ORDER BY uh.hotel_id, l.start_date ASC"
     );
-    
+
     echo "  Congés en attente: " . count($pendingLeaves) . "\n";
-    
+
     if (empty($pendingLeaves)) {
         return;
     }
-    
-    // Préparer le message récapitulatif
-    $message = "Rappel: " . count($pendingLeaves) . " demande(s) de congés en attente de validation.\n\n";
+
+    // Regrouper les congés par hôtel
+    $leavesByHotel = [];
     foreach ($pendingLeaves as $l) {
-        $message .= "• {$l['employee_name']}: du {$l['start_date']} au {$l['end_date']} ({$l['leave_type']})\n";
+        $hid = $l['hotel_id'] ?? 0;
+        if (!isset($leavesByHotel[$hid])) {
+            $leavesByHotel[$hid] = ['hotel_name' => $l['hotel_name'] ?? 'Non assigné', 'leaves' => []];
+        }
+        $leavesByHotel[$hid]['leaves'][] = $l;
     }
-    
-    // Notifier les validateurs (responsables et admin)
-    $validators = db()->query(
-        "SELECT id, email FROM users WHERE role IN ('admin', 'groupe_manager', 'hotel_manager') AND status = 'active'"
-    );
-    
-    foreach ($validators as $v) {
-        sendNotification($v['id'], $v['email'], 'Rappel: Congés en attente de validation', $message);
-    }
-    
-    // Vérifier les congés URGENTS (départ dans moins de 5 semaines)
+
     $fiveWeeksFromNow = date('Y-m-d', strtotime('+5 weeks'));
-    $urgentLeaves = array();
-    foreach ($pendingLeaves as $l) {
-        if ($l['start_date'] <= $fiveWeeksFromNow) {
-            $urgentLeaves[] = $l;
+
+    foreach ($leavesByHotel as $hotelId => $data) {
+        if (!$hotelId) continue;
+
+        $leaves = $data['leaves'];
+        $hotelName = $data['hotel_name'];
+
+        // Préparer le message récapitulatif pour cet hôtel
+        $message = "Rappel: " . count($leaves) . " demande(s) de congés en attente de validation pour {$hotelName}.\n\n";
+        foreach ($leaves as $l) {
+            $message .= "• {$l['employee_name']}: du {$l['start_date']} au {$l['end_date']} ({$l['leave_type']})\n";
         }
-    }
-    
-    if (!empty($urgentLeaves)) {
-        echo "  Congés urgents (< 5 semaines): " . count($urgentLeaves) . "\n";
-        
-        $urgentMessage = "⚠️ URGENT: Les congés suivants doivent être validés rapidement (départ dans moins de 5 semaines):\n\n";
-        foreach ($urgentLeaves as $l) {
-            $urgentMessage .= "• {$l['employee_name']}: du {$l['start_date']} au {$l['end_date']}\n";
-        }
-        
-        // Notifier uniquement admin et groupe managers pour les urgents
-        $urgentValidators = db()->query(
-            "SELECT id, email FROM users WHERE role IN ('admin', 'groupe_manager') AND status = 'active'"
+
+        // Notifier les validateurs liés à cet hôtel
+        $validators = db()->query(
+            "SELECT DISTINCT u.id, u.email FROM users u
+             JOIN user_hotels uh ON u.id = uh.user_id
+             WHERE uh.hotel_id = ? AND u.role IN ('admin', 'groupe_manager', 'hotel_manager') AND u.status = 'active'",
+            [$hotelId]
         );
-        
-        foreach ($urgentValidators as $v) {
-            sendNotification($v['id'], $v['email'], '[URGENT] Congés à valider rapidement', $urgentMessage);
+
+        foreach ($validators as $v) {
+            sendNotification($v['id'], $v['email'], 'Rappel: Congés en attente de validation - ' . $hotelName, $message);
+        }
+
+        // Vérifier les congés URGENTS (départ dans moins de 5 semaines)
+        $urgentLeaves = array();
+        foreach ($leaves as $l) {
+            if ($l['start_date'] <= $fiveWeeksFromNow) {
+                $urgentLeaves[] = $l;
+            }
+        }
+
+        if (!empty($urgentLeaves)) {
+            echo "  Congés urgents (< 5 semaines) pour {$hotelName}: " . count($urgentLeaves) . "\n";
+
+            $urgentMessage = "⚠️ URGENT: Les congés suivants doivent être validés rapidement (départ dans moins de 5 semaines) pour {$hotelName}:\n\n";
+            foreach ($urgentLeaves as $l) {
+                $urgentMessage .= "• {$l['employee_name']}: du {$l['start_date']} au {$l['end_date']}\n";
+            }
+
+            // Notifier admin et groupe managers liés à cet hôtel
+            $urgentValidators = db()->query(
+                "SELECT DISTINCT u.id, u.email FROM users u
+                 JOIN user_hotels uh ON u.id = uh.user_id
+                 WHERE uh.hotel_id = ? AND u.role IN ('admin', 'groupe_manager') AND u.status = 'active'",
+                [$hotelId]
+            );
+
+            foreach ($urgentValidators as $v) {
+                sendNotification($v['id'], $v['email'], '[URGENT] Congés à valider rapidement - ' . $hotelName, $urgentMessage);
+            }
         }
     }
 }
@@ -958,10 +990,15 @@ function notifyAuditOverdue($db, $today) {
                 }
             }
             
-            // Après 5 jours, notifier les admins
+            // Après 5 jours, notifier les admins liés à cet hôtel
             if ($daysOverdue >= 5) {
-                $admins = $db->query("SELECT id, email FROM users WHERE role = 'admin' AND status = 'active'");
-                
+                $admins = $db->query(
+                    "SELECT DISTINCT u.id, u.email FROM users u
+                     JOIN user_hotels uh ON u.id = uh.user_id
+                     WHERE uh.hotel_id = ? AND u.role = 'admin' AND u.status = 'active'",
+                    [$schedule['hotel_id']]
+                );
+
                 foreach ($admins as $admin) {
                     createNotification($admin['id'], 'danger', $subject, $message . "\n\n(ESCALADE CRITIQUE: 5+ jours de retard)");
                     sendEmail($admin['email'], $subject, $message . "\n\n(ESCALADE CRITIQUE: 5+ jours de retard)");
@@ -1165,9 +1202,12 @@ function checkClosureAlerts() {
                 if (!$alertSent) {
                     echo "  🚨 {$hotel['name']}: Clôture du $twoDaysAgo toujours non effectuée (48h+)\n";
                     
-                    // Envoyer aux admins et groupe managers
+                    // Envoyer aux admins et groupe managers liés à cet hôtel
                     $admins = $db->query(
-                        "SELECT id, email, first_name FROM users WHERE role IN ('admin', 'groupe_manager') AND status = 'active'"
+                        "SELECT DISTINCT u.id, u.email, u.first_name FROM users u
+                         JOIN user_hotels uh ON u.id = uh.user_id
+                         WHERE uh.hotel_id = ? AND u.role IN ('admin', 'groupe_manager') AND u.status = 'active'",
+                        [$hotel['id']]
                     );
                     
                     foreach ($admins as $admin) {
