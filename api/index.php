@@ -7849,15 +7849,39 @@ try {
                     "SELECT * FROM closure_config WHERE hotel_id = ? AND is_active = 1 ORDER BY sort_order",
                     [$hotelId]
                 );
-                
+
+                // Charger le workflow config pour l'affichage
+                $workflowConfig = null;
+                $workflowSteps = [];
+                try {
+                    $workflowConfig = db()->queryOne(
+                        "SELECT * FROM closure_workflow_config WHERE hotel_id = ?",
+                        [$hotelId]
+                    );
+                    if ($workflowConfig) {
+                        if (is_string($workflowConfig['validator_roles'])) {
+                            $workflowConfig['validator_roles'] = json_decode($workflowConfig['validator_roles'], true);
+                        }
+                        if (is_string($workflowConfig['validator_roles_level2'])) {
+                            $workflowConfig['validator_roles_level2'] = json_decode($workflowConfig['validator_roles_level2'], true);
+                        }
+                    }
+                    $workflowSteps = db()->query(
+                        "SELECT * FROM closure_workflow_steps WHERE hotel_id = ? AND is_active = 1 ORDER BY step_order",
+                        [$hotelId]
+                    );
+                } catch (Exception $e) {}
+
                 json_out([
-                    'success' => true, 
+                    'success' => true,
                     'closures' => $closures,
                     'pending_date' => $pendingClosure ? null : $yesterday,
-                    'config' => $config
+                    'config' => $config,
+                    'workflow_config' => $workflowConfig,
+                    'workflow_steps' => $workflowSteps
                 ]);
             }
-            
+
             // Détail clôture journalière - GET /closures/daily/{hotel_id}/{date}
             if ($method === 'GET' && $id === 'daily' && $action && is_numeric($action) && $subId) {
                 $user = require_auth();
@@ -7918,27 +7942,39 @@ try {
                 $status = $_POST['status'] ?? 'draft';
                 
                 if (!$hotelId || !$closureDate) json_error('Hôtel et date requis');
-                
-                // Validation si soumission et dépenses > 0
-                if ($status === 'submitted' && $cashSpent > 0) {
+
+                // Charger la config workflow pour les seuils de validation
+                $wfConfig = null;
+                try {
+                    $wfConfig = db()->queryOne(
+                        "SELECT * FROM closure_workflow_config WHERE hotel_id = ?",
+                        [$hotelId]
+                    );
+                } catch (Exception $e) { $wfConfig = null; }
+
+                $commentThreshold = $wfConfig ? floatval($wfConfig['comment_required_above']) : 0;
+                $receiptThreshold = $wfConfig ? floatval($wfConfig['receipt_required_above']) : 0;
+
+                // Validation si soumission et dépenses au-dessus du seuil
+                if ($status === 'submitted' && $cashSpent > $commentThreshold) {
                     if (empty($notes)) {
-                        json_error('Un commentaire est obligatoire pour justifier les dépenses');
+                        json_error('Un commentaire est obligatoire pour justifier les dépenses supérieures à ' . number_format($commentThreshold, 2, ',', ' ') . ' €');
                     }
                 }
-                
+
                 $cashBalance = $cashReceived - $cashSpent;
-                
+
                 // Vérifier si existe déjà
                 $existing = db()->queryOne(
                     "SELECT id, expense_receipt FROM daily_closures WHERE hotel_id = ? AND closure_date = ?",
                     [$hotelId, $closureDate]
                 );
-                
+
                 // Traiter le justificatif des dépenses
                 $expenseReceipt = $existing['expense_receipt'] ?? null;
                 $uploadDir = __DIR__ . '/../uploads/closures/';
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                
+
                 if (isset($_FILES['expense_receipt']) && $_FILES['expense_receipt']['error'] === UPLOAD_ERR_OK) {
                     $uploadError = validateUpload($_FILES['expense_receipt'], 'any');
                     if (!$uploadError) {
@@ -7951,10 +7987,16 @@ try {
                         }
                     }
                 }
-                
-                // Validation justificatif si dépenses > 0 et soumission
-                if ($status === 'submitted' && $cashSpent > 0 && empty($expenseReceipt)) {
-                    json_error('Un justificatif est obligatoire pour les dépenses');
+
+                // Validation justificatif si dépenses au-dessus du seuil et soumission
+                if ($status === 'submitted' && $cashSpent > $receiptThreshold && empty($expenseReceipt)) {
+                    json_error('Un justificatif est obligatoire pour les dépenses supérieures à ' . number_format($receiptThreshold, 2, ',', ' ') . ' €');
+                }
+
+                // Auto-validation si configuré et montant sous le seuil
+                $autoLimit = $wfConfig ? floatval($wfConfig['auto_validate_limit']) : 0;
+                if ($status === 'submitted' && $autoLimit > 0 && $cashSpent <= $autoLimit) {
+                    $status = 'validated';
                 }
                 
                 if ($existing) {
@@ -8081,17 +8123,175 @@ try {
                 json_out(['success' => true]);
             }
             
-            // Valider clôture - PUT /closures/daily/{id}/validate
+            // Valider clôture - PUT /closures/daily/{id}/validate (avec workflow configurable)
             if ($method === 'PUT' && $id === 'daily' && $action && is_numeric($action) && $subId === 'validate') {
                 $user = require_auth();
-                if (!in_array($user['role'], ['admin', 'groupe_manager'])) json_error('Accès refusé', 403);
-                
-                db()->execute(
-                    "UPDATE daily_closures SET status = 'validated', validated_by = ?, validated_at = NOW() WHERE id = ?",
-                    [$user['id'], $action]
+                $closureId = intval($action);
+
+                $closure = db()->queryOne("SELECT * FROM daily_closures WHERE id = ?", [$closureId]);
+                if (!$closure) json_error('Clôture non trouvée', 404);
+
+                // Charger la config workflow de l'hôtel
+                $wfConfig = db()->queryOne(
+                    "SELECT * FROM closure_workflow_config WHERE hotel_id = ?",
+                    [$closure['hotel_id']]
                 );
-                
-                json_out(['success' => true]);
+
+                // Charger les étapes du workflow
+                $wfSteps = [];
+                try {
+                    $wfSteps = db()->query(
+                        "SELECT * FROM closure_workflow_steps WHERE hotel_id = ? AND is_active = 1 ORDER BY step_order",
+                        [$closure['hotel_id']]
+                    );
+                } catch (Exception $e) { $wfSteps = []; }
+
+                $cashSpent = floatval($closure['cash_spent'] ?? 0);
+                $currentStep = intval($closure['current_step'] ?? 0);
+
+                // Filtrer les étapes applicables selon le montant des dépenses
+                $applicableSteps = [];
+                foreach ($wfSteps as $ws) {
+                    $minOk = floatval($ws['min_amount']) == 0 || $cashSpent >= floatval($ws['min_amount']);
+                    $maxOk = floatval($ws['max_amount']) == 0 || $cashSpent <= floatval($ws['max_amount']);
+                    if ($minOk && $maxOk) {
+                        $applicableSteps[] = $ws;
+                    }
+                }
+
+                if (!empty($applicableSteps)) {
+                    // MODE MULTI-ÉTAPES
+                    $nextStepIdx = $currentStep; // currentStep est l'index 0-based de la prochaine étape à valider
+                    if ($nextStepIdx >= count($applicableSteps)) {
+                        json_error('Toutes les étapes sont déjà validées');
+                    }
+
+                    $currentStepConfig = $applicableSteps[$nextStepIdx];
+
+                    // Vérifier que le rôle du valideur correspond à l'étape
+                    if ($user['role'] !== $currentStepConfig['required_role'] && $user['role'] !== 'admin') {
+                        json_error('Cette étape requiert le rôle : ' . $currentStepConfig['required_role'], 403);
+                    }
+
+                    // Enregistrer la validation de cette étape
+                    $data = get_input();
+                    db()->insert(
+                        "INSERT INTO closure_validations (closure_id, step_id, step_order, validated_by, validator_role, action, comment, validated_at)
+                         VALUES (?, ?, ?, ?, ?, 'approved', ?, NOW())",
+                        [$closureId, $currentStepConfig['id'], $nextStepIdx + 1, $user['id'], $user['role'], $data['comment'] ?? null]
+                    );
+
+                    $newStep = $nextStepIdx + 1;
+
+                    if ($newStep >= count($applicableSteps)) {
+                        // Dernière étape → clôture validée
+                        db()->execute(
+                            "UPDATE daily_closures SET status = 'validated', current_step = ?, validated_by = ?, validated_at = NOW(), updated_at = NOW() WHERE id = ?",
+                            [$newStep, $user['id'], $closureId]
+                        );
+                        json_out(['success' => true, 'status' => 'validated', 'message' => 'Clôture entièrement validée']);
+                    } else {
+                        // Passer à l'étape suivante
+                        db()->execute(
+                            "UPDATE daily_closures SET current_step = ?, updated_at = NOW() WHERE id = ?",
+                            [$newStep, $closureId]
+                        );
+                        $nextStep = $applicableSteps[$newStep];
+                        json_out([
+                            'success' => true,
+                            'status' => 'pending_step',
+                            'current_step' => $newStep,
+                            'next_step' => $nextStep['step_name'],
+                            'next_role' => $nextStep['required_role'],
+                            'message' => 'Étape validée. En attente : ' . $nextStep['step_name']
+                        ]);
+                    }
+                } else {
+                    // MODE SIMPLE (pas d'étapes configurées ou aucune applicable)
+                    // Vérifier rôles de validation
+                    $validatorRoles = ['admin', 'groupe_manager'];
+                    if ($wfConfig && !empty($wfConfig['validator_roles'])) {
+                        $validatorRoles = json_decode($wfConfig['validator_roles'], true) ?: $validatorRoles;
+                    }
+
+                    // Auto-validation si montant sous le seuil
+                    $autoLimit = $wfConfig ? floatval($wfConfig['auto_validate_limit']) : 0;
+                    if ($autoLimit > 0 && $cashSpent <= $autoLimit) {
+                        // Auto-validation - pas de vérification de rôle
+                    } else {
+                        // Vérifier si hotel_manager suffit (montant sous le seuil manager)
+                        $managerLimit = $wfConfig ? floatval($wfConfig['manager_validate_limit']) : 0;
+                        if ($managerLimit > 0 && $cashSpent <= $managerLimit) {
+                            $validatorRoles[] = 'hotel_manager';
+                            $validatorRoles = array_unique($validatorRoles);
+                        }
+
+                        if (!in_array($user['role'], $validatorRoles)) {
+                            json_error('Accès refusé. Rôles autorisés : ' . implode(', ', $validatorRoles), 403);
+                        }
+                    }
+
+                    // Double validation si applicable
+                    $doubleLimit = $wfConfig ? floatval($wfConfig['double_validation_above']) : 0;
+                    if ($doubleLimit > 0 && $cashSpent > $doubleLimit && $currentStep === 0) {
+                        // Première validation
+                        db()->insert(
+                            "INSERT INTO closure_validations (closure_id, step_order, validated_by, validator_role, action, validated_at)
+                             VALUES (?, 1, ?, ?, 'approved', NOW())",
+                            [$closureId, $user['id'], $user['role']]
+                        );
+                        db()->execute(
+                            "UPDATE daily_closures SET current_step = 1, updated_at = NOW() WHERE id = ?",
+                            [$closureId]
+                        );
+
+                        $level2Roles = ['admin'];
+                        if ($wfConfig && !empty($wfConfig['validator_roles_level2'])) {
+                            $level2Roles = json_decode($wfConfig['validator_roles_level2'], true) ?: $level2Roles;
+                        }
+
+                        json_out([
+                            'success' => true,
+                            'status' => 'pending_level2',
+                            'message' => 'Première validation enregistrée. Validation niveau 2 requise par : ' . implode(', ', $level2Roles)
+                        ]);
+                    } elseif ($doubleLimit > 0 && $cashSpent > $doubleLimit && $currentStep === 1) {
+                        // Deuxième validation
+                        $level2Roles = ['admin'];
+                        if ($wfConfig && !empty($wfConfig['validator_roles_level2'])) {
+                            $level2Roles = json_decode($wfConfig['validator_roles_level2'], true) ?: $level2Roles;
+                        }
+
+                        if (!in_array($user['role'], $level2Roles)) {
+                            json_error('Validation niveau 2 requise. Rôles autorisés : ' . implode(', ', $level2Roles), 403);
+                        }
+
+                        db()->insert(
+                            "INSERT INTO closure_validations (closure_id, step_order, validated_by, validator_role, action, validated_at)
+                             VALUES (?, 2, ?, ?, 'approved', NOW())",
+                            [$closureId, $user['id'], $user['role']]
+                        );
+                        db()->execute(
+                            "UPDATE daily_closures SET status = 'validated', current_step = 2, validated_by = ?, validated_at = NOW(), updated_at = NOW() WHERE id = ?",
+                            [$user['id'], $closureId]
+                        );
+
+                        json_out(['success' => true, 'status' => 'validated', 'message' => 'Double validation complète']);
+                    } else {
+                        // Validation simple
+                        db()->insert(
+                            "INSERT INTO closure_validations (closure_id, step_order, validated_by, validator_role, action, validated_at)
+                             VALUES (?, 1, ?, ?, 'approved', NOW())",
+                            [$closureId, $user['id'], $user['role']]
+                        );
+                        db()->execute(
+                            "UPDATE daily_closures SET status = 'validated', validated_by = ?, validated_at = NOW(), updated_at = NOW() WHERE id = ?",
+                            [$user['id'], $closureId]
+                        );
+
+                        json_out(['success' => true, 'status' => 'validated']);
+                    }
+                }
             }
             
             // Créer une remise banque - POST /closures/bank-deposits
@@ -8588,9 +8788,292 @@ try {
                     ]);
                 }
             }
-            
+
+            // =============================================
+            // WORKFLOW CONFIG - Configuration validation par hôtel
+            // =============================================
+
+            // GET /closures/workflow-config/{hotel_id} - Récupérer la config workflow d'un hôtel
+            if ($method === 'GET' && $id === 'workflow-config' && $action && is_numeric($action)) {
+                $user = require_auth();
+                $hotelId = intval($action);
+
+                // Config générale du workflow
+                $config = db()->queryOne(
+                    "SELECT * FROM closure_workflow_config WHERE hotel_id = ?",
+                    [$hotelId]
+                );
+
+                // Étapes du workflow
+                $steps = db()->query(
+                    "SELECT * FROM closure_workflow_steps WHERE hotel_id = ? AND is_active = 1 ORDER BY step_order",
+                    [$hotelId]
+                );
+
+                // Config par défaut si aucune config
+                if (!$config) {
+                    $config = [
+                        'hotel_id' => $hotelId,
+                        'auto_validate_limit' => 0,
+                        'manager_validate_limit' => 0,
+                        'receipt_required_above' => 0,
+                        'comment_required_above' => 0,
+                        'double_validation_above' => 0,
+                        'validator_roles' => '["admin","groupe_manager"]',
+                        'validator_roles_level2' => '["admin"]',
+                        'alert_delay_hours' => 13,
+                        'validation_deadline_hours' => 48
+                    ];
+                }
+
+                // Décoder les champs JSON
+                if (is_string($config['validator_roles'])) {
+                    $config['validator_roles'] = json_decode($config['validator_roles'], true) ?: ['admin', 'groupe_manager'];
+                }
+                if (is_string($config['validator_roles_level2'])) {
+                    $config['validator_roles_level2'] = json_decode($config['validator_roles_level2'], true) ?: ['admin'];
+                }
+
+                json_out([
+                    'success' => true,
+                    'config' => $config,
+                    'steps' => $steps
+                ]);
+            }
+
+            // POST /closures/workflow-config/{hotel_id} - Sauvegarder la config workflow
+            if ($method === 'POST' && $id === 'workflow-config' && $action && is_numeric($action)) {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin', 'groupe_manager'])) json_error('Accès refusé', 403);
+
+                $hotelId = intval($action);
+                $data = get_input();
+
+                $config = $data['config'] ?? [];
+                $steps = $data['steps'] ?? [];
+
+                // Sauvegarder la config générale (upsert)
+                $existing = db()->queryOne("SELECT id FROM closure_workflow_config WHERE hotel_id = ?", [$hotelId]);
+
+                $configData = [
+                    'auto_validate_limit' => floatval($config['auto_validate_limit'] ?? 0),
+                    'manager_validate_limit' => floatval($config['manager_validate_limit'] ?? 0),
+                    'receipt_required_above' => floatval($config['receipt_required_above'] ?? 0),
+                    'comment_required_above' => floatval($config['comment_required_above'] ?? 0),
+                    'double_validation_above' => floatval($config['double_validation_above'] ?? 0),
+                    'validator_roles' => json_encode($config['validator_roles'] ?? ['admin', 'groupe_manager']),
+                    'validator_roles_level2' => json_encode($config['validator_roles_level2'] ?? ['admin']),
+                    'alert_delay_hours' => intval($config['alert_delay_hours'] ?? 13),
+                    'validation_deadline_hours' => intval($config['validation_deadline_hours'] ?? 48),
+                    'updated_at' => date('Y-m-d H:i:s')
+                ];
+
+                if ($existing) {
+                    $sets = [];
+                    $params = [];
+                    foreach ($configData as $key => $val) {
+                        $sets[] = "$key = ?";
+                        $params[] = $val;
+                    }
+                    $params[] = $hotelId;
+                    db()->execute(
+                        "UPDATE closure_workflow_config SET " . implode(', ', $sets) . " WHERE hotel_id = ?",
+                        $params
+                    );
+                } else {
+                    $configData['hotel_id'] = $hotelId;
+                    $configData['created_at'] = date('Y-m-d H:i:s');
+                    $columns = implode(', ', array_keys($configData));
+                    $placeholders = implode(', ', array_fill(0, count($configData), '?'));
+                    db()->insert(
+                        "INSERT INTO closure_workflow_config ($columns) VALUES ($placeholders)",
+                        array_values($configData)
+                    );
+                }
+
+                // Sauvegarder les étapes
+                // Désactiver les anciennes étapes
+                db()->execute("UPDATE closure_workflow_steps SET is_active = 0 WHERE hotel_id = ?", [$hotelId]);
+
+                foreach ($steps as $idx => $step) {
+                    if (empty($step['step_name']) || empty($step['required_role'])) continue;
+
+                    if (!empty($step['id'])) {
+                        // Mettre à jour l'étape existante
+                        db()->execute(
+                            "UPDATE closure_workflow_steps SET step_name = ?, required_role = ?, step_order = ?,
+                             min_amount = ?, max_amount = ?, is_active = 1 WHERE id = ? AND hotel_id = ?",
+                            [$step['step_name'], $step['required_role'], $idx + 1,
+                             floatval($step['min_amount'] ?? 0), floatval($step['max_amount'] ?? 0),
+                             $step['id'], $hotelId]
+                        );
+                    } else {
+                        // Créer une nouvelle étape
+                        db()->insert(
+                            "INSERT INTO closure_workflow_steps (hotel_id, step_order, step_name, required_role, min_amount, max_amount, is_active, created_at)
+                             VALUES (?, ?, ?, ?, ?, ?, 1, NOW())",
+                            [$hotelId, $idx + 1, $step['step_name'], $step['required_role'],
+                             floatval($step['min_amount'] ?? 0), floatval($step['max_amount'] ?? 0)]
+                        );
+                    }
+                }
+
+                // Supprimer les étapes désactivées sans historique
+                db()->execute(
+                    "DELETE FROM closure_workflow_steps WHERE hotel_id = ? AND is_active = 0
+                     AND id NOT IN (SELECT COALESCE(step_id, 0) FROM closure_validations)",
+                    [$hotelId]
+                );
+
+                json_out(['success' => true]);
+            }
+
+            // POST /closures/workflow-config/{hotel_id}/replicate - Répliquer le workflow vers d'autres hôtels
+            if ($method === 'POST' && $id === 'workflow-config' && $action && is_numeric($action) && $subId === 'replicate') {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin'])) json_error('Accès réservé aux administrateurs', 403);
+
+                $sourceHotelId = intval($action);
+                $data = get_input();
+                $targetHotelIds = $data['target_hotel_ids'] ?? [];
+
+                if (empty($targetHotelIds)) json_error('Aucun hôtel cible sélectionné');
+
+                // Charger la config source
+                $sourceConfig = db()->queryOne(
+                    "SELECT * FROM closure_workflow_config WHERE hotel_id = ?",
+                    [$sourceHotelId]
+                );
+
+                if (!$sourceConfig) json_error('Aucune configuration workflow trouvée pour cet hôtel source');
+
+                $sourceSteps = db()->query(
+                    "SELECT * FROM closure_workflow_steps WHERE hotel_id = ? AND is_active = 1 ORDER BY step_order",
+                    [$sourceHotelId]
+                );
+
+                $replicated = 0;
+
+                foreach ($targetHotelIds as $targetId) {
+                    $targetId = intval($targetId);
+                    if ($targetId === $sourceHotelId) continue;
+
+                    // Vérifier accès à l'hôtel cible
+                    if (!in_array($targetId, $user['hotel_ids']) && $user['role'] !== 'admin') continue;
+
+                    // Supprimer l'ancienne config du cible
+                    db()->execute("DELETE FROM closure_workflow_config WHERE hotel_id = ?", [$targetId]);
+
+                    // Copier la config
+                    db()->insert(
+                        "INSERT INTO closure_workflow_config (hotel_id, auto_validate_limit, manager_validate_limit,
+                         receipt_required_above, comment_required_above, double_validation_above,
+                         validator_roles, validator_roles_level2, alert_delay_hours, validation_deadline_hours,
+                         created_at, updated_at)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
+                        [$targetId, $sourceConfig['auto_validate_limit'], $sourceConfig['manager_validate_limit'],
+                         $sourceConfig['receipt_required_above'], $sourceConfig['comment_required_above'],
+                         $sourceConfig['double_validation_above'], $sourceConfig['validator_roles'],
+                         $sourceConfig['validator_roles_level2'], $sourceConfig['alert_delay_hours'],
+                         $sourceConfig['validation_deadline_hours']]
+                    );
+
+                    // Désactiver les anciennes étapes du cible
+                    db()->execute("DELETE FROM closure_workflow_steps WHERE hotel_id = ? AND is_active = 1
+                                   AND id NOT IN (SELECT COALESCE(step_id, 0) FROM closure_validations)", [$targetId]);
+                    db()->execute("UPDATE closure_workflow_steps SET is_active = 0 WHERE hotel_id = ?", [$targetId]);
+
+                    // Copier les étapes
+                    foreach ($sourceSteps as $step) {
+                        db()->insert(
+                            "INSERT INTO closure_workflow_steps (hotel_id, step_order, step_name, required_role, min_amount, max_amount, is_active, created_at)
+                             VALUES (?, ?, ?, ?, ?, ?, 1, NOW())",
+                            [$targetId, $step['step_order'], $step['step_name'], $step['required_role'],
+                             $step['min_amount'], $step['max_amount']]
+                        );
+                    }
+
+                    $replicated++;
+                }
+
+                json_out(['success' => true, 'replicated_count' => $replicated]);
+            }
+
+            // PUT /closures/daily/{id}/validate - Valider avec workflow configurable
+            // (Override de l'endpoint existant ci-dessus pour supporter le multi-étapes)
+            if ($method === 'PUT' && $id === 'daily' && $action && is_numeric($action) && $subId === 'reject') {
+                $user = require_auth();
+                $closureId = intval($action);
+                $data = get_input();
+
+                $closure = db()->queryOne("SELECT * FROM daily_closures WHERE id = ?", [$closureId]);
+                if (!$closure) json_error('Clôture non trouvée', 404);
+
+                // Charger la config workflow de l'hôtel
+                $wfConfig = db()->queryOne(
+                    "SELECT * FROM closure_workflow_config WHERE hotel_id = ?",
+                    [$closure['hotel_id']]
+                );
+
+                $validatorRoles = ['admin', 'groupe_manager'];
+                if ($wfConfig && !empty($wfConfig['validator_roles'])) {
+                    $validatorRoles = json_decode($wfConfig['validator_roles'], true) ?: $validatorRoles;
+                }
+
+                if (!in_array($user['role'], $validatorRoles)) json_error('Accès refusé', 403);
+
+                $comment = trim($data['comment'] ?? '');
+
+                db()->execute(
+                    "UPDATE daily_closures SET status = 'rejected', rejection_comment = ?, current_step = 0, updated_at = NOW() WHERE id = ?",
+                    [$comment, $closureId]
+                );
+
+                // Enregistrer la validation (rejet)
+                db()->insert(
+                    "INSERT INTO closure_validations (closure_id, step_id, step_order, validated_by, validator_role, action, comment, validated_at)
+                     VALUES (?, NULL, ?, ?, ?, 'rejected', ?, NOW())",
+                    [$closureId, intval($closure['current_step'] ?? 0), $user['id'], $user['role'], $comment]
+                );
+
+                // Notification à l'auteur
+                if ($closure['submitted_by']) {
+                    try {
+                        createNotification(
+                            $closure['submitted_by'],
+                            'Clôture rejetée',
+                            'Votre clôture du ' . $closure['closure_date'] . ' a été rejetée.' . ($comment ? ' Motif : ' . $comment : ''),
+                            'warning',
+                            '#closures'
+                        );
+                    } catch (Exception $e) {}
+                }
+
+                json_out(['success' => true]);
+            }
+
+            // GET /closures/workflow-config/{hotel_id}/validations/{closure_id} - Historique validations
+            if ($method === 'GET' && $id === 'workflow-config' && $action && is_numeric($action)
+                && $subId === 'validations' && $subaction && is_numeric($subaction)) {
+                $user = require_auth();
+                $closureId = intval($subaction);
+
+                $validations = db()->query(
+                    "SELECT cv.*, CONCAT(u.first_name, ' ', u.last_name) as validator_name,
+                            ws.step_name
+                     FROM closure_validations cv
+                     LEFT JOIN users u ON cv.validated_by = u.id
+                     LEFT JOIN closure_workflow_steps ws ON cv.step_id = ws.id
+                     WHERE cv.closure_id = ?
+                     ORDER BY cv.validated_at ASC",
+                    [$closureId]
+                );
+
+                json_out(['success' => true, 'validations' => $validations]);
+            }
+
             break;
-        
+
         // =============================================
         // RGPD - Protection des données personnelles
         // =============================================
