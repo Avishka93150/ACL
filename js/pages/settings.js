@@ -18,6 +18,7 @@ const SYSTEM_MODULES = {
     'messages': { name: 'Messagerie', icon: 'fa-envelope', description: 'Communication interne' },
     'users': { name: 'Utilisateurs', icon: 'fa-users', description: 'Gestion des comptes utilisateurs', core: true },
     'welcome': { name: 'Livret d\'accueil', icon: 'fa-book-open', description: 'Livret d\'accueil numérique par hôtel' },
+    'selfcheckin': { name: 'Self Check-in', icon: 'fa-qrcode', description: 'Self check-in, QR codes, consignes et casiers' },
     'settings': { name: 'Paramètres', icon: 'fa-cog', description: 'Configuration du système', core: true, adminOnly: true }
 };
 
@@ -77,6 +78,8 @@ const PERMISSION_LABELS = {
     'reports.export': 'Exporter les données',
     'welcome.view': 'Voir le livret d\'accueil',
     'welcome.manage': 'Gérer le livret d\'accueil',
+    'selfcheckin.view': 'Voir le self check-in',
+    'selfcheckin.manage': 'Gérer la configuration self check-in',
     'permissions.manage': 'Gérer les permissions'
 };
 
@@ -94,6 +97,7 @@ const PERMISSION_CATEGORIES = {
     'Clôtures & Caisse': ['closures.view', 'closures.create', 'closures.validate', 'closures.edit_all', 'closures.add_remise', 'closures.add_comment'],
     'Communication': ['messages.access', 'messages.broadcast', 'notifications.receive', 'notifications.manage'],
     'Livret d\'accueil': ['welcome.view', 'welcome.manage'],
+    'Self Check-in': ['selfcheckin.view', 'selfcheckin.manage'],
     'Dashboard & Rapports': ['dashboard.view', 'dashboard.global', 'reports.access', 'reports.export'],
     'Administration': ['permissions.manage']
 };
@@ -142,6 +146,7 @@ const DEFAULT_PERMISSIONS = {
         'audit.view': true, 'audit.grids': true, 'audit.execute': true, 'audit.view_results': true,
         'closures.view': true, 'closures.create': true, 'closures.validate': true, 'closures.edit_all': true, 'closures.add_remise': true, 'closures.add_comment': true,
         'welcome.view': true, 'welcome.manage': true,
+        'selfcheckin.view': true, 'selfcheckin.manage': true,
         'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': true,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -158,6 +163,7 @@ const DEFAULT_PERMISSIONS = {
         'audit.view': true, 'audit.grids': false, 'audit.execute': true, 'audit.view_results': true,
         'closures.view': true, 'closures.create': true, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': true, 'closures.add_comment': true,
         'welcome.view': true, 'welcome.manage': true,
+        'selfcheckin.view': true, 'selfcheckin.manage': true,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': true,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -174,6 +180,7 @@ const DEFAULT_PERMISSIONS = {
         'audit.view': true, 'audit.grids': false, 'audit.execute': false, 'audit.view_results': true,
         'closures.view': true, 'closures.create': false, 'closures.validate': true, 'closures.edit_all': true, 'closures.add_remise': true, 'closures.add_comment': true,
         'welcome.view': false, 'welcome.manage': false,
+        'selfcheckin.view': false, 'selfcheckin.manage': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -190,6 +197,7 @@ const DEFAULT_PERMISSIONS = {
         'audit.view': false, 'audit.grids': false, 'audit.execute': false, 'audit.view_results': false,
         'closures.view': false, 'closures.create': false, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': false, 'closures.add_comment': false,
         'welcome.view': false, 'welcome.manage': false,
+        'selfcheckin.view': false, 'selfcheckin.manage': false,
         'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -206,6 +214,7 @@ const DEFAULT_PERMISSIONS = {
         'audit.view': true, 'audit.grids': false, 'audit.execute': true, 'audit.view_results': true,
         'closures.view': true, 'closures.create': true, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': true, 'closures.add_comment': true,
         'welcome.view': true, 'welcome.manage': false,
+        'selfcheckin.view': true, 'selfcheckin.manage': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
         'permissions.manage': false
@@ -222,6 +231,7 @@ const DEFAULT_PERMISSIONS = {
         'audit.view': false, 'audit.grids': false, 'audit.execute': false, 'audit.view_results': false,
         'closures.view': true, 'closures.create': false, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': false, 'closures.add_comment': false,
         'welcome.view': false, 'welcome.manage': false,
+        'selfcheckin.view': false, 'selfcheckin.manage': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
         'permissions.manage': false
@@ -893,6 +903,7 @@ function getCategoryIcon(cat) {
         'Audits': 'fa-search',
         'Revenue Management': 'fa-chart-line',
         'Livret d\'accueil': 'fa-book-open',
+        'Self Check-in': 'fa-qrcode',
         'Communication': 'fa-envelope',
         'Dashboard & Rapports': 'fa-chart-bar',
         'Administration': 'fa-cog'
