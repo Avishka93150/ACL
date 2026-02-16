@@ -225,6 +225,8 @@ function executeAutomationCron($auto, $db) {
             return runAuditReminderCron($recipients, $db);
         case 'closure_reminder':
             return runClosureReminderCron($hotels, $recipients, $db);
+        case 'contract_alert':
+            return runContractAlertCron($hotels, $recipients, $db);
         case 'revenue_update':
             return ['message' => 'Mise à jour tarifs - utiliser cron.php revenue'];
         case 'system_cleanup':
@@ -330,6 +332,32 @@ function runClosureReminderCron($hotels, $recipients, $db) {
     }
     
     return ['message' => "$missing hôtel(s) sans clôture"];
+}
+
+function runContractAlertCron($hotels, $recipients, $db) {
+    $today = date('Y-m-d');
+    $deactivated = 0;
+    $alerts = 0;
+
+    // Désactiver les contrats expirés
+    $expired = $db->query(
+        "SELECT id FROM time_contracts WHERE is_active = 1 AND end_date IS NOT NULL AND end_date < ?",
+        [$today]
+    );
+    foreach ($expired as $c) {
+        $db->execute("UPDATE time_contracts SET is_active = 0, updated_at = NOW() WHERE id = ?", [$c['id']]);
+        $deactivated++;
+    }
+
+    // Compter les contrats expirant dans 30 jours
+    $soonDate = date('Y-m-d', strtotime('+30 days'));
+    $expiring = $db->queryOne(
+        "SELECT COUNT(*) as cnt FROM time_contracts WHERE is_active = 1 AND end_date IS NOT NULL AND end_date BETWEEN ? AND ?",
+        [$today, $soonDate]
+    );
+    $alerts = $expiring['cnt'] ?? 0;
+
+    return ['message' => "$deactivated contrat(s) désactivé(s), $alerts contrat(s) expirant sous 30 jours"];
 }
 
 function runSystemCleanupCron($db) {
