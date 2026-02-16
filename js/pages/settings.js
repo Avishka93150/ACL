@@ -17,6 +17,7 @@ const SYSTEM_MODULES = {
     'closures': { name: 'Clôtures & Remises', icon: 'fa-cash-register', description: 'Clôtures journalières et suivi caisse' },
     'messages': { name: 'Messagerie', icon: 'fa-envelope', description: 'Communication interne' },
     'users': { name: 'Utilisateurs', icon: 'fa-users', description: 'Gestion des comptes utilisateurs', core: true },
+    'welcome': { name: 'Livret d\'accueil', icon: 'fa-book-open', description: 'Livret d\'accueil numérique par hôtel' },
     'settings': { name: 'Paramètres', icon: 'fa-cog', description: 'Configuration du système', core: true, adminOnly: true }
 };
 
@@ -74,6 +75,8 @@ const PERMISSION_LABELS = {
     'dashboard.global': 'Dashboard multi-hôtels',
     'reports.access': 'Accès aux rapports',
     'reports.export': 'Exporter les données',
+    'welcome.view': 'Voir le livret d\'accueil',
+    'welcome.manage': 'Gérer le livret d\'accueil',
     'permissions.manage': 'Gérer les permissions'
 };
 
@@ -90,6 +93,7 @@ const PERMISSION_CATEGORIES = {
     'Revenue Management': ['revenue.view', 'revenue.settings', 'revenue.fetch_rates'],
     'Clôtures & Caisse': ['closures.view', 'closures.create', 'closures.validate', 'closures.edit_all', 'closures.add_remise', 'closures.add_comment'],
     'Communication': ['messages.access', 'messages.broadcast', 'notifications.receive', 'notifications.manage'],
+    'Livret d\'accueil': ['welcome.view', 'welcome.manage'],
     'Dashboard & Rapports': ['dashboard.view', 'dashboard.global', 'reports.access', 'reports.export'],
     'Administration': ['permissions.manage']
 };
@@ -137,6 +141,7 @@ const DEFAULT_PERMISSIONS = {
         'evaluations.view': true, 'evaluations.view_team': true, 'evaluations.grids': true, 'evaluations.evaluate': true, 'evaluations.view_own': true,
         'audit.view': true, 'audit.grids': true, 'audit.execute': true, 'audit.view_results': true,
         'closures.view': true, 'closures.create': true, 'closures.validate': true, 'closures.edit_all': true, 'closures.add_remise': true, 'closures.add_comment': true,
+        'welcome.view': true, 'welcome.manage': true,
         'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': true,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -152,6 +157,7 @@ const DEFAULT_PERMISSIONS = {
         'evaluations.view': true, 'evaluations.view_team': true, 'evaluations.grids': false, 'evaluations.evaluate': true, 'evaluations.view_own': true,
         'audit.view': true, 'audit.grids': false, 'audit.execute': true, 'audit.view_results': true,
         'closures.view': true, 'closures.create': true, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': true, 'closures.add_comment': true,
+        'welcome.view': true, 'welcome.manage': true,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': true,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -167,6 +173,7 @@ const DEFAULT_PERMISSIONS = {
         'evaluations.view': false, 'evaluations.view_team': false, 'evaluations.grids': false, 'evaluations.evaluate': false, 'evaluations.view_own': true,
         'audit.view': true, 'audit.grids': false, 'audit.execute': false, 'audit.view_results': true,
         'closures.view': true, 'closures.create': false, 'closures.validate': true, 'closures.edit_all': true, 'closures.add_remise': true, 'closures.add_comment': true,
+        'welcome.view': false, 'welcome.manage': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -182,6 +189,7 @@ const DEFAULT_PERMISSIONS = {
         'evaluations.view': true, 'evaluations.view_team': true, 'evaluations.grids': true, 'evaluations.evaluate': true, 'evaluations.view_own': true,
         'audit.view': false, 'audit.grids': false, 'audit.execute': false, 'audit.view_results': false,
         'closures.view': false, 'closures.create': false, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': false, 'closures.add_comment': false,
+        'welcome.view': false, 'welcome.manage': false,
         'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -197,6 +205,7 @@ const DEFAULT_PERMISSIONS = {
         'evaluations.view': false, 'evaluations.view_team': false, 'evaluations.grids': false, 'evaluations.evaluate': false, 'evaluations.view_own': true,
         'audit.view': true, 'audit.grids': false, 'audit.execute': true, 'audit.view_results': true,
         'closures.view': true, 'closures.create': true, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': true, 'closures.add_comment': true,
+        'welcome.view': true, 'welcome.manage': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
         'permissions.manage': false
@@ -212,6 +221,7 @@ const DEFAULT_PERMISSIONS = {
         'evaluations.view': false, 'evaluations.view_team': false, 'evaluations.grids': false, 'evaluations.evaluate': false, 'evaluations.view_own': true,
         'audit.view': false, 'audit.grids': false, 'audit.execute': false, 'audit.view_results': false,
         'closures.view': true, 'closures.create': false, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': false, 'closures.add_comment': false,
+        'welcome.view': false, 'welcome.manage': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
         'permissions.manage': false
@@ -882,6 +892,7 @@ function getCategoryIcon(cat) {
         'Évaluations': 'fa-clipboard-check',
         'Audits': 'fa-search',
         'Revenue Management': 'fa-chart-line',
+        'Livret d\'accueil': 'fa-book-open',
         'Communication': 'fa-envelope',
         'Dashboard & Rapports': 'fa-chart-bar',
         'Administration': 'fa-cog'
