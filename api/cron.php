@@ -11,7 +11,7 @@
  * | Contrôle incomplet | 19h00 chaque jour | php /chemin/api/cron.php control        |
  * | Maintenance        | 09h00 chaque jour | php /chemin/api/cron.php maintenance    |
  * | Rappel congés      | 09h00 chaque lundi| php /chemin/api/cron.php leaves_reminder|
- * | Contrats           | 08h00 chaque jour | php /chemin/api/cron.php contracts      |
+ * | Contrats fournis.  | 08h00 chaque jour | php /chemin/api/cron.php contracts      |
  * | Nettoyage          | 03h00 chaque jour | php /chemin/api/cron.php cleanup        |
  */
 
@@ -72,7 +72,7 @@ switch ($action) {
         echo "  closure         - Vérifie les clôtures journalières non effectuées (13h-23h)\n";
         echo "  revenue         - Actualise les tarifs Xotelo pour tous les hôtels (06h00)\n";
         echo "  price_alerts    - Vérifie les alertes tarifaires après mise à jour (06h15)\n";
-        echo "  contracts       - Désactive contrats expirés et alertes avant expiration (08h00)\n";
+        echo "  contracts       - Contrats fournisseurs: statuts, alertes, renouvellement auto (08h00)\n";
         echo "  cleanup         - Nettoyage tokens expirés et anciennes données (03h00)\n";
         echo "  contracts       - Alertes contrats fournisseurs (échéances, résiliation) (09h00)\n";
         exit(1);
@@ -514,147 +514,221 @@ function sendLeavesReminder() {
 }
 
 // =============================================================================
-// CONTRATS - Désactivation automatique et alertes avant expiration
+// CONTRATS FOURNISSEURS - Statuts, alertes configurées, renouvellement auto
 // =============================================================================
 
 /**
- * Vérifie les contrats de travail :
- *   1. Désactive les contrats dont la date de fin est dépassée
- *   2. Alerte 30 jours avant expiration → hotel_manager
- *   3. Alerte 15 jours avant expiration → hotel_manager + groupe_manager
- *   4. Alerte 7 jours avant expiration → hotel_manager + groupe_manager + admin
- *
- * Ne concerne que les contrats à durée déterminée (CDD, intérim, stage, apprentissage, extra).
- * Les CDI n'ont pas de date de fin.
+ * Gestion automatique des contrats fournisseurs (table contracts) :
+ *   1. Passe les contrats actifs en "expiring" quand end_date approche (< 90 jours)
+ *   2. Passe les contrats expirés en "terminated" (ou renouvellement auto)
+ *   3. Déclenche les alertes configurées dans contract_alerts (expiry, termination_notice, custom)
+ *   4. Notifie les responsables de l'hôtel concerné
  */
 function checkContracts() {
-    echo "\n=== GESTION DES CONTRATS ===\n\n";
+    echo "\n=== GESTION DES CONTRATS FOURNISSEURS ===\n\n";
 
     $db = Database::get();
     $today = date('Y-m-d');
 
     // ============================================
-    // 1. DÉSACTIVATION DES CONTRATS EXPIRÉS
+    // 1. CONTRATS EXPIRÉS → terminated ou renouvellement auto
     // ============================================
     try {
         $expired = $db->query(
-            "SELECT tc.id, tc.user_id, tc.hotel_id, tc.contract_type, tc.end_date,
-                    CONCAT(u.first_name, ' ', u.last_name) as employee_name,
+            "SELECT c.id, c.hotel_id, c.supplier_name, c.contract_ref, c.end_date,
+                    c.auto_renewal, c.renewal_duration_months, c.amount, c.amount_frequency,
                     h.name as hotel_name
-             FROM time_contracts tc
-             JOIN users u ON tc.user_id = u.id
-             JOIN hotels h ON tc.hotel_id = h.id
-             WHERE tc.is_active = 1
-               AND tc.end_date IS NOT NULL
-               AND tc.end_date < ?",
+             FROM contracts c
+             JOIN hotels h ON c.hotel_id = h.id AND h.status = 'active'
+             WHERE c.status IN ('active', 'expiring')
+               AND c.end_date IS NOT NULL
+               AND c.end_date < ?",
             [$today]
         );
 
-        echo "  Contrats expirés à désactiver: " . count($expired) . "\n";
+        echo "  Contrats fournisseurs expirés: " . count($expired) . "\n";
 
         foreach ($expired as $contract) {
-            $db->execute("UPDATE time_contracts SET is_active = 0, updated_at = NOW() WHERE id = ?", [$contract['id']]);
-
-            echo "    → Désactivé: {$contract['employee_name']} ({$contract['contract_type']}) - {$contract['hotel_name']} (fin: {$contract['end_date']})\n";
-
-            // Notifier le hotel_manager
-            $managers = $db->query(
-                "SELECT DISTINCT u.id, u.email FROM users u
-                 JOIN user_hotels uh ON u.id = uh.user_id
-                 WHERE uh.hotel_id = ? AND u.role IN ('hotel_manager', 'rh') AND u.status = 'active'",
-                [$contract['hotel_id']]
-            );
-
-            $typeLabels = ['cdd' => 'CDD', 'interim' => 'Intérim', 'stage' => 'Stage', 'apprentissage' => 'Apprentissage', 'extra' => 'Extra'];
-            $typeLabel = isset($typeLabels[$contract['contract_type']]) ? $typeLabels[$contract['contract_type']] : $contract['contract_type'];
-
-            foreach ($managers as $m) {
-                createNotification(
-                    $m['id'], 'info',
-                    "Contrat expiré - {$contract['employee_name']}",
-                    "Le contrat {$typeLabel} de {$contract['employee_name']} pour l'hôtel {$contract['hotel_name']} a expiré le " . date('d/m/Y', strtotime($contract['end_date'])) . " et a été désactivé automatiquement."
+            if ($contract['auto_renewal'] == 1 && $contract['renewal_duration_months'] > 0) {
+                // Renouvellement automatique : prolonger la date de fin
+                $newEndDate = date('Y-m-d', strtotime($contract['end_date'] . " +{$contract['renewal_duration_months']} months"));
+                $db->execute(
+                    "UPDATE contracts SET end_date = ?, status = 'active', updated_at = NOW() WHERE id = ?",
+                    [$newEndDate, $contract['id']]
                 );
+
+                echo "    → Renouvelé: {$contract['supplier_name']} → nouvelle fin: {$newEndDate}\n";
+
+                // Notifier du renouvellement
+                $managers = getContractManagers($db, $contract['hotel_id']);
+                foreach ($managers as $m) {
+                    createNotification(
+                        $m['id'], 'info',
+                        "Contrat renouvelé - {$contract['supplier_name']}",
+                        "Le contrat fournisseur \"{$contract['supplier_name']}\" (réf: " . ($contract['contract_ref'] ?: '-') . ") pour l'hôtel {$contract['hotel_name']} a été renouvelé automatiquement.\n\nNouvelle date de fin : " . date('d/m/Y', strtotime($newEndDate)) . "."
+                    );
+                }
+
+                // Réinitialiser les alertes pour le prochain cycle
+                $db->execute(
+                    "UPDATE contract_alerts SET last_triggered_at = NULL WHERE contract_id = ?",
+                    [$contract['id']]
+                );
+            } else {
+                // Pas de renouvellement → terminated
+                $db->execute(
+                    "UPDATE contracts SET status = 'terminated', updated_at = NOW() WHERE id = ?",
+                    [$contract['id']]
+                );
+
+                echo "    → Terminé: {$contract['supplier_name']} - {$contract['hotel_name']} (fin: {$contract['end_date']})\n";
+
+                $managers = getContractManagers($db, $contract['hotel_id']);
+                foreach ($managers as $m) {
+                    createNotification(
+                        $m['id'], 'warning',
+                        "Contrat fournisseur terminé - {$contract['supplier_name']}",
+                        "Le contrat fournisseur \"{$contract['supplier_name']}\" (réf: " . ($contract['contract_ref'] ?: '-') . ") pour l'hôtel {$contract['hotel_name']} a expiré le " . date('d/m/Y', strtotime($contract['end_date'])) . " et a été marqué comme terminé."
+                    );
+                    sendEmail($m['email'], "Contrat fournisseur terminé - {$contract['supplier_name']}",
+                        "Le contrat fournisseur \"{$contract['supplier_name']}\" pour l'hôtel {$contract['hotel_name']} a expiré le " . date('d/m/Y', strtotime($contract['end_date'])) . ".\n\nVeuillez renouveler ou trouver un autre fournisseur si nécessaire.");
+                }
             }
         }
     } catch (Exception $e) {
-        echo "  ⚠ Erreur désactivation contrats: " . $e->getMessage() . "\n";
+        echo "  ⚠ Erreur contrats expirés: " . $e->getMessage() . "\n";
     }
 
     // ============================================
-    // 2. ALERTES AVANT EXPIRATION
+    // 2. CONTRATS ACTIFS → passage en "expiring" (< 90 jours)
     // ============================================
-    $alertThresholds = [
-        ['days' => 30, 'roles' => ['hotel_manager', 'rh'], 'level' => 'info'],
-        ['days' => 15, 'roles' => ['hotel_manager', 'rh', 'groupe_manager'], 'level' => 'warning'],
-        ['days' => 7,  'roles' => ['hotel_manager', 'rh', 'groupe_manager', 'admin'], 'level' => 'danger'],
-    ];
+    try {
+        $soon = date('Y-m-d', strtotime('+90 days'));
+        $updated = $db->execute(
+            "UPDATE contracts SET status = 'expiring', updated_at = NOW()
+             WHERE status = 'active'
+               AND end_date IS NOT NULL
+               AND end_date BETWEEN ? AND ?",
+            [$today, $soon]
+        );
+        echo "  Contrats passés en 'expiring' (fin < 90 jours): requête exécutée\n";
+    } catch (Exception $e) {
+        echo "  ⚠ Erreur mise à jour statut expiring: " . $e->getMessage() . "\n";
+    }
 
-    foreach ($alertThresholds as $threshold) {
-        $days = $threshold['days'];
-        $targetDate = date('Y-m-d', strtotime("+{$days} days"));
+    // ============================================
+    // 3. DÉCLENCHEMENT DES ALERTES CONFIGURÉES (contract_alerts)
+    // ============================================
+    try {
+        // Récupérer les alertes actives dont le seuil est atteint
+        $alerts = $db->query(
+            "SELECT ca.id as alert_id, ca.contract_id, ca.alert_type, ca.days_before, ca.last_triggered_at,
+                    c.supplier_name, c.contract_ref, c.end_date, c.termination_notice_days,
+                    c.hotel_id, c.amount, c.amount_frequency,
+                    h.name as hotel_name
+             FROM contract_alerts ca
+             JOIN contracts c ON ca.contract_id = c.id
+             JOIN hotels h ON c.hotel_id = h.id AND h.status = 'active'
+             WHERE ca.is_active = 1
+               AND c.status IN ('active', 'expiring')
+               AND c.end_date IS NOT NULL"
+        );
 
-        try {
-            $expiring = $db->query(
-                "SELECT tc.id, tc.user_id, tc.hotel_id, tc.contract_type, tc.end_date, tc.weekly_hours,
-                        CONCAT(u.first_name, ' ', u.last_name) as employee_name,
-                        h.name as hotel_name
-                 FROM time_contracts tc
-                 JOIN users u ON tc.user_id = u.id
-                 JOIN hotels h ON tc.hotel_id = h.id AND h.status = 'active'
-                 WHERE tc.is_active = 1
-                   AND tc.end_date IS NOT NULL
-                   AND tc.end_date = ?",
-                [$targetDate]
-            );
+        echo "  Alertes configurées à vérifier: " . count($alerts) . "\n";
+        $alertsSent = 0;
 
-            if (empty($expiring)) continue;
+        foreach ($alerts as $alert) {
+            // Calculer la date de déclenchement selon le type d'alerte
+            if ($alert['alert_type'] === 'termination_notice') {
+                // Alerte basée sur le préavis de résiliation
+                $triggerDate = date('Y-m-d', strtotime($alert['end_date'] . " -{$alert['days_before']} days"));
+            } else {
+                // expiry ou custom : X jours avant la date de fin
+                $triggerDate = date('Y-m-d', strtotime($alert['end_date'] . " -{$alert['days_before']} days"));
+            }
 
-            echo "  Contrats expirant dans {$days} jours ({$targetDate}): " . count($expiring) . "\n";
+            // Vérifier si on a atteint la date de déclenchement
+            if ($today < $triggerDate) continue;
 
-            $typeLabels = ['cdd' => 'CDD', 'interim' => 'Intérim', 'stage' => 'Stage', 'apprentissage' => 'Apprentissage', 'extra' => 'Extra'];
+            // Vérifier si déjà déclenchée aujourd'hui
+            if ($alert['last_triggered_at'] && date('Y-m-d', strtotime($alert['last_triggered_at'])) === $today) continue;
 
-            foreach ($expiring as $contract) {
-                $typeLabel = isset($typeLabels[$contract['contract_type']]) ? $typeLabels[$contract['contract_type']] : $contract['contract_type'];
+            $daysLeft = (int)((strtotime($alert['end_date']) - strtotime($today)) / 86400);
+            $daysLeftText = $daysLeft > 0 ? "dans {$daysLeft} jour(s)" : ($daysLeft === 0 ? "aujourd'hui" : "dépassée de " . abs($daysLeft) . " jour(s)");
 
-                // Vérifier si alerte déjà envoyée aujourd'hui pour ce contrat et ce seuil
-                $alreadySent = $db->queryOne(
-                    "SELECT id FROM notifications
-                     WHERE title LIKE ? AND message LIKE ? AND DATE(created_at) = CURDATE()",
-                    ["%{$days} jour%{$contract['employee_name']}%", "%{$contract['hotel_name']}%"]
-                );
+            $alertTypeLabels = [
+                'expiry' => 'Expiration contrat',
+                'termination_notice' => 'Préavis de résiliation',
+                'custom' => 'Rappel personnalisé'
+            ];
+            $alertLabel = isset($alertTypeLabels[$alert['alert_type']]) ? $alertTypeLabels[$alert['alert_type']] : $alert['alert_type'];
 
-                if ($alreadySent) continue;
+            $urgentPrefix = $daysLeft <= 7 ? '⚠️ URGENT: ' : '';
+            $subject = "{$urgentPrefix}{$alertLabel} - {$alert['supplier_name']}";
+            $message = "{$alertLabel} pour le contrat fournisseur \"{$alert['supplier_name']}\"";
+            $message .= $alert['contract_ref'] ? " (réf: {$alert['contract_ref']})" : "";
+            $message .= " - {$alert['hotel_name']}.\n\n";
+            $message .= "Date de fin : " . date('d/m/Y', strtotime($alert['end_date'])) . " ({$daysLeftText})\n";
+            $message .= "Montant : " . number_format((float)$alert['amount'], 2, ',', ' ') . " € ({$alert['amount_frequency']})\n\n";
 
-                // Récupérer les destinataires selon le niveau d'escalade
-                $rolesPlaceholders = implode(',', array_fill(0, count($threshold['roles']), '?'));
-                $params = array_merge([$contract['hotel_id']], $threshold['roles']);
+            if ($alert['alert_type'] === 'termination_notice') {
+                $message .= "Le préavis de résiliation de {$alert['days_before']} jours est atteint.\nSi vous souhaitez résilier ce contrat, agissez maintenant.\n";
+            } else {
+                $message .= "Veuillez anticiper le renouvellement ou la résiliation de ce contrat.\n";
+            }
 
-                $recipients = $db->query(
-                    "SELECT DISTINCT u.id, u.email, u.first_name FROM users u
+            // Déterminer le niveau de notification selon l'urgence
+            $level = $daysLeft <= 7 ? 'danger' : ($daysLeft <= 30 ? 'warning' : 'info');
+
+            // Notifier les responsables hôtel
+            $managers = getContractManagers($db, $alert['hotel_id']);
+            foreach ($managers as $m) {
+                createNotification($m['id'], $level, $subject, $message);
+                sendEmail($m['email'], $subject, $message);
+            }
+
+            // Si urgent (< 7 jours), notifier aussi les admins
+            if ($daysLeft <= 7) {
+                $admins = $db->query(
+                    "SELECT DISTINCT u.id, u.email FROM users u
                      JOIN user_hotels uh ON u.id = uh.user_id
-                     WHERE uh.hotel_id = ? AND u.role IN ($rolesPlaceholders) AND u.status = 'active'",
-                    $params
+                     WHERE uh.hotel_id = ? AND u.role = 'admin' AND u.status = 'active'",
+                    [$alert['hotel_id']]
                 );
-
-                $subject = ($days <= 7 ? '⚠️ URGENT: ' : '') . "Contrat {$typeLabel} expire dans {$days} jours - {$contract['employee_name']}";
-                $message = "Le contrat {$typeLabel} de {$contract['employee_name']} pour l'hôtel {$contract['hotel_name']} expire le " .
-                           date('d/m/Y', strtotime($contract['end_date'])) . " (dans {$days} jours).\n\n" .
-                           "Type: {$typeLabel}\n" .
-                           "Heures hebdo: {$contract['weekly_hours']}h\n\n" .
-                           "Veuillez prévoir le renouvellement ou le remplacement.";
-
-                foreach ($recipients as $r) {
-                    createNotification($r['id'], $threshold['level'], $subject, $message);
-                    sendEmail($r['email'], $subject, $message);
-                    echo "    → Alerte {$days}j envoyée à {$r['email']} pour {$contract['employee_name']}\n";
+                foreach ($admins as $a) {
+                    createNotification($a['id'], 'danger', $subject, $message . "\n(Escalade admin: < 7 jours)");
+                    sendEmail($a['email'], $subject, $message);
                 }
             }
-        } catch (Exception $e) {
-            echo "  ⚠ Erreur alertes {$days}j: " . $e->getMessage() . "\n";
+
+            // Mettre à jour la date de dernière alerte
+            $db->execute(
+                "UPDATE contract_alerts SET last_triggered_at = NOW() WHERE id = ?",
+                [$alert['alert_id']]
+            );
+
+            $alertsSent++;
+            echo "    → Alerte [{$alertLabel}] {$alert['supplier_name']} ({$daysLeftText}) → " . count($managers) . " destinataire(s)\n";
         }
+
+        echo "  Alertes déclenchées: {$alertsSent}\n";
+    } catch (Exception $e) {
+        echo "  ⚠ Erreur alertes contrats: " . $e->getMessage() . "\n";
     }
 
-    echo "\n  ✓ Vérification contrats terminée\n";
+    echo "\n  ✓ Vérification contrats fournisseurs terminée\n";
+}
+
+/**
+ * Récupère les hotel_manager, groupe_manager et comptabilité affectés à un hôtel
+ */
+function getContractManagers($db, $hotelId) {
+    return $db->query(
+        "SELECT DISTINCT u.id, u.email, u.first_name FROM users u
+         JOIN user_hotels uh ON u.id = uh.user_id
+         WHERE uh.hotel_id = ? AND u.role IN ('hotel_manager', 'groupe_manager', 'comptabilite') AND u.status = 'active'",
+        [$hotelId]
+    );
 }
 
 // =============================================================================

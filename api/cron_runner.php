@@ -336,28 +336,42 @@ function runClosureReminderCron($hotels, $recipients, $db) {
 
 function runContractAlertCron($hotels, $recipients, $db) {
     $today = date('Y-m-d');
-    $deactivated = 0;
-    $alerts = 0;
+    $terminated = 0;
+    $renewed = 0;
+    $expiring = 0;
 
-    // Désactiver les contrats expirés
+    // Traiter les contrats fournisseurs expirés (renouvellement auto ou terminated)
     $expired = $db->query(
-        "SELECT id FROM time_contracts WHERE is_active = 1 AND end_date IS NOT NULL AND end_date < ?",
+        "SELECT id, auto_renewal, renewal_duration_months, end_date FROM contracts
+         WHERE status IN ('active', 'expiring') AND end_date IS NOT NULL AND end_date < ?",
         [$today]
     );
     foreach ($expired as $c) {
-        $db->execute("UPDATE time_contracts SET is_active = 0, updated_at = NOW() WHERE id = ?", [$c['id']]);
-        $deactivated++;
+        if ($c['auto_renewal'] == 1 && $c['renewal_duration_months'] > 0) {
+            $newEndDate = date('Y-m-d', strtotime($c['end_date'] . " +{$c['renewal_duration_months']} months"));
+            $db->execute("UPDATE contracts SET end_date = ?, status = 'active', updated_at = NOW() WHERE id = ?", [$newEndDate, $c['id']]);
+            $renewed++;
+        } else {
+            $db->execute("UPDATE contracts SET status = 'terminated', updated_at = NOW() WHERE id = ?", [$c['id']]);
+            $terminated++;
+        }
     }
 
-    // Compter les contrats expirant dans 30 jours
-    $soonDate = date('Y-m-d', strtotime('+30 days'));
-    $expiring = $db->queryOne(
-        "SELECT COUNT(*) as cnt FROM time_contracts WHERE is_active = 1 AND end_date IS NOT NULL AND end_date BETWEEN ? AND ?",
-        [$today, $soonDate]
+    // Passer en "expiring" les contrats expirant dans 90 jours
+    $soon = date('Y-m-d', strtotime('+90 days'));
+    $db->execute(
+        "UPDATE contracts SET status = 'expiring', updated_at = NOW() WHERE status = 'active' AND end_date IS NOT NULL AND end_date BETWEEN ? AND ?",
+        [$today, $soon]
     );
-    $alerts = $expiring['cnt'] ?? 0;
 
-    return ['message' => "$deactivated contrat(s) désactivé(s), $alerts contrat(s) expirant sous 30 jours"];
+    // Compter les contrats expirant bientôt
+    $expiringCount = $db->queryOne(
+        "SELECT COUNT(*) as cnt FROM contracts WHERE status = 'expiring'",
+        []
+    );
+    $expiring = $expiringCount['cnt'] ?? 0;
+
+    return ['message' => "$terminated terminé(s), $renewed renouvelé(s), $expiring en cours d'expiration"];
 }
 
 function runSystemCleanupCron($db) {
