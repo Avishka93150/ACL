@@ -2972,6 +2972,51 @@ try {
                 db()->execute("DELETE FROM hotels WHERE id = ?", [$id]);
                 json_out(['success' => true]);
             }
+
+            // GET /hotels/{id}/contracts-config - Configuration IA contrats
+            if ($method === 'GET' && $id && is_numeric($id) && $action === 'contracts-config') {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin'])) json_error('Réservé aux administrateurs', 403);
+                $config = null;
+                try {
+                    $config = db()->queryOne("SELECT id, hotel_id, ai_enabled, IF(anthropic_api_key IS NOT NULL AND anthropic_api_key != '', 1, 0) as has_api_key, created_at, updated_at FROM hotel_contracts_config WHERE hotel_id = ?", [$id]);
+                } catch (Exception $e) {}
+                json_out(['success' => true, 'config' => $config ?: ['hotel_id' => (int)$id, 'ai_enabled' => 0, 'has_api_key' => 0]]);
+            }
+
+            // PUT /hotels/{id}/contracts-config - Sauvegarder configuration IA contrats
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'contracts-config') {
+                $user = require_auth();
+                if (!in_array($user['role'], ['admin'])) json_error('Réservé aux administrateurs', 403);
+
+                $data = get_input();
+                $existing = null;
+                try {
+                    $existing = db()->queryOne("SELECT id FROM hotel_contracts_config WHERE hotel_id = ?", [$id]);
+                } catch (Exception $e) {}
+
+                $aiEnabled = !empty($data['ai_enabled']) ? 1 : 0;
+                $apiKey = isset($data['anthropic_api_key']) ? $data['anthropic_api_key'] : null;
+
+                if ($existing) {
+                    $sets = ['ai_enabled = ?', 'updated_at = NOW()'];
+                    $params = [$aiEnabled];
+                    // Ne mettre à jour la clé API que si elle est fournie (non vide)
+                    if ($apiKey !== null && $apiKey !== '') {
+                        $sets[] = 'anthropic_api_key = ?';
+                        $params[] = $apiKey;
+                    }
+                    $params[] = $id;
+                    db()->execute("UPDATE hotel_contracts_config SET " . implode(', ', $sets) . " WHERE hotel_id = ?", $params);
+                } else {
+                    db()->insert(
+                        "INSERT INTO hotel_contracts_config (hotel_id, ai_enabled, anthropic_api_key, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())",
+                        [$id, $aiEnabled, $apiKey]
+                    );
+                }
+                json_out(['success' => true]);
+            }
+
             break;
         
         // --- ROOMS ---
@@ -11758,6 +11803,511 @@ try {
             }
 
             json_error('Endpoint welcome non trouvé', 404);
+            break;
+
+        // ==================== CONTRATS FOURNISSEURS ====================
+        case 'contracts':
+            $user = require_auth();
+            $userRole = $user['role'];
+            $userId = $user['id'];
+
+            // Récupérer les hôtels de l'utilisateur
+            if ($userRole === 'admin') {
+                $userHotelIds = array_column(db()->query("SELECT id FROM hotels WHERE status = 'active'"), 'id');
+            } else {
+                $userHotelIds = array_column(db()->query("SELECT hotel_id FROM user_hotels WHERE user_id = ?", [$userId]), 'hotel_id');
+            }
+            if (empty($userHotelIds)) json_error('Aucun hôtel assigné', 403);
+            $hotelPlaceholders = implode(',', array_fill(0, count($userHotelIds), '?'));
+
+            // --- GET /contracts/stats ---
+            if ($method === 'GET' && $id === 'stats') {
+                $hotelFilter = isset($_GET['hotel_id']) ? [(int)$_GET['hotel_id']] : $userHotelIds;
+                $ph = implode(',', array_fill(0, count($hotelFilter), '?'));
+
+                $active = db()->count("SELECT COUNT(*) FROM contracts WHERE hotel_id IN ($ph) AND status = 'active'", $hotelFilter);
+                $expiring = db()->count("SELECT COUNT(*) FROM contracts WHERE hotel_id IN ($ph) AND status = 'expiring'", $hotelFilter);
+                $archived = db()->count("SELECT COUNT(*) FROM contracts WHERE hotel_id IN ($ph) AND status IN ('archived','terminated')", $hotelFilter);
+
+                $totalMonthly = db()->queryOne(
+                    "SELECT COALESCE(SUM(CASE
+                        WHEN amount_frequency = 'monthly' THEN amount
+                        WHEN amount_frequency = 'quarterly' THEN amount / 3
+                        WHEN amount_frequency = 'yearly' THEN amount / 12
+                        WHEN amount_frequency = 'one_time' THEN 0
+                    END), 0) as total
+                    FROM contracts WHERE hotel_id IN ($ph) AND status IN ('active','expiring')", $hotelFilter
+                );
+
+                json_out([
+                    'success' => true,
+                    'stats' => [
+                        'active' => (int)$active,
+                        'expiring' => (int)$expiring,
+                        'archived' => (int)$archived,
+                        'total_monthly' => round((float)$totalMonthly['total'], 2)
+                    ]
+                ]);
+            }
+
+            // --- GET /contracts/categories ---
+            if ($method === 'GET' && $id === 'categories') {
+                $hotelFilter = isset($_GET['hotel_id']) ? [(int)$_GET['hotel_id']] : $userHotelIds;
+                $ph = implode(',', array_fill(0, count($hotelFilter), '?'));
+                $cats = db()->query("SELECT cc.*, (SELECT COUNT(*) FROM contracts c WHERE c.category_id = cc.id) as contract_count FROM contract_categories cc WHERE cc.hotel_id IN ($ph) ORDER BY cc.name", $hotelFilter);
+                json_out(['success' => true, 'categories' => $cats]);
+            }
+
+            // --- POST /contracts/categories ---
+            if ($method === 'POST' && $id === 'categories') {
+                if (!hasPermission($userRole, 'contracts.manage')) json_error('Accès refusé', 403);
+                $data = get_input();
+                if (empty($data['name']) || empty($data['hotel_id'])) json_error('Nom et hôtel requis');
+                $insertId = db()->insert(
+                    "INSERT INTO contract_categories (hotel_id, name, color, created_at) VALUES (?, ?, ?, NOW())",
+                    [(int)$data['hotel_id'], $data['name'], $data['color'] ?? '#6366f1']
+                );
+                json_out(['success' => true, 'id' => $insertId], 201);
+            }
+
+            // --- PUT /contracts/categories/{catId} ---
+            if ($method === 'PUT' && $id === 'categories' && $action && is_numeric($action)) {
+                if (!hasPermission($userRole, 'contracts.manage')) json_error('Accès refusé', 403);
+                $data = get_input();
+                $sets = []; $params = [];
+                if (isset($data['name'])) { $sets[] = 'name = ?'; $params[] = $data['name']; }
+                if (isset($data['color'])) { $sets[] = 'color = ?'; $params[] = $data['color']; }
+                if ($sets) {
+                    $params[] = (int)$action;
+                    db()->execute("UPDATE contract_categories SET " . implode(', ', $sets) . " WHERE id = ?", $params);
+                }
+                json_out(['success' => true]);
+            }
+
+            // --- DELETE /contracts/categories/{catId} ---
+            if ($method === 'DELETE' && $id === 'categories' && $action && is_numeric($action)) {
+                if (!hasPermission($userRole, 'contracts.delete')) json_error('Accès refusé', 403);
+                // Dissocier les contrats de cette catégorie
+                db()->execute("UPDATE contracts SET category_id = NULL WHERE category_id = ?", [(int)$action]);
+                db()->execute("DELETE FROM contract_categories WHERE id = ?", [(int)$action]);
+                json_out(['success' => true]);
+            }
+
+            // --- GET /contracts/charges ---
+            if ($method === 'GET' && $id === 'charges') {
+                $hotelId = isset($_GET['hotel_id']) ? (int)$_GET['hotel_id'] : null;
+                $year = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
+                $hotelFilter = $hotelId ? [$hotelId] : $userHotelIds;
+                $ph = implode(',', array_fill(0, count($hotelFilter), '?'));
+
+                $contracts = db()->query(
+                    "SELECT c.*, cc.name as category_name, cc.color as category_color
+                     FROM contracts c
+                     LEFT JOIN contract_categories cc ON c.category_id = cc.id
+                     WHERE c.hotel_id IN ($ph) AND c.status IN ('active','expiring')
+                     ORDER BY cc.name, c.supplier_name",
+                    $hotelFilter
+                );
+
+                json_out(['success' => true, 'contracts' => $contracts, 'year' => $year]);
+            }
+
+            // --- GET /contracts/export-pdf ---
+            if ($method === 'GET' && $id === 'export-pdf') {
+                $hotelId = isset($_GET['hotel_id']) ? (int)$_GET['hotel_id'] : null;
+                $statusFilter = $_GET['status'] ?? 'all';
+                $hotelFilter = $hotelId ? [$hotelId] : $userHotelIds;
+                $ph = implode(',', array_fill(0, count($hotelFilter), '?'));
+
+                $where = "c.hotel_id IN ($ph)";
+                $params = $hotelFilter;
+                if ($statusFilter === 'active') { $where .= " AND c.status IN ('active','expiring')"; }
+                elseif ($statusFilter === 'archived') { $where .= " AND c.status IN ('archived','terminated')"; }
+
+                $contracts = db()->query(
+                    "SELECT c.*, cc.name as category_name, h.name as hotel_name
+                     FROM contracts c
+                     LEFT JOIN contract_categories cc ON c.category_id = cc.id
+                     LEFT JOIN hotels h ON c.hotel_id = h.id
+                     WHERE $where ORDER BY h.name, c.supplier_name", $params
+                );
+
+                $hotelName = $hotelId ? (db()->queryOne("SELECT name FROM hotels WHERE id = ?", [$hotelId])['name'] ?? 'Hotel') : 'Multi-hotels';
+                $statusLabels = ['active' => 'Actif', 'expiring' => 'Expire bientôt', 'terminated' => 'Résilié', 'archived' => 'Archivé'];
+                $freqLabels = ['monthly' => 'Mensuel', 'quarterly' => 'Trimestriel', 'yearly' => 'Annuel', 'one_time' => 'Ponctuel'];
+
+                // Générer CSV (compatible Excel avec BOM UTF-8)
+                header('Content-Type: text/csv; charset=utf-8');
+                header('Content-Disposition: attachment; filename="contrats_' . date('Y-m-d') . '.csv"');
+                echo "\xEF\xBB\xBF"; // BOM UTF-8
+                echo "Hôtel;Fournisseur;Référence;Catégorie;Montant;Fréquence;Début;Échéance;Préavis (j);Tacite reconduction;Statut\n";
+                foreach ($contracts as $c) {
+                    echo implode(';', [
+                        '"' . str_replace('"', '""', $c['hotel_name'] ?? '') . '"',
+                        '"' . str_replace('"', '""', $c['supplier_name']) . '"',
+                        '"' . str_replace('"', '""', $c['contract_ref'] ?? '') . '"',
+                        '"' . str_replace('"', '""', $c['category_name'] ?? 'Sans catégorie') . '"',
+                        number_format((float)$c['amount'], 2, ',', ' ') . ' €',
+                        $freqLabels[$c['amount_frequency']] ?? $c['amount_frequency'],
+                        $c['start_date'] ?? '',
+                        $c['end_date'] ?? '',
+                        $c['termination_notice_days'] ?? '',
+                        $c['auto_renewal'] ? 'Oui' : 'Non',
+                        $statusLabels[$c['status']] ?? $c['status']
+                    ]) . "\n";
+                }
+                exit;
+            }
+
+            // --- GET /contracts/{id}/documents ---
+            if ($method === 'GET' && $id && is_numeric($id) && $action === 'documents') {
+                $contract = db()->queryOne("SELECT * FROM contracts WHERE id = ?", [(int)$id]);
+                if (!$contract) json_error('Contrat non trouvé', 404);
+                if (!in_array($contract['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                $docs = db()->query(
+                    "SELECT cd.*, CONCAT(u.first_name, ' ', u.last_name) as uploader_name
+                     FROM contract_documents cd
+                     LEFT JOIN users u ON cd.uploaded_by = u.id
+                     WHERE cd.contract_id = ? ORDER BY cd.created_at DESC",
+                    [(int)$id]
+                );
+                json_out(['success' => true, 'documents' => $docs]);
+            }
+
+            // --- POST /contracts/{id}/documents (upload) ---
+            if ($method === 'POST' && $id && is_numeric($id) && $action === 'documents') {
+                if (!hasPermission($userRole, 'contracts.manage')) json_error('Accès refusé', 403);
+                $contract = db()->queryOne("SELECT * FROM contracts WHERE id = ?", [(int)$id]);
+                if (!$contract) json_error('Contrat non trouvé', 404);
+                if (!in_array($contract['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                if (!isset($_FILES['file'])) json_error('Aucun fichier envoyé');
+                $file = $_FILES['file'];
+                $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+                if (!in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'])) json_error('Format non autorisé (PDF, JPG, PNG uniquement)');
+                if ($file['size'] > 10 * 1024 * 1024) json_error('Fichier trop volumineux (max 10 Mo)');
+
+                $filename = uniqid() . '.' . $ext;
+                $uploadDir = __DIR__ . '/../uploads/contracts/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0775, true);
+                if (!move_uploaded_file($file['tmp_name'], $uploadDir . $filename)) json_error('Erreur lors de l\'upload');
+
+                $docType = $_POST['type'] ?? 'other';
+                $label = $_POST['label'] ?? $file['name'];
+                $docId = db()->insert(
+                    "INSERT INTO contract_documents (contract_id, type, label, file_path, original_filename, uploaded_by, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())",
+                    [(int)$id, $docType, $label, 'uploads/contracts/' . $filename, $file['name'], $userId]
+                );
+                json_out(['success' => true, 'id' => $docId, 'file_path' => 'uploads/contracts/' . $filename], 201);
+            }
+
+            // --- DELETE /contracts/{id}/documents/{docId} ---
+            if ($method === 'DELETE' && $id && is_numeric($id) && $action === 'documents' && $subId && is_numeric($subId)) {
+                if (!hasPermission($userRole, 'contracts.manage')) json_error('Accès refusé', 403);
+                $doc = db()->queryOne("SELECT cd.*, c.hotel_id FROM contract_documents cd JOIN contracts c ON cd.contract_id = c.id WHERE cd.id = ?", [(int)$subId]);
+                if (!$doc) json_error('Document non trouvé', 404);
+                if (!in_array($doc['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                // Supprimer le fichier physique
+                $filePath = __DIR__ . '/../' . $doc['file_path'];
+                if (file_exists($filePath)) unlink($filePath);
+                db()->execute("DELETE FROM contract_documents WHERE id = ?", [(int)$subId]);
+                json_out(['success' => true]);
+            }
+
+            // --- GET /contracts/{id}/alerts ---
+            if ($method === 'GET' && $id && is_numeric($id) && $action === 'alerts') {
+                $contract = db()->queryOne("SELECT * FROM contracts WHERE id = ?", [(int)$id]);
+                if (!$contract) json_error('Contrat non trouvé', 404);
+                if (!in_array($contract['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                $alerts = db()->query("SELECT * FROM contract_alerts WHERE contract_id = ? ORDER BY days_before DESC", [(int)$id]);
+                json_out(['success' => true, 'alerts' => $alerts]);
+            }
+
+            // --- POST /contracts/{id}/alerts ---
+            if ($method === 'POST' && $id && is_numeric($id) && $action === 'alerts') {
+                if (!hasPermission($userRole, 'contracts.manage')) json_error('Accès refusé', 403);
+                $contract = db()->queryOne("SELECT * FROM contracts WHERE id = ?", [(int)$id]);
+                if (!$contract) json_error('Contrat non trouvé', 404);
+                $data = get_input();
+                $alertId = db()->insert(
+                    "INSERT INTO contract_alerts (contract_id, alert_type, days_before, is_active, created_at) VALUES (?, ?, ?, ?, NOW())",
+                    [(int)$id, $data['alert_type'] ?? 'expiry', (int)($data['days_before'] ?? 30), 1]
+                );
+                json_out(['success' => true, 'id' => $alertId], 201);
+            }
+
+            // --- PUT /contracts/{id}/alerts/{alertId} ---
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'alerts' && $subId && is_numeric($subId)) {
+                if (!hasPermission($userRole, 'contracts.manage')) json_error('Accès refusé', 403);
+                $data = get_input();
+                $sets = []; $params = [];
+                if (isset($data['is_active'])) { $sets[] = 'is_active = ?'; $params[] = $data['is_active'] ? 1 : 0; }
+                if (isset($data['days_before'])) { $sets[] = 'days_before = ?'; $params[] = (int)$data['days_before']; }
+                if (isset($data['alert_type'])) { $sets[] = 'alert_type = ?'; $params[] = $data['alert_type']; }
+                if ($sets) {
+                    $params[] = (int)$subId;
+                    db()->execute("UPDATE contract_alerts SET " . implode(', ', $sets) . " WHERE id = ?", $params);
+                }
+                json_out(['success' => true]);
+            }
+
+            // --- DELETE /contracts/{id}/alerts/{alertId} ---
+            if ($method === 'DELETE' && $id && is_numeric($id) && $action === 'alerts' && $subId && is_numeric($subId)) {
+                if (!hasPermission($userRole, 'contracts.manage')) json_error('Accès refusé', 403);
+                db()->execute("DELETE FROM contract_alerts WHERE id = ?", [(int)$subId]);
+                json_out(['success' => true]);
+            }
+
+            // --- POST /contracts/{id}/analyze (IA Anthropic) ---
+            if ($method === 'POST' && $id && is_numeric($id) && $action === 'analyze') {
+                if (!hasPermission($userRole, 'contracts.analyze')) json_error('Accès refusé', 403);
+                $contract = db()->queryOne("SELECT * FROM contracts WHERE id = ?", [(int)$id]);
+                if (!$contract) json_error('Contrat non trouvé', 404);
+                if (!in_array($contract['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                // Vérifier que l'IA est activée pour cet hôtel
+                $config = db()->queryOne("SELECT * FROM hotel_contracts_config WHERE hotel_id = ?", [$contract['hotel_id']]);
+                if (!$config || !$config['ai_enabled']) json_error('L\'analyse IA n\'est pas activée pour cet hôtel. Configurez-la dans Hôtels > Contrats.');
+                if (empty($config['anthropic_api_key'])) json_error('Clé API Anthropic non configurée pour cet hôtel');
+
+                // Construire le contexte du contrat
+                $docs = db()->query("SELECT label, type, original_filename FROM contract_documents WHERE contract_id = ?", [(int)$id]);
+                $alerts = db()->query("SELECT alert_type, days_before, is_active FROM contract_alerts WHERE contract_id = ?", [(int)$id]);
+                $category = $contract['category_id'] ? db()->queryOne("SELECT name FROM contract_categories WHERE id = ?", [$contract['category_id']]) : null;
+
+                $contractContext = "Fournisseur: {$contract['supplier_name']}\n";
+                $contractContext .= "Référence: " . ($contract['contract_ref'] ?? 'Non renseignée') . "\n";
+                $contractContext .= "Catégorie: " . ($category ? $category['name'] : 'Non catégorisé') . "\n";
+                $contractContext .= "Montant: {$contract['amount']} € ({$contract['amount_frequency']})\n";
+                $contractContext .= "Date de début: " . ($contract['start_date'] ?? 'Non renseignée') . "\n";
+                $contractContext .= "Date d'échéance: " . ($contract['end_date'] ?? 'Non renseignée') . "\n";
+                $contractContext .= "Délai de préavis de résiliation: {$contract['termination_notice_days']} jours\n";
+                $contractContext .= "Tacite reconduction: " . ($contract['auto_renewal'] ? "Oui ({$contract['renewal_duration_months']} mois)" : 'Non') . "\n";
+                $contractContext .= "Statut: {$contract['status']}\n";
+                $contractContext .= "Description: " . ($contract['description'] ?? 'Aucune') . "\n";
+                $contractContext .= "Notes: " . ($contract['notes'] ?? 'Aucune') . "\n";
+                if (!empty($docs)) {
+                    $contractContext .= "Documents joints: " . implode(', ', array_map(function($d) { return $d['label'] . ' (' . $d['type'] . ')'; }, $docs)) . "\n";
+                }
+
+                $prompt = "Tu es un expert en gestion de contrats fournisseurs pour l'hôtellerie. Analyse le contrat suivant et fournis :\n\n";
+                $prompt .= "1. **Résumé** : Un résumé concis du contrat\n";
+                $prompt .= "2. **Points d'attention** : Les clauses ou conditions qui méritent une vigilance particulière\n";
+                $prompt .= "3. **Risques identifiés** : Les risques potentiels (financiers, juridiques, opérationnels)\n";
+                $prompt .= "4. **Conditions de résiliation** : Analyse du préavis et des conditions de sortie\n";
+                $prompt .= "5. **Recommandations** : Actions recommandées (renégociation, résiliation, renouvellement, etc.)\n\n";
+                $prompt .= "Contrat à analyser :\n$contractContext";
+
+                // Appel API Anthropic Claude
+                $ch = curl_init('https://api.anthropic.com/v1/messages');
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_POST => true,
+                    CURLOPT_TIMEOUT => 60,
+                    CURLOPT_HTTPHEADER => [
+                        'Content-Type: application/json',
+                        'x-api-key: ' . $config['anthropic_api_key'],
+                        'anthropic-version: 2023-06-01'
+                    ],
+                    CURLOPT_POSTFIELDS => json_encode([
+                        'model' => 'claude-sonnet-4-5-20250929',
+                        'max_tokens' => 2048,
+                        'messages' => [
+                            ['role' => 'user', 'content' => $prompt]
+                        ]
+                    ])
+                ]);
+
+                $response = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlError = curl_error($ch);
+                curl_close($ch);
+
+                if ($curlError) json_error('Erreur de connexion à l\'API Anthropic: ' . $curlError);
+                if ($httpCode !== 200) {
+                    $errorData = json_decode($response, true);
+                    $errorMsg = $errorData['error']['message'] ?? 'Erreur API Anthropic (code ' . $httpCode . ')';
+                    json_error($errorMsg);
+                }
+
+                $result = json_decode($response, true);
+                $analysis = '';
+                if (!empty($result['content'])) {
+                    foreach ($result['content'] as $block) {
+                        if ($block['type'] === 'text') $analysis .= $block['text'];
+                    }
+                }
+
+                if (empty($analysis)) json_error('Réponse vide de l\'API');
+
+                // Sauvegarder l'analyse
+                db()->execute(
+                    "UPDATE contracts SET ai_analysis = ?, ai_analyzed_at = NOW(), updated_at = NOW() WHERE id = ?",
+                    [$analysis, (int)$id]
+                );
+
+                json_out(['success' => true, 'analysis' => $analysis]);
+            }
+
+            // --- PUT /contracts/{id}/status ---
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'status') {
+                if (!hasPermission($userRole, 'contracts.manage')) json_error('Accès refusé', 403);
+                $data = get_input();
+                $validStatuses = ['active', 'expiring', 'terminated', 'archived'];
+                if (!in_array($data['status'] ?? '', $validStatuses)) json_error('Statut invalide');
+                $contract = db()->queryOne("SELECT * FROM contracts WHERE id = ?", [(int)$id]);
+                if (!$contract) json_error('Contrat non trouvé', 404);
+                if (!in_array($contract['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                db()->execute("UPDATE contracts SET status = ?, updated_at = NOW() WHERE id = ?", [$data['status'], (int)$id]);
+                json_out(['success' => true]);
+            }
+
+            // --- GET /contracts/{id} ---
+            if ($method === 'GET' && $id && is_numeric($id) && !$action) {
+                $contract = db()->queryOne(
+                    "SELECT c.*, cc.name as category_name, cc.color as category_color,
+                            h.name as hotel_name,
+                            CONCAT(u.first_name, ' ', u.last_name) as created_by_name
+                     FROM contracts c
+                     LEFT JOIN contract_categories cc ON c.category_id = cc.id
+                     LEFT JOIN hotels h ON c.hotel_id = h.id
+                     LEFT JOIN users u ON c.created_by = u.id
+                     WHERE c.id = ?", [(int)$id]
+                );
+                if (!$contract) json_error('Contrat non trouvé', 404);
+                if (!in_array($contract['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                // Charger documents et alertes
+                $contract['documents'] = db()->query(
+                    "SELECT cd.*, CONCAT(u.first_name, ' ', u.last_name) as uploader_name FROM contract_documents cd LEFT JOIN users u ON cd.uploaded_by = u.id WHERE cd.contract_id = ? ORDER BY cd.created_at DESC", [(int)$id]
+                );
+                $contract['alerts'] = db()->query("SELECT * FROM contract_alerts WHERE contract_id = ? ORDER BY days_before DESC", [(int)$id]);
+
+                // Vérifier si IA activée
+                $aiConfig = db()->queryOne("SELECT ai_enabled FROM hotel_contracts_config WHERE hotel_id = ?", [$contract['hotel_id']]);
+                $contract['ai_enabled'] = $aiConfig ? (bool)$aiConfig['ai_enabled'] : false;
+
+                json_out(['success' => true, 'contract' => $contract]);
+            }
+
+            // --- GET /contracts ---
+            if ($method === 'GET' && !$id) {
+                $hotelFilter = isset($_GET['hotel_id']) ? [(int)$_GET['hotel_id']] : $userHotelIds;
+                $ph = implode(',', array_fill(0, count($hotelFilter), '?'));
+                $where = "c.hotel_id IN ($ph)";
+                $params = $hotelFilter;
+
+                if (!empty($_GET['status'])) {
+                    if ($_GET['status'] === 'archived') {
+                        $where .= " AND c.status IN ('archived','terminated')";
+                    } else {
+                        $where .= " AND c.status = ?";
+                        $params[] = $_GET['status'];
+                    }
+                }
+                if (!empty($_GET['category_id'])) { $where .= " AND c.category_id = ?"; $params[] = (int)$_GET['category_id']; }
+                if (!empty($_GET['search'])) { $where .= " AND (c.supplier_name LIKE ? OR c.contract_ref LIKE ?)"; $params[] = '%' . $_GET['search'] . '%'; $params[] = '%' . $_GET['search'] . '%'; }
+
+                $result = paginate(
+                    "SELECT c.*, cc.name as category_name, cc.color as category_color, h.name as hotel_name
+                     FROM contracts c
+                     LEFT JOIN contract_categories cc ON c.category_id = cc.id
+                     LEFT JOIN hotels h ON c.hotel_id = h.id
+                     WHERE $where ORDER BY c.end_date ASC",
+                    $params
+                );
+                json_out(['success' => true, 'contracts' => $result['data'], 'pagination' => $result['pagination']]);
+            }
+
+            // --- POST /contracts ---
+            if ($method === 'POST' && !$id) {
+                if (!hasPermission($userRole, 'contracts.create')) json_error('Accès refusé', 403);
+                $data = get_input();
+                if (empty($data['supplier_name']) || empty($data['hotel_id'])) json_error('Fournisseur et hôtel requis');
+                if (!in_array((int)$data['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $insertId = db()->insert(
+                    "INSERT INTO contracts (hotel_id, supplier_name, contract_ref, category_id, description, amount, amount_frequency, start_date, end_date, termination_notice_days, auto_renewal, renewal_duration_months, status, notes, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
+                    [
+                        (int)$data['hotel_id'], $data['supplier_name'], $data['contract_ref'] ?? null,
+                        !empty($data['category_id']) ? (int)$data['category_id'] : null,
+                        $data['description'] ?? null, (float)($data['amount'] ?? 0),
+                        $data['amount_frequency'] ?? 'monthly',
+                        $data['start_date'] ?? null, $data['end_date'] ?? null,
+                        (int)($data['termination_notice_days'] ?? 90),
+                        !empty($data['auto_renewal']) ? 1 : 0,
+                        (int)($data['renewal_duration_months'] ?? 12),
+                        $data['status'] ?? 'active', $data['notes'] ?? null, $userId
+                    ]
+                );
+
+                // Créer les alertes par défaut (90j, 60j, 30j avant échéance)
+                if (!empty($data['end_date'])) {
+                    foreach ([90, 60, 30] as $days) {
+                        db()->insert(
+                            "INSERT INTO contract_alerts (contract_id, alert_type, days_before, is_active, created_at) VALUES (?, 'expiry', ?, 1, NOW())",
+                            [$insertId, $days]
+                        );
+                    }
+                    // Alerte préavis résiliation
+                    if (($data['termination_notice_days'] ?? 0) > 0) {
+                        db()->insert(
+                            "INSERT INTO contract_alerts (contract_id, alert_type, days_before, is_active, created_at) VALUES (?, 'termination_notice', ?, 1, NOW())",
+                            [$insertId, (int)($data['termination_notice_days'] ?? 90)]
+                        );
+                    }
+                }
+
+                json_out(['success' => true, 'id' => $insertId], 201);
+            }
+
+            // --- PUT /contracts/{id} ---
+            if ($method === 'PUT' && $id && is_numeric($id) && !$action) {
+                if (!hasPermission($userRole, 'contracts.manage')) json_error('Accès refusé', 403);
+                $contract = db()->queryOne("SELECT * FROM contracts WHERE id = ?", [(int)$id]);
+                if (!$contract) json_error('Contrat non trouvé', 404);
+                if (!in_array($contract['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $data = get_input();
+                $fields = ['supplier_name', 'contract_ref', 'description', 'amount', 'amount_frequency', 'start_date', 'end_date', 'termination_notice_days', 'auto_renewal', 'renewal_duration_months', 'status', 'notes', 'category_id'];
+                $sets = []; $params = [];
+                foreach ($fields as $f) {
+                    if (isset($data[$f])) {
+                        $sets[] = "$f = ?";
+                        if ($f === 'amount') $params[] = (float)$data[$f];
+                        elseif (in_array($f, ['termination_notice_days', 'renewal_duration_months', 'category_id'])) $params[] = $data[$f] !== null && $data[$f] !== '' ? (int)$data[$f] : null;
+                        elseif ($f === 'auto_renewal') $params[] = !empty($data[$f]) ? 1 : 0;
+                        else $params[] = $data[$f];
+                    }
+                }
+                if ($sets) {
+                    $sets[] = 'updated_at = NOW()';
+                    $params[] = (int)$id;
+                    db()->execute("UPDATE contracts SET " . implode(', ', $sets) . " WHERE id = ?", $params);
+                }
+                json_out(['success' => true]);
+            }
+
+            // --- DELETE /contracts/{id} ---
+            if ($method === 'DELETE' && $id && is_numeric($id) && !$action) {
+                if (!hasPermission($userRole, 'contracts.delete')) json_error('Accès refusé', 403);
+                $contract = db()->queryOne("SELECT * FROM contracts WHERE id = ?", [(int)$id]);
+                if (!$contract) json_error('Contrat non trouvé', 404);
+                if (!in_array($contract['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                // Supprimer les documents physiques
+                $docs = db()->query("SELECT file_path FROM contract_documents WHERE contract_id = ?", [(int)$id]);
+                foreach ($docs as $doc) {
+                    $filePath = __DIR__ . '/../' . $doc['file_path'];
+                    if (file_exists($filePath)) unlink($filePath);
+                }
+                db()->execute("DELETE FROM contract_documents WHERE contract_id = ?", [(int)$id]);
+                db()->execute("DELETE FROM contract_alerts WHERE contract_id = ?", [(int)$id]);
+                db()->execute("DELETE FROM contracts WHERE id = ?", [(int)$id]);
+                json_out(['success' => true]);
+            }
+
+            json_error('Endpoint contracts non trouvé', 404);
             break;
 
         default:

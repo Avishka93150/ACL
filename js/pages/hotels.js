@@ -234,6 +234,10 @@ async function showEditHotelPage(id, tab) {
                 <button class="hotel-tab ${_editHotelTab === 'revenue' ? 'active' : ''}" onclick="switchHotelTab('revenue')">
                     <i class="fas fa-chart-line"></i> Revenue
                 </button>
+                ${API.user.role === 'admin' ? `
+                <button class="hotel-tab ${_editHotelTab === 'contracts' ? 'active' : ''}" onclick="switchHotelTab('contracts')">
+                    <i class="fas fa-file-contract"></i> Contrats IA
+                </button>` : ''}
             </div>
 
             <div id="hotel-tab-content"></div>
@@ -292,6 +296,7 @@ async function renderHotelTab(h, leaveConfig) {
         case 'leaves': renderTabLeaves(content, h, leaveConfig); break;
         case 'closures': renderTabClosures(content, h); break;
         case 'revenue': renderTabRevenue(content, h); break;
+        case 'contracts': renderTabContracts(content, h); break;
     }
 }
 
@@ -1931,6 +1936,73 @@ function injectHotelTabStyles() {
         }
     `;
     document.head.appendChild(style);
+}
+
+// ---- ONGLET CONTRATS IA (config par hôtel, admin only) ----
+async function renderTabContracts(content, h) {
+    content.innerHTML = '<div class="loading-spinner"></div>';
+    let config = { ai_enabled: 0, has_api_key: 0 };
+    try {
+        const res = await API.getHotelContractsConfig(h.id);
+        if (res.config) config = res.config;
+    } catch (e) {}
+
+    content.innerHTML = `
+        <div class="card" style="max-width:700px">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-robot"></i> Configuration Analyse IA - Contrats</h3>
+            </div>
+            <div style="padding:24px">
+                <p style="margin-bottom:20px;color:var(--gray-500)">
+                    Activez l'analyse IA des contrats fournisseurs pour cet hôtel.
+                    L'IA (Anthropic Claude) analysera les contrats et générera des notes d'alerte,
+                    des recommandations et des points d'attention.
+                </p>
+
+                <div class="form-group">
+                    <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+                        <input type="checkbox" id="ct-cfg-ai-enabled" ${config.ai_enabled == 1 ? 'checked' : ''}>
+                        <strong>Activer l'analyse IA pour cet hôtel</strong>
+                    </label>
+                </div>
+
+                <div class="form-group" id="ct-cfg-api-section" style="${config.ai_enabled == 1 ? '' : 'display:none'}">
+                    <label>Clé API Anthropic</label>
+                    <input type="password" class="form-control" id="ct-cfg-api-key"
+                           placeholder="${config.has_api_key ? '••••••••••••••••••••• (clé configurée)' : 'sk-ant-api03-...'}"
+                           value="">
+                    <small style="color:var(--gray-400);margin-top:4px;display:block">
+                        ${config.has_api_key ? 'Une clé est déjà configurée. Laissez vide pour la conserver, ou saisissez une nouvelle clé.' : 'Obtenez votre clé sur console.anthropic.com'}
+                    </small>
+                </div>
+
+                <div style="margin-top:24px">
+                    <button class="btn btn-primary" onclick="saveHotelContractsConfig(${h.id})">
+                        <i class="fas fa-save"></i> Enregistrer
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('ct-cfg-ai-enabled').addEventListener('change', function() {
+        document.getElementById('ct-cfg-api-section').style.display = this.checked ? '' : 'none';
+    });
+}
+
+async function saveHotelContractsConfig(hotelId) {
+    const aiEnabled = document.getElementById('ct-cfg-ai-enabled').checked;
+    const apiKey = document.getElementById('ct-cfg-api-key').value;
+
+    const data = { ai_enabled: aiEnabled ? 1 : 0 };
+    if (apiKey) data.anthropic_api_key = apiKey;
+
+    try {
+        await API.saveHotelContractsConfig(hotelId, data);
+        toast('Configuration sauvegardée', 'success');
+    } catch (e) {
+        toast('Erreur: ' + e.message, 'error');
+    }
 }
 
 // Backward compat - old function name redirects to new page

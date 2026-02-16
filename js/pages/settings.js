@@ -19,6 +19,7 @@ const SYSTEM_MODULES = {
     'users': { name: 'Utilisateurs', icon: 'fa-users', description: 'Gestion des comptes utilisateurs', core: true },
     'welcome': { name: 'Livret d\'accueil', icon: 'fa-book-open', description: 'Livret d\'accueil numérique par hôtel' },
     'selfcheckin': { name: 'Self Check-in', icon: 'fa-qrcode', description: 'Self check-in, QR codes, consignes et casiers' },
+    'contracts': { name: 'Contrats Fournisseurs', icon: 'fa-file-contract', description: 'Gestion des contrats fournisseurs, alertes et charges fixes' },
     'settings': { name: 'Paramètres', icon: 'fa-cog', description: 'Configuration du système', core: true, adminOnly: true }
 };
 
@@ -80,6 +81,12 @@ const PERMISSION_LABELS = {
     'welcome.manage': 'Gérer le livret d\'accueil',
     'selfcheckin.view': 'Voir le self check-in',
     'selfcheckin.manage': 'Gérer la configuration self check-in',
+    'contracts.view': 'Voir les contrats fournisseurs',
+    'contracts.create': 'Créer un contrat',
+    'contracts.manage': 'Gérer les contrats',
+    'contracts.delete': 'Supprimer un contrat',
+    'contracts.analyze': 'Analyser via IA',
+    'contracts.export': 'Exporter les contrats',
     'permissions.manage': 'Gérer les permissions'
 };
 
@@ -98,6 +105,7 @@ const PERMISSION_CATEGORIES = {
     'Communication': ['messages.access', 'messages.broadcast', 'notifications.receive', 'notifications.manage'],
     'Livret d\'accueil': ['welcome.view', 'welcome.manage'],
     'Self Check-in': ['selfcheckin.view', 'selfcheckin.manage'],
+    'Contrats Fournisseurs': ['contracts.view', 'contracts.create', 'contracts.manage', 'contracts.delete', 'contracts.analyze', 'contracts.export'],
     'Dashboard & Rapports': ['dashboard.view', 'dashboard.global', 'reports.access', 'reports.export'],
     'Administration': ['permissions.manage']
 };
@@ -147,6 +155,7 @@ const DEFAULT_PERMISSIONS = {
         'closures.view': true, 'closures.create': true, 'closures.validate': true, 'closures.edit_all': true, 'closures.add_remise': true, 'closures.add_comment': true,
         'welcome.view': true, 'welcome.manage': true,
         'selfcheckin.view': true, 'selfcheckin.manage': true,
+        'contracts.view': true, 'contracts.create': true, 'contracts.manage': true, 'contracts.delete': true, 'contracts.analyze': true, 'contracts.export': true,
         'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': true,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -164,6 +173,7 @@ const DEFAULT_PERMISSIONS = {
         'closures.view': true, 'closures.create': true, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': true, 'closures.add_comment': true,
         'welcome.view': true, 'welcome.manage': true,
         'selfcheckin.view': true, 'selfcheckin.manage': true,
+        'contracts.view': true, 'contracts.create': true, 'contracts.manage': true, 'contracts.delete': false, 'contracts.analyze': true, 'contracts.export': true,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': true,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -181,6 +191,7 @@ const DEFAULT_PERMISSIONS = {
         'closures.view': true, 'closures.create': false, 'closures.validate': true, 'closures.edit_all': true, 'closures.add_remise': true, 'closures.add_comment': true,
         'welcome.view': false, 'welcome.manage': false,
         'selfcheckin.view': false, 'selfcheckin.manage': false,
+        'contracts.view': true, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': true,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -198,6 +209,7 @@ const DEFAULT_PERMISSIONS = {
         'closures.view': false, 'closures.create': false, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': false, 'closures.add_comment': false,
         'welcome.view': false, 'welcome.manage': false,
         'selfcheckin.view': false, 'selfcheckin.manage': false,
+        'contracts.view': false, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': false,
         'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -215,6 +227,7 @@ const DEFAULT_PERMISSIONS = {
         'closures.view': true, 'closures.create': true, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': true, 'closures.add_comment': true,
         'welcome.view': true, 'welcome.manage': false,
         'selfcheckin.view': true, 'selfcheckin.manage': false,
+        'contracts.view': false, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
         'permissions.manage': false
@@ -232,6 +245,7 @@ const DEFAULT_PERMISSIONS = {
         'closures.view': true, 'closures.create': false, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': false, 'closures.add_comment': false,
         'welcome.view': false, 'welcome.manage': false,
         'selfcheckin.view': false, 'selfcheckin.manage': false,
+        'contracts.view': false, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
         'permissions.manage': false

@@ -413,6 +413,7 @@ function updateMenuByPermissions() {
         'revenue': 'revenue.view',
         'selfcheckin': 'selfcheckin.view',
         'welcome': 'welcome.view',
+        'contracts': 'contracts.view',
         'settings': 'permissions.manage',
         'reports': 'reports.access'
     };
@@ -520,6 +521,7 @@ function navigateTo(page) {
         'revenue': 'revenue.view',
         'selfcheckin': 'selfcheckin.view',
         'welcome': 'welcome.view',
+        'contracts': 'contracts.view',
         'settings': 'permissions.manage',
         'reports': 'reports.access'
     };
@@ -558,6 +560,7 @@ function navigateTo(page) {
         users: 'Utilisateurs',
         selfcheckin: 'Self Check-in',
         welcome: 'Livret d\'accueil',
+        contracts: 'Contrats Fournisseurs',
         settings: 'Paramètres'
     };
     document.getElementById('page-title').textContent = titles[page] || page;
@@ -586,6 +589,7 @@ function loadPage(page) {
         case 'users': loadUsers(container); break;
         case 'selfcheckin': loadSelfcheckin(container); break;
         case 'welcome': loadWelcome(container); break;
+        case 'contracts': loadContracts(container); break;
         case 'settings': loadSettings(container); break;
         default: container.innerHTML = '<div class="card"><p>Page non trouvée</p></div>';
     }
