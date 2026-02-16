@@ -9,41 +9,30 @@ let ctActiveTab = 'list';
 let ctCategories = [];
 let ctCurrentPage = 1;
 
-const CT_STATUS_LABELS = {
-    active: 'Actif',
-    expiring: 'Expire bientôt',
-    terminated: 'Résilié',
-    archived: 'Archivé'
-};
+function ctStatusLabel(status) {
+    const map = { active: 'contracts.active', expiring: 'contracts.expiring', terminated: 'contracts.terminated', archived: 'contracts.archived' };
+    return map[status] ? t(map[status]) : status;
+}
 
-const CT_STATUS_COLORS = {
-    active: 'success',
-    expiring: 'warning',
-    terminated: 'danger',
-    archived: 'secondary'
-};
+function ctStatusColor(status) {
+    const map = { active: 'success', expiring: 'warning', terminated: 'danger', archived: 'secondary' };
+    return map[status] || 'secondary';
+}
 
-const CT_FREQ_LABELS = {
-    monthly: 'Mensuel',
-    quarterly: 'Trimestriel',
-    yearly: 'Annuel',
-    one_time: 'Ponctuel'
-};
+function ctFreqLabel(freq) {
+    const map = { monthly: 'contracts.freq_monthly', quarterly: 'contracts.freq_quarterly', yearly: 'contracts.freq_yearly', one_time: 'contracts.freq_one_time' };
+    return map[freq] ? t(map[freq]) : freq;
+}
 
-const CT_DOC_TYPES = {
-    contract: 'Contrat original',
-    annex: 'Annexe',
-    termination_letter: 'Courrier de résiliation',
-    acknowledgment: 'Accusé de réception',
-    invoice: 'Facture',
-    other: 'Autre'
-};
+function ctDocTypeLabel(type) {
+    const map = { contract: 'contracts.doc_contract', annex: 'contracts.doc_annex', termination_letter: 'contracts.doc_termination', acknowledgment: 'contracts.doc_acknowledgment', invoice: 'contracts.doc_invoice', other: 'contracts.doc_other' };
+    return map[type] ? t(map[type]) : type;
+}
 
-const CT_ALERT_TYPES = {
-    expiry: 'Échéance',
-    termination_notice: 'Préavis résiliation',
-    custom: 'Personnalisée'
-};
+function ctAlertTypeLabel(type) {
+    const map = { expiry: 'contracts.alert_expiry', termination_notice: 'contracts.alert_termination', custom: 'contracts.alert_custom' };
+    return map[type] ? t(map[type]) : type;
+}
 
 // ============ CHARGEMENT PRINCIPAL ============
 
@@ -55,7 +44,7 @@ async function loadContracts(container) {
         ctHotels = mgmtRes.manageable_hotels || [];
 
         if (ctHotels.length === 0) {
-            container.innerHTML = '<div class="card"><div class="empty-state"><i class="fas fa-file-contract"></i><h3>Aucun hôtel assigné</h3></div></div>';
+            container.innerHTML = `<div class="card"><div class="empty-state"><i class="fas fa-file-contract"></i><h3>${t('contracts.no_hotel')}</h3></div></div>`;
             return;
         }
 
@@ -64,8 +53,8 @@ async function loadContracts(container) {
         container.innerHTML = `
             <div class="page-header">
                 <div>
-                    <h2><i class="fas fa-file-contract"></i> Contrats Fournisseurs</h2>
-                    <p>Gestion et suivi des contrats par établissement</p>
+                    <h2><i class="fas fa-file-contract"></i> ${t('contracts.title')}</h2>
+                    <p>${t('contracts.subtitle')}</p>
                 </div>
                 <div class="header-actions-group">
                     ${ctHotels.length > 1 ? `
@@ -73,19 +62,22 @@ async function loadContracts(container) {
                             ${ctHotels.map(h => `<option value="${h.id}" ${h.id == ctCurrentHotel ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}
                         </select>
                     ` : ''}
-                    ${hasPermission('contracts.export') ? `<button class="btn btn-outline" onclick="ctExportPDF()"><i class="fas fa-file-csv"></i> Export CSV</button>` : ''}
-                    ${hasPermission('contracts.create') ? `<button class="btn btn-primary" onclick="ctShowCreateModal()"><i class="fas fa-plus"></i> Nouveau contrat</button>` : ''}
+                    ${hasPermission('contracts.export') ? `
+                        <button class="btn btn-outline" onclick="ctExportCSV()"><i class="fas fa-file-csv"></i> ${t('contracts.export_csv')}</button>
+                        <button class="btn btn-outline" onclick="ctExportPDFDoc()"><i class="fas fa-file-pdf"></i> ${t('contracts.export_pdf')}</button>
+                    ` : ''}
+                    ${hasPermission('contracts.create') ? `<button class="btn btn-primary" onclick="ctShowCreateModal()"><i class="fas fa-plus"></i> ${t('contracts.new')}</button>` : ''}
                 </div>
             </div>
 
             <div id="ct-stats"></div>
 
-            <div class="tabs-container" style="margin-bottom:20px">
-                <button class="tab-btn ${ctActiveTab === 'list' ? 'active' : ''}" data-tab="list" onclick="ctSwitchTab('list')"><i class="fas fa-list"></i> Contrats</button>
-                <button class="tab-btn ${ctActiveTab === 'charges' ? 'active' : ''}" data-tab="charges" onclick="ctSwitchTab('charges')"><i class="fas fa-table"></i> Charges fixes</button>
-                <button class="tab-btn ${ctActiveTab === 'alerts' ? 'active' : ''}" data-tab="alerts" onclick="ctSwitchTab('alerts')"><i class="fas fa-bell"></i> Alertes</button>
-                <button class="tab-btn ${ctActiveTab === 'categories' ? 'active' : ''}" data-tab="categories" onclick="ctSwitchTab('categories')"><i class="fas fa-tags"></i> Catégories</button>
-                <button class="tab-btn ${ctActiveTab === 'archives' ? 'active' : ''}" data-tab="archives" onclick="ctSwitchTab('archives')"><i class="fas fa-archive"></i> Archives</button>
+            <div class="closure-tabs">
+                <div class="closure-tab ${ctActiveTab === 'list' ? 'active' : ''}" data-tab="list" onclick="ctSwitchTab('list')"><i class="fas fa-list"></i> <span>${t('contracts.tab_list')}</span></div>
+                <div class="closure-tab ${ctActiveTab === 'charges' ? 'active' : ''}" data-tab="charges" onclick="ctSwitchTab('charges')"><i class="fas fa-table"></i> <span>${t('contracts.charges')}</span></div>
+                <div class="closure-tab ${ctActiveTab === 'alerts' ? 'active' : ''}" data-tab="alerts" onclick="ctSwitchTab('alerts')"><i class="fas fa-bell"></i> <span>${t('contracts.alerts')}</span></div>
+                <div class="closure-tab ${ctActiveTab === 'categories' ? 'active' : ''}" data-tab="categories" onclick="ctSwitchTab('categories')"><i class="fas fa-tags"></i> <span>${t('contracts.categories')}</span></div>
+                <div class="closure-tab ${ctActiveTab === 'archives' ? 'active' : ''}" data-tab="archives" onclick="ctSwitchTab('archives')"><i class="fas fa-archive"></i> <span>${t('contracts.archives')}</span></div>
             </div>
 
             <div id="ct-tab-content"></div>
@@ -94,7 +86,7 @@ async function loadContracts(container) {
         await ctLoadStats();
         ctSwitchTab(ctActiveTab);
     } catch (err) {
-        container.innerHTML = `<div class="card"><p class="text-danger">Erreur: ${err.message}</p></div>`;
+        container.innerHTML = `<div class="card"><p class="text-danger">${t('contracts.error')}: ${err.message}</p></div>`;
     }
 }
 
@@ -110,22 +102,34 @@ async function ctLoadStats() {
         const res = await API.get(`contracts/stats?hotel_id=${ctCurrentHotel}`);
         const s = res.stats;
         document.getElementById('ct-stats').innerHTML = `
-            <div class="stats-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:20px">
-                <div class="card stat-card" style="padding:20px;text-align:center">
-                    <div style="font-size:2em;font-weight:700;color:var(--success)">${s.active}</div>
-                    <div style="color:var(--gray-500)">Contrats actifs</div>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-icon green"><i class="fas fa-check-circle"></i></div>
+                    <div class="kpi-content">
+                        <div class="kpi-value">${s.active}</div>
+                        <div class="kpi-label">${t('contracts.active_contracts')}</div>
+                    </div>
                 </div>
-                <div class="card stat-card" style="padding:20px;text-align:center">
-                    <div style="font-size:2em;font-weight:700;color:var(--primary-500)">${Number(s.total_monthly).toLocaleString('fr-FR', {minimumFractionDigits:2})} €</div>
-                    <div style="color:var(--gray-500)">Charges fixes / mois</div>
+                <div class="kpi-card">
+                    <div class="kpi-icon blue"><i class="fas fa-euro-sign"></i></div>
+                    <div class="kpi-content">
+                        <div class="kpi-value">${Number(s.total_monthly).toLocaleString('fr-FR', {minimumFractionDigits: 2})} &euro;</div>
+                        <div class="kpi-label">${t('contracts.monthly_charges')}</div>
+                    </div>
                 </div>
-                <div class="card stat-card" style="padding:20px;text-align:center">
-                    <div style="font-size:2em;font-weight:700;color:var(--warning)">${s.expiring}</div>
-                    <div style="color:var(--gray-500)">Expirent bientôt</div>
+                <div class="kpi-card">
+                    <div class="kpi-icon orange"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="kpi-content">
+                        <div class="kpi-value">${s.expiring}</div>
+                        <div class="kpi-label">${t('contracts.expiring_soon')}</div>
+                    </div>
                 </div>
-                <div class="card stat-card" style="padding:20px;text-align:center">
-                    <div style="font-size:2em;font-weight:700;color:var(--gray-400)">${s.archived}</div>
-                    <div style="color:var(--gray-500)">Archivés / Résiliés</div>
+                <div class="kpi-card">
+                    <div class="kpi-icon red"><i class="fas fa-archive"></i></div>
+                    <div class="kpi-content">
+                        <div class="kpi-value">${s.archived}</div>
+                        <div class="kpi-label">${t('contracts.archived_terminated')}</div>
+                    </div>
                 </div>
             </div>
         `;
@@ -136,7 +140,7 @@ async function ctLoadStats() {
 
 function ctSwitchTab(tab) {
     ctActiveTab = tab;
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
+    document.querySelectorAll('.closure-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
     const content = document.getElementById('ct-tab-content');
     switch (tab) {
         case 'list': ctRenderList(content); break;
@@ -163,11 +167,11 @@ async function ctRenderList(content) {
         content.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title">Contrats actifs</h3>
+                    <h3 class="card-title">${t('contracts.active_contracts')}</h3>
                     <div style="display:flex;gap:10px;align-items:center">
-                        <input type="text" id="ct-search" class="form-control" placeholder="Rechercher..." style="width:200px" onkeyup="ctSearchContracts(event)">
+                        <input type="text" id="ct-search" class="form-control" placeholder="${t('contracts.search')}" style="width:200px" onkeyup="ctSearchContracts(event)">
                         <select id="ct-filter-cat" class="form-control" onchange="ctFilterByCategory()" style="min-width:150px">
-                            <option value="">Toutes catégories</option>
+                            <option value="">${t('contracts.all_categories')}</option>
                             ${ctCategories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
                         </select>
                     </div>
@@ -176,15 +180,15 @@ async function ctRenderList(content) {
                     <div style="overflow-x:auto">
                     <table>
                         <thead><tr>
-                            <th>Fournisseur</th>
-                            <th>Réf.</th>
-                            <th>Catégorie</th>
-                            <th>Montant</th>
-                            <th>Fréquence</th>
-                            <th>Début</th>
-                            <th>Échéance</th>
-                            <th>Statut</th>
-                            <th>Actions</th>
+                            <th>${t('contracts.supplier')}</th>
+                            <th>${t('contracts.reference')}</th>
+                            <th>${t('contracts.category')}</th>
+                            <th>${t('contracts.amount')}</th>
+                            <th>${t('contracts.frequency')}</th>
+                            <th>${t('contracts.start_date')}</th>
+                            <th>${t('contracts.end_date')}</th>
+                            <th>${t('contracts.status')}</th>
+                            <th>${t('contracts.actions')}</th>
                         </tr></thead>
                         <tbody>
                             ${contracts.map(c => ctRenderContractRow(c)).join('')}
@@ -192,11 +196,11 @@ async function ctRenderList(content) {
                     </table>
                     </div>
                     <div id="ct-pagination" style="padding:16px">${pagination ? renderPagination(pagination, ctGoToPage) : ''}</div>
-                ` : `<div class="empty-state"><i class="fas fa-file-contract"></i><h3>Aucun contrat</h3><p>Créez votre premier contrat fournisseur</p></div>`}
+                ` : `<div class="empty-state"><i class="fas fa-file-contract"></i><h3>${t('contracts.no_contracts')}</h3><p>${t('contracts.first_contract_hint')}</p></div>`}
             </div>
         `;
     } catch (e) {
-        content.innerHTML = `<div class="card"><p class="text-danger">Erreur: ${e.message}</p></div>`;
+        content.innerHTML = `<div class="card"><p class="text-danger">${t('contracts.error')}: ${e.message}</p></div>`;
     }
 }
 
@@ -204,26 +208,26 @@ function ctRenderContractRow(c) {
     const catBadge = c.category_name
         ? `<span class="badge" style="background:${escAttr(c.category_color || '#6366f1')};color:#fff">${esc(c.category_name)}</span>`
         : '<span class="text-muted">-</span>';
-    const statusBadgeHtml = `<span class="badge badge-${CT_STATUS_COLORS[c.status] || 'secondary'}">${CT_STATUS_LABELS[c.status] || c.status}</span>`;
+    const statusBadgeHtml = `<span class="badge badge-${ctStatusColor(c.status)}">${ctStatusLabel(c.status)}</span>`;
     const endDateDisplay = c.end_date ? formatDate(c.end_date) : '-';
     const startDateDisplay = c.start_date ? formatDate(c.start_date) : '-';
-    const amount = Number(c.amount).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' €';
+    const amount = Number(c.amount).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' \u20AC';
 
     return `<tr>
         <td><strong>${esc(c.supplier_name)}</strong></td>
         <td>${esc(c.contract_ref || '-')}</td>
         <td>${catBadge}</td>
         <td style="text-align:right">${amount}</td>
-        <td>${CT_FREQ_LABELS[c.amount_frequency] || c.amount_frequency}</td>
+        <td>${ctFreqLabel(c.amount_frequency)}</td>
         <td>${startDateDisplay}</td>
         <td>${endDateDisplay}</td>
         <td>${statusBadgeHtml}</td>
         <td>
             <div class="table-actions">
-                <button onclick="ctViewContract(${c.id})" title="Voir"><i class="fas fa-eye"></i></button>
-                ${hasPermission('contracts.manage') ? `<button onclick="ctEditContract(${c.id})" title="Modifier"><i class="fas fa-edit"></i></button>` : ''}
-                ${hasPermission('contracts.manage') ? `<button onclick="ctArchiveContract(${c.id})" title="Archiver" style="color:var(--gray-400)"><i class="fas fa-archive"></i></button>` : ''}
-                ${hasPermission('contracts.delete') ? `<button onclick="ctDeleteContract(${c.id})" title="Supprimer" style="color:var(--danger)"><i class="fas fa-trash"></i></button>` : ''}
+                <button onclick="ctViewContract(${c.id})" title="${t('contracts.view')}"><i class="fas fa-eye"></i></button>
+                ${hasPermission('contracts.manage') ? `<button onclick="ctEditContract(${c.id})" title="${t('contracts.edit')}"><i class="fas fa-edit"></i></button>` : ''}
+                ${hasPermission('contracts.manage') ? `<button onclick="ctArchiveContract(${c.id})" title="${t('contracts.archive_btn')}" style="color:var(--gray-400)"><i class="fas fa-archive"></i></button>` : ''}
+                ${hasPermission('contracts.delete') ? `<button onclick="ctDeleteContract(${c.id})" title="${t('contracts.delete')}" style="color:var(--danger)"><i class="fas fa-trash"></i></button>` : ''}
             </div>
         </td>
     </tr>`;
@@ -243,8 +247,8 @@ async function ctSearchContracts(e) {
             const res = await API.get(`contracts?hotel_id=${ctCurrentHotel}&search=${encodeURIComponent(search)}`);
             const contracts = res.contracts || [];
             const tbody = contracts.map(c => ctRenderContractRow(c)).join('');
-            content.querySelector('tbody').innerHTML = tbody || '<tr><td colspan="9" class="text-center">Aucun résultat</td></tr>';
-        } catch (err) { toast('Erreur de recherche', 'error'); }
+            content.querySelector('tbody').innerHTML = tbody || `<tr><td colspan="9" class="text-center">${t('contracts.no_results')}</td></tr>`;
+        } catch (err) { toast(t('contracts.search_error'), 'error'); }
     }
 }
 
@@ -257,7 +261,7 @@ async function ctFilterByCategory() {
         if (catId) url += `&category_id=${catId}`;
         const res = await API.get(url);
         ctRenderList(content);
-    } catch (err) { toast('Erreur de filtrage', 'error'); }
+    } catch (err) { toast(t('contracts.error'), 'error'); }
 }
 
 // ============ ONGLET CHARGES FIXES ============
@@ -268,31 +272,30 @@ async function ctRenderCharges(content) {
         const year = new Date().getFullYear();
         const res = await API.get(`contracts/charges?hotel_id=${ctCurrentHotel}&year=${year}`);
         const contracts = res.contracts || [];
-        const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+        const months = [t('contracts.month_jan'), t('contracts.month_feb'), t('contracts.month_mar'), t('contracts.month_apr'), t('contracts.month_may'), t('contracts.month_jun'), t('contracts.month_jul'), t('contracts.month_aug'), t('contracts.month_sep'), t('contracts.month_oct'), t('contracts.month_nov'), t('contracts.month_dec')];
         const totals = new Array(12).fill(0);
 
         content.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-table"></i> Tableau des charges fixes ${year}</h3>
-                    ${hasPermission('contracts.export') ? `<button class="btn btn-outline btn-sm" onclick="ctExportPDF()"><i class="fas fa-file-csv"></i> Export</button>` : ''}
+                    <h3 class="card-title"><i class="fas fa-table"></i> ${t('contracts.charges_table')} ${year}</h3>
+                    ${hasPermission('contracts.export') ? `<button class="btn btn-outline btn-sm" onclick="ctExportCSV()"><i class="fas fa-file-csv"></i> ${t('contracts.export_csv')}</button>` : ''}
                 </div>
                 ${contracts.length ? `
                 <div style="overflow-x:auto">
                 <table>
                     <thead><tr>
-                        <th>Fournisseur</th>
-                        <th>Catégorie</th>
-                        <th>Fréquence</th>
+                        <th>${t('contracts.supplier')}</th>
+                        <th>${t('contracts.category')}</th>
+                        <th>${t('contracts.frequency')}</th>
                         ${months.map(m => `<th style="text-align:right">${m}</th>`).join('')}
-                        <th style="text-align:right"><strong>Total</strong></th>
+                        <th style="text-align:right"><strong>${t('contracts.total')}</strong></th>
                     </tr></thead>
                     <tbody>
                         ${contracts.map(c => {
                             const monthlyAmount = ctCalcMonthly(c);
                             let rowTotal = 0;
                             const cells = months.map((_, i) => {
-                                // Check if contract is active during this month
                                 const startMonth = c.start_date ? new Date(c.start_date).getMonth() : 0;
                                 const startYear = c.start_date ? new Date(c.start_date).getFullYear() : 0;
                                 const endMonth = c.end_date ? new Date(c.end_date).getMonth() : 11;
@@ -307,26 +310,26 @@ async function ctRenderCharges(content) {
                             return `<tr>
                                 <td>${esc(c.supplier_name)}</td>
                                 <td>${catBadge}</td>
-                                <td>${CT_FREQ_LABELS[c.amount_frequency] || ''}</td>
+                                <td>${ctFreqLabel(c.amount_frequency)}</td>
                                 ${cells}
-                                <td style="text-align:right"><strong>${rowTotal.toLocaleString('fr-FR', {minimumFractionDigits:2})} €</strong></td>
+                                <td style="text-align:right"><strong>${rowTotal.toLocaleString('fr-FR', {minimumFractionDigits:2})} \u20AC</strong></td>
                             </tr>`;
                         }).join('')}
                     </tbody>
                     <tfoot>
                         <tr style="font-weight:700;background:var(--gray-50)">
-                            <td colspan="3">TOTAL</td>
+                            <td colspan="3">${t('contracts.total')}</td>
                             ${totals.map(t => `<td style="text-align:right">${t.toLocaleString('fr-FR', {minimumFractionDigits:2})}</td>`).join('')}
-                            <td style="text-align:right">${totals.reduce((a, b) => a + b, 0).toLocaleString('fr-FR', {minimumFractionDigits:2})} €</td>
+                            <td style="text-align:right">${totals.reduce((a, b) => a + b, 0).toLocaleString('fr-FR', {minimumFractionDigits:2})} \u20AC</td>
                         </tr>
                     </tfoot>
                 </table>
                 </div>
-                ` : '<div class="empty-state"><i class="fas fa-table"></i><h3>Aucun contrat actif</h3></div>'}
+                ` : `<div class="empty-state"><i class="fas fa-table"></i><h3>${t('contracts.no_active_contract')}</h3></div>`}
             </div>
         `;
     } catch (e) {
-        content.innerHTML = `<div class="card"><p class="text-danger">Erreur: ${e.message}</p></div>`;
+        content.innerHTML = `<div class="card"><p class="text-danger">${t('contracts.error')}: ${e.message}</p></div>`;
     }
 }
 
@@ -349,7 +352,6 @@ async function ctRenderAlerts(content) {
         const res = await API.get(`contracts?hotel_id=${ctCurrentHotel}&per_page=100`);
         const contracts = res.contracts || [];
 
-        // Charger les alertes de tous les contrats
         let allAlerts = [];
         for (const c of contracts) {
             try {
@@ -366,26 +368,26 @@ async function ctRenderAlerts(content) {
         content.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-bell"></i> Alertes configurées</h3>
+                    <h3 class="card-title"><i class="fas fa-bell"></i> ${t('contracts.configured_alerts')}</h3>
                 </div>
                 ${allAlerts.length ? `
                 <table>
                     <thead><tr>
-                        <th>Contrat</th>
-                        <th>Type</th>
-                        <th>Jours avant</th>
-                        <th>Date d'échéance</th>
-                        <th>Dernière alerte</th>
-                        <th>État</th>
-                        <th>Actions</th>
+                        <th>${t('contracts.tab_list')}</th>
+                        <th>${t('contracts.type')}</th>
+                        <th>${t('contracts.days_before')}</th>
+                        <th>${t('contracts.end_date')}</th>
+                        <th>${t('contracts.last_alert')}</th>
+                        <th>${t('contracts.state')}</th>
+                        <th>${t('contracts.actions')}</th>
                     </tr></thead>
                     <tbody>
                         ${allAlerts.map(a => `<tr>
                             <td><strong>${esc(a.contract_name)}</strong> ${a.contract_ref ? `<small class="text-muted">(${esc(a.contract_ref)})</small>` : ''}</td>
-                            <td>${CT_ALERT_TYPES[a.alert_type] || a.alert_type}</td>
-                            <td>${a.days_before} j</td>
+                            <td>${ctAlertTypeLabel(a.alert_type)}</td>
+                            <td>${a.days_before} ${t('contracts.days_unit')}</td>
                             <td>${a.end_date ? formatDate(a.end_date) : '-'}</td>
-                            <td>${a.last_triggered_at ? formatDateTime(a.last_triggered_at) : 'Jamais'}</td>
+                            <td>${a.last_triggered_at ? formatDateTime(a.last_triggered_at) : t('contracts.never')}</td>
                             <td>
                                 <label class="toggle-switch" style="margin:0">
                                     <input type="checkbox" ${a.is_active == 1 ? 'checked' : ''} onchange="ctToggleAlert(${a.contract_id}, ${a.id}, this.checked)">
@@ -398,28 +400,28 @@ async function ctRenderAlerts(content) {
                         </tr>`).join('')}
                     </tbody>
                 </table>
-                ` : '<div class="empty-state"><i class="fas fa-bell-slash"></i><h3>Aucune alerte configurée</h3><p>Les alertes sont créées automatiquement lors de l\'ajout d\'un contrat</p></div>'}
+                ` : `<div class="empty-state"><i class="fas fa-bell-slash"></i><h3>${t('contracts.no_alert_configured')}</h3><p>${t('contracts.alert_auto_hint')}</p></div>`}
             </div>
         `;
     } catch (e) {
-        content.innerHTML = `<div class="card"><p class="text-danger">Erreur: ${e.message}</p></div>`;
+        content.innerHTML = `<div class="card"><p class="text-danger">${t('contracts.error')}: ${e.message}</p></div>`;
     }
 }
 
 async function ctToggleAlert(contractId, alertId, active) {
     try {
         await API.put(`contracts/${contractId}/alerts/${alertId}`, { is_active: active ? 1 : 0 });
-        toast(active ? 'Alerte activée' : 'Alerte désactivée', 'success');
-    } catch (e) { toast('Erreur', 'error'); }
+        toast(active ? t('contracts.alert_activated') : t('contracts.alert_deactivated'), 'success');
+    } catch (e) { toast(t('contracts.error'), 'error'); }
 }
 
 async function ctDeleteAlert(contractId, alertId) {
-    if (!confirm('Supprimer cette alerte ?')) return;
+    if (!confirm(t('contracts.delete_alert_confirm'))) return;
     try {
         await API.delete(`contracts/${contractId}/alerts/${alertId}`);
-        toast('Alerte supprimée', 'success');
+        toast(t('contracts.alert_deleted'), 'success');
         ctSwitchTab('alerts');
-    } catch (e) { toast('Erreur', 'error'); }
+    } catch (e) { toast(t('contracts.error'), 'error'); }
 }
 
 // ============ ONGLET CATÉGORIES ============
@@ -433,12 +435,12 @@ async function ctRenderCategories(content) {
         content.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-tags"></i> Catégories de contrats</h3>
-                    ${hasPermission('contracts.manage') ? `<button class="btn btn-primary btn-sm" onclick="ctShowCategoryModal()"><i class="fas fa-plus"></i> Nouvelle catégorie</button>` : ''}
+                    <h3 class="card-title"><i class="fas fa-tags"></i> ${t('contracts.contract_categories')}</h3>
+                    ${hasPermission('contracts.manage') ? `<button class="btn btn-primary btn-sm" onclick="ctShowCategoryModal()"><i class="fas fa-plus"></i> ${t('contracts.new_category')}</button>` : ''}
                 </div>
                 ${ctCategories.length ? `
                 <table>
-                    <thead><tr><th>Couleur</th><th>Nom</th><th>Contrats</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>${t('contracts.color')}</th><th>${t('contracts.name')}</th><th>${t('contracts.tab_list')}</th><th>${t('contracts.actions')}</th></tr></thead>
                     <tbody>
                         ${ctCategories.map(c => `<tr>
                             <td><span style="display:inline-block;width:24px;height:24px;border-radius:4px;background:${escAttr(c.color)}"></span></td>
@@ -446,35 +448,35 @@ async function ctRenderCategories(content) {
                             <td><span class="badge badge-primary">${c.contract_count || 0}</span></td>
                             <td>
                                 <div class="table-actions">
-                                    ${hasPermission('contracts.manage') ? `<button onclick="ctEditCategory(${c.id}, '${escAttr(c.name)}', '${escAttr(c.color)}')" title="Modifier"><i class="fas fa-edit"></i></button>` : ''}
-                                    ${hasPermission('contracts.delete') ? `<button onclick="ctDeleteCategory(${c.id})" title="Supprimer" style="color:var(--danger)"><i class="fas fa-trash"></i></button>` : ''}
+                                    ${hasPermission('contracts.manage') ? `<button onclick="ctEditCategory(${c.id}, '${escAttr(c.name)}', '${escAttr(c.color)}')" title="${t('contracts.edit')}"><i class="fas fa-edit"></i></button>` : ''}
+                                    ${hasPermission('contracts.delete') ? `<button onclick="ctDeleteCategory(${c.id})" title="${t('contracts.delete')}" style="color:var(--danger)"><i class="fas fa-trash"></i></button>` : ''}
                                 </div>
                             </td>
                         </tr>`).join('')}
                     </tbody>
                 </table>
-                ` : '<div class="empty-state"><i class="fas fa-tags"></i><h3>Aucune catégorie</h3><p>Créez des catégories pour organiser vos contrats</p></div>'}
+                ` : `<div class="empty-state"><i class="fas fa-tags"></i><h3>${t('contracts.no_category')}</h3><p>${t('contracts.create_categories_hint')}</p></div>`}
             </div>
         `;
     } catch (e) {
-        content.innerHTML = `<div class="card"><p class="text-danger">Erreur: ${e.message}</p></div>`;
+        content.innerHTML = `<div class="card"><p class="text-danger">${t('contracts.error')}: ${e.message}</p></div>`;
     }
 }
 
 function ctShowCategoryModal(id, name, color) {
     const isEdit = !!id;
-    openModal(isEdit ? 'Modifier la catégorie' : 'Nouvelle catégorie', `
+    openModal(isEdit ? t('contracts.edit_category') : t('contracts.new_category'), `
         <form onsubmit="ctSaveCategory(event, ${id || 'null'})">
             <div class="form-group">
-                <label>Nom de la catégorie</label>
+                <label>${t('contracts.category_name')}</label>
                 <input type="text" class="form-control" id="ct-cat-name" value="${esc(name || '')}" required>
             </div>
             <div class="form-group">
-                <label>Couleur</label>
+                <label>${t('contracts.color')}</label>
                 <input type="color" id="ct-cat-color" value="${color || '#6366f1'}" style="width:60px;height:40px;border:none;cursor:pointer">
             </div>
             <div style="text-align:right;margin-top:20px">
-                <button type="submit" class="btn btn-primary">${isEdit ? 'Modifier' : 'Créer'}</button>
+                <button type="submit" class="btn btn-primary">${isEdit ? t('contracts.edit') : t('contracts.create')}</button>
             </div>
         </form>
     `, 'modal-md');
@@ -494,19 +496,19 @@ async function ctSaveCategory(e, id) {
         } else {
             await API.post('contracts/categories', { hotel_id: ctCurrentHotel, name, color });
         }
-        toast('Catégorie sauvegardée', 'success');
+        toast(t('contracts.category_saved'), 'success');
         closeModal();
         ctSwitchTab('categories');
-    } catch (e) { toast('Erreur: ' + e.message, 'error'); }
+    } catch (e) { toast(t('contracts.error') + ': ' + e.message, 'error'); }
 }
 
 async function ctDeleteCategory(id) {
-    if (!confirm('Supprimer cette catégorie ? Les contrats associés seront dissociés.')) return;
+    if (!confirm(t('contracts.delete_category_confirm'))) return;
     try {
         await API.delete(`contracts/categories/${id}`);
-        toast('Catégorie supprimée', 'success');
+        toast(t('contracts.category_deleted'), 'success');
         ctSwitchTab('categories');
-    } catch (e) { toast('Erreur', 'error'); }
+    } catch (e) { toast(t('contracts.error'), 'error'); }
 }
 
 // ============ ONGLET ARCHIVES ============
@@ -520,12 +522,12 @@ async function ctRenderArchives(content) {
         content.innerHTML = `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i class="fas fa-archive"></i> Contrats archivés / résiliés</h3>
+                    <h3 class="card-title"><i class="fas fa-archive"></i> ${t('contracts.archived_contracts')}</h3>
                 </div>
                 ${contracts.length ? `
                 <div style="overflow-x:auto">
                 <table>
-                    <thead><tr><th>Fournisseur</th><th>Réf.</th><th>Catégorie</th><th>Montant</th><th>Échéance</th><th>Statut</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>${t('contracts.supplier')}</th><th>${t('contracts.reference')}</th><th>${t('contracts.category')}</th><th>${t('contracts.amount')}</th><th>${t('contracts.end_date')}</th><th>${t('contracts.status')}</th><th>${t('contracts.actions')}</th></tr></thead>
                     <tbody>
                         ${contracts.map(c => {
                             const catBadge = c.category_name ? `<span class="badge" style="background:${escAttr(c.category_color || '#6366f1')};color:#fff">${esc(c.category_name)}</span>` : '-';
@@ -533,13 +535,13 @@ async function ctRenderArchives(content) {
                                 <td><strong>${esc(c.supplier_name)}</strong></td>
                                 <td>${esc(c.contract_ref || '-')}</td>
                                 <td>${catBadge}</td>
-                                <td style="text-align:right">${Number(c.amount).toLocaleString('fr-FR', {minimumFractionDigits:2})} €</td>
+                                <td style="text-align:right">${Number(c.amount).toLocaleString('fr-FR', {minimumFractionDigits:2})} \u20AC</td>
                                 <td>${c.end_date ? formatDate(c.end_date) : '-'}</td>
-                                <td><span class="badge badge-${CT_STATUS_COLORS[c.status]}">${CT_STATUS_LABELS[c.status]}</span></td>
+                                <td><span class="badge badge-${ctStatusColor(c.status)}">${ctStatusLabel(c.status)}</span></td>
                                 <td>
                                     <div class="table-actions">
-                                        <button onclick="ctViewContract(${c.id})" title="Voir"><i class="fas fa-eye"></i></button>
-                                        ${hasPermission('contracts.manage') ? `<button onclick="ctReactivateContract(${c.id})" title="Réactiver" style="color:var(--success)"><i class="fas fa-redo"></i></button>` : ''}
+                                        <button onclick="ctViewContract(${c.id})" title="${t('contracts.view')}"><i class="fas fa-eye"></i></button>
+                                        ${hasPermission('contracts.manage') ? `<button onclick="ctReactivateContract(${c.id})" title="${t('contracts.reactivate_btn')}" style="color:var(--success)"><i class="fas fa-redo"></i></button>` : ''}
                                     </div>
                                 </td>
                             </tr>`;
@@ -547,11 +549,11 @@ async function ctRenderArchives(content) {
                     </tbody>
                 </table>
                 </div>
-                ` : '<div class="empty-state"><i class="fas fa-archive"></i><h3>Aucun contrat archivé</h3></div>'}
+                ` : `<div class="empty-state"><i class="fas fa-archive"></i><h3>${t('contracts.no_archive')}</h3></div>`}
             </div>
         `;
     } catch (e) {
-        content.innerHTML = `<div class="card"><p class="text-danger">Erreur: ${e.message}</p></div>`;
+        content.innerHTML = `<div class="card"><p class="text-danger">${t('contracts.error')}: ${e.message}</p></div>`;
     }
 }
 
@@ -561,7 +563,6 @@ async function ctShowCreateModal(contractId) {
     const isEdit = !!contractId;
     let contract = {};
 
-    // Charger catégories si pas encore fait
     if (!ctCategories.length) {
         try {
             const res = await API.get(`contracts/categories?hotel_id=${ctCurrentHotel}`);
@@ -573,77 +574,83 @@ async function ctShowCreateModal(contractId) {
         try {
             const res = await API.get(`contracts/${contractId}`);
             contract = res.contract || {};
-        } catch (e) { toast('Erreur chargement', 'error'); return; }
+        } catch (e) { toast(t('contracts.error'), 'error'); return; }
     }
 
-    openModal(isEdit ? 'Modifier le contrat' : 'Nouveau contrat', `
+    openModal(isEdit ? t('contracts.edit_contract') : t('contracts.new'), `
         <form onsubmit="ctSaveContract(event, ${contractId || 'null'})">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
                 <div class="form-group">
-                    <label>Fournisseur *</label>
+                    <label>${t('contracts.supplier')} *</label>
                     <input type="text" class="form-control" id="ct-supplier" value="${esc(contract.supplier_name || '')}" required>
                 </div>
                 <div class="form-group">
-                    <label>Référence du contrat</label>
+                    <label>${t('contracts.reference')}</label>
                     <input type="text" class="form-control" id="ct-ref" value="${esc(contract.contract_ref || '')}">
                 </div>
                 <div class="form-group">
-                    <label>Catégorie</label>
+                    <label>${t('contracts.category')}</label>
                     <select class="form-control" id="ct-category">
-                        <option value="">Sans catégorie</option>
+                        <option value="">${t('contracts.without_category')}</option>
                         ${ctCategories.map(c => `<option value="${c.id}" ${contract.category_id == c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Statut</label>
+                    <label>${t('contracts.status')}</label>
                     <select class="form-control" id="ct-status">
-                        ${Object.entries(CT_STATUS_LABELS).map(([k, v]) => `<option value="${k}" ${contract.status === k ? 'selected' : ''}>${v}</option>`).join('')}
+                        <option value="active" ${contract.status === 'active' ? 'selected' : ''}>${t('contracts.active')}</option>
+                        <option value="expiring" ${contract.status === 'expiring' ? 'selected' : ''}>${t('contracts.expiring')}</option>
+                        <option value="terminated" ${contract.status === 'terminated' ? 'selected' : ''}>${t('contracts.terminated')}</option>
+                        <option value="archived" ${contract.status === 'archived' ? 'selected' : ''}>${t('contracts.archived')}</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Montant</label>
+                    <label>${t('contracts.amount')}</label>
                     <input type="number" class="form-control" id="ct-amount" step="0.01" min="0" value="${contract.amount || '0'}">
                 </div>
                 <div class="form-group">
-                    <label>Fréquence</label>
+                    <label>${t('contracts.frequency')}</label>
                     <select class="form-control" id="ct-frequency">
-                        ${Object.entries(CT_FREQ_LABELS).map(([k, v]) => `<option value="${k}" ${contract.amount_frequency === k ? 'selected' : ''}>${v}</option>`).join('')}
+                        <option value="monthly" ${contract.amount_frequency === 'monthly' ? 'selected' : ''}>${t('contracts.freq_monthly')}</option>
+                        <option value="quarterly" ${contract.amount_frequency === 'quarterly' ? 'selected' : ''}>${t('contracts.freq_quarterly')}</option>
+                        <option value="yearly" ${contract.amount_frequency === 'yearly' ? 'selected' : ''}>${t('contracts.freq_yearly')}</option>
+                        <option value="one_time" ${contract.amount_frequency === 'one_time' ? 'selected' : ''}>${t('contracts.freq_one_time')}</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Date de début</label>
+                    <label>${t('contracts.start_date')}</label>
                     <input type="date" class="form-control" id="ct-start" value="${contract.start_date || ''}">
                 </div>
                 <div class="form-group">
-                    <label>Date d'échéance</label>
+                    <label>${t('contracts.end_date')}</label>
                     <input type="date" class="form-control" id="ct-end" value="${contract.end_date || ''}">
                 </div>
                 <div class="form-group">
-                    <label>Préavis de résiliation (jours)</label>
+                    <label>${t('contracts.notice_days')}</label>
                     <input type="number" class="form-control" id="ct-notice" min="0" value="${contract.termination_notice_days || 90}">
                 </div>
                 <div class="form-group" style="display:flex;align-items:center;gap:12px;padding-top:28px">
                     <label style="display:flex;align-items:center;gap:8px;margin:0;cursor:pointer">
                         <input type="checkbox" id="ct-autorenewal" ${contract.auto_renewal == 1 ? 'checked' : ''}>
-                        Tacite reconduction
+                        ${t('contracts.auto_renewal')}
                     </label>
                 </div>
                 <div class="form-group" id="ct-renewal-months-group" style="${contract.auto_renewal == 1 ? '' : 'display:none'}">
-                    <label>Durée de reconduction (mois)</label>
+                    <label>${t('contracts.renewal_duration')}</label>
                     <input type="number" class="form-control" id="ct-renewal-months" min="1" value="${contract.renewal_duration_months || 12}">
                 </div>
             </div>
             <div class="form-group">
-                <label>Description / Objet du contrat</label>
+                <label>${t('contracts.description')}</label>
                 <textarea class="form-control" id="ct-description" rows="3">${esc(contract.description || '')}</textarea>
             </div>
             <div class="form-group">
-                <label>Notes</label>
+                <label>${t('contracts.notes')}</label>
                 <textarea class="form-control" id="ct-notes" rows="2">${esc(contract.notes || '')}</textarea>
             </div>
             <div style="text-align:right;margin-top:20px">
-                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
-                <button type="submit" class="btn btn-primary">${isEdit ? 'Modifier' : 'Créer'}</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">${t('contracts.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${isEdit ? t('contracts.edit') : t('contracts.create')}</button>
             </div>
         </form>
         <script>
@@ -680,15 +687,15 @@ async function ctSaveContract(e, id) {
     try {
         if (id) {
             await API.put(`contracts/${id}`, data);
-            toast('Contrat modifié', 'success');
+            toast(t('contracts.contract_modified'), 'success');
         } else {
             await API.post('contracts', data);
-            toast('Contrat créé', 'success');
+            toast(t('contracts.contract_created'), 'success');
         }
         closeModal();
         ctLoadStats();
         ctSwitchTab(ctActiveTab);
-    } catch (err) { toast('Erreur: ' + err.message, 'error'); }
+    } catch (err) { toast(t('contracts.error') + ': ' + err.message, 'error'); }
 }
 
 // ============ VUE DÉTAILLÉE D'UN CONTRAT ============
@@ -700,59 +707,64 @@ async function ctViewContract(id) {
         const docs = c.documents || [];
         const alerts = c.alerts || [];
 
-        const statusBadgeHtml = `<span class="badge badge-${CT_STATUS_COLORS[c.status]}">${CT_STATUS_LABELS[c.status]}</span>`;
-        const catBadge = c.category_name ? `<span class="badge" style="background:${escAttr(c.category_color || '#6366f1')};color:#fff">${esc(c.category_name)}</span>` : 'Non catégorisé';
+        const statusBadgeHtml = `<span class="badge badge-${ctStatusColor(c.status)}">${ctStatusLabel(c.status)}</span>`;
+        const catBadge = c.category_name ? `<span class="badge" style="background:${escAttr(c.category_color || '#6366f1')};color:#fff">${esc(c.category_name)}</span>` : t('contracts.no_category_assigned');
 
-        openModal(`Contrat - ${esc(c.supplier_name)}`, `
+        openModal(`${t('contracts.tab_list')} - ${esc(c.supplier_name)}`, `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
                 <!-- Informations -->
                 <div>
-                    <h4 style="margin-bottom:12px"><i class="fas fa-info-circle"></i> Informations</h4>
+                    <h4 style="margin-bottom:12px"><i class="fas fa-info-circle"></i> ${t('contracts.info')}</h4>
                     <table class="detail-table" style="width:100%">
-                        <tr><td style="width:40%;color:var(--gray-500)">Fournisseur</td><td><strong>${esc(c.supplier_name)}</strong></td></tr>
-                        <tr><td style="color:var(--gray-500)">Référence</td><td>${esc(c.contract_ref || '-')}</td></tr>
-                        <tr><td style="color:var(--gray-500)">Catégorie</td><td>${catBadge}</td></tr>
-                        <tr><td style="color:var(--gray-500)">Montant</td><td><strong>${Number(c.amount).toLocaleString('fr-FR', {minimumFractionDigits:2})} €</strong> (${CT_FREQ_LABELS[c.amount_frequency]})</td></tr>
-                        <tr><td style="color:var(--gray-500)">Date début</td><td>${c.start_date ? formatDate(c.start_date) : '-'}</td></tr>
-                        <tr><td style="color:var(--gray-500)">Date échéance</td><td>${c.end_date ? formatDate(c.end_date) : '-'}</td></tr>
-                        <tr><td style="color:var(--gray-500)">Préavis résiliation</td><td>${c.termination_notice_days} jours</td></tr>
-                        <tr><td style="color:var(--gray-500)">Tacite reconduction</td><td>${c.auto_renewal == 1 ? `Oui (${c.renewal_duration_months} mois)` : 'Non'}</td></tr>
-                        <tr><td style="color:var(--gray-500)">Statut</td><td>${statusBadgeHtml}</td></tr>
-                        <tr><td style="color:var(--gray-500)">Créé par</td><td>${esc(c.created_by_name || '-')}</td></tr>
-                        <tr><td style="color:var(--gray-500)">Créé le</td><td>${c.created_at ? formatDateTime(c.created_at) : '-'}</td></tr>
+                        <tr><td style="width:40%;color:var(--gray-500)">${t('contracts.supplier')}</td><td><strong>${esc(c.supplier_name)}</strong></td></tr>
+                        <tr><td style="color:var(--gray-500)">${t('contracts.reference')}</td><td>${esc(c.contract_ref || '-')}</td></tr>
+                        <tr><td style="color:var(--gray-500)">${t('contracts.category')}</td><td>${catBadge}</td></tr>
+                        <tr><td style="color:var(--gray-500)">${t('contracts.amount')}</td><td><strong>${Number(c.amount).toLocaleString('fr-FR', {minimumFractionDigits:2})} \u20AC</strong> (${ctFreqLabel(c.amount_frequency)})</td></tr>
+                        <tr><td style="color:var(--gray-500)">${t('contracts.start_date')}</td><td>${c.start_date ? formatDate(c.start_date) : '-'}</td></tr>
+                        <tr><td style="color:var(--gray-500)">${t('contracts.end_date')}</td><td>${c.end_date ? formatDate(c.end_date) : '-'}</td></tr>
+                        <tr><td style="color:var(--gray-500)">${t('contracts.notice_days')}</td><td>${c.termination_notice_days} ${t('contracts.days_unit')}</td></tr>
+                        <tr><td style="color:var(--gray-500)">${t('contracts.auto_renewal')}</td><td>${c.auto_renewal == 1 ? t('contracts.yes') + ` (${c.renewal_duration_months} ${t('contracts.months')})` : t('contracts.no')}</td></tr>
+                        <tr><td style="color:var(--gray-500)">${t('contracts.status')}</td><td>${statusBadgeHtml}</td></tr>
+                        <tr><td style="color:var(--gray-500)">${t('contracts.created_by')}</td><td>${esc(c.created_by_name || '-')}</td></tr>
+                        <tr><td style="color:var(--gray-500)">${t('contracts.created_at')}</td><td>${c.created_at ? formatDateTime(c.created_at) : '-'}</td></tr>
                     </table>
-                    ${c.description ? `<div style="margin-top:12px"><strong>Description :</strong><p style="margin-top:4px">${esc(c.description)}</p></div>` : ''}
-                    ${c.notes ? `<div style="margin-top:12px"><strong>Notes :</strong><p style="margin-top:4px">${esc(c.notes)}</p></div>` : ''}
+                    ${c.description ? `<div style="margin-top:12px"><strong>${t('contracts.description')} :</strong><p style="margin-top:4px">${esc(c.description)}</p></div>` : ''}
+                    ${c.notes ? `<div style="margin-top:12px"><strong>${t('contracts.notes')} :</strong><p style="margin-top:4px">${esc(c.notes)}</p></div>` : ''}
 
                     ${hasPermission('contracts.manage') ? `
                     <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
-                        <button class="btn btn-sm btn-outline" onclick="closeModal();ctEditContract(${c.id})"><i class="fas fa-edit"></i> Modifier</button>
-                        ${c.status !== 'archived' ? `<button class="btn btn-sm btn-outline" onclick="ctChangeStatus(${c.id}, 'archived')"><i class="fas fa-archive"></i> Archiver</button>` : ''}
-                        ${c.status !== 'terminated' ? `<button class="btn btn-sm btn-outline" style="color:var(--danger)" onclick="ctChangeStatus(${c.id}, 'terminated')"><i class="fas fa-times"></i> Résilier</button>` : ''}
-                        ${(c.status === 'archived' || c.status === 'terminated') ? `<button class="btn btn-sm btn-outline" style="color:var(--success)" onclick="ctChangeStatus(${c.id}, 'active')"><i class="fas fa-redo"></i> Réactiver</button>` : ''}
+                        <button class="btn btn-sm btn-outline" onclick="closeModal();ctEditContract(${c.id})"><i class="fas fa-edit"></i> ${t('contracts.edit')}</button>
+                        ${c.status !== 'archived' ? `<button class="btn btn-sm btn-outline" onclick="ctChangeStatus(${c.id}, 'archived')"><i class="fas fa-archive"></i> ${t('contracts.archive_btn')}</button>` : ''}
+                        ${c.status !== 'terminated' ? `<button class="btn btn-sm btn-outline" style="color:var(--danger)" onclick="ctChangeStatus(${c.id}, 'terminated')"><i class="fas fa-times"></i> ${t('contracts.terminate_btn')}</button>` : ''}
+                        ${(c.status === 'archived' || c.status === 'terminated') ? `<button class="btn btn-sm btn-outline" style="color:var(--success)" onclick="ctChangeStatus(${c.id}, 'active')"><i class="fas fa-redo"></i> ${t('contracts.reactivate_btn')}</button>` : ''}
                     </div>
                     ` : ''}
                 </div>
 
                 <!-- Documents + Alertes -->
                 <div>
-                    <h4 style="margin-bottom:12px"><i class="fas fa-paperclip"></i> Documents (${docs.length})</h4>
+                    <h4 style="margin-bottom:12px"><i class="fas fa-paperclip"></i> ${t('contracts.documents')} (${docs.length})</h4>
                     ${docs.length ? docs.map(d => `
                         <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid var(--gray-200);border-radius:8px;margin-bottom:8px">
                             <div>
                                 <a href="${escAttr(d.file_path)}" target="_blank" style="font-weight:500"><i class="fas fa-file-${d.file_path.endsWith('.pdf') ? 'pdf' : 'image'}" style="color:var(--primary-500)"></i> ${esc(d.label || d.original_filename)}</a>
-                                <div style="font-size:0.8em;color:var(--gray-400)">${CT_DOC_TYPES[d.type] || d.type} - ${d.uploader_name || ''} - ${d.created_at ? formatDate(d.created_at) : ''}</div>
+                                <div style="font-size:0.8em;color:var(--gray-400)">${ctDocTypeLabel(d.type)} - ${d.uploader_name || ''} - ${d.created_at ? formatDate(d.created_at) : ''}</div>
                             </div>
                             ${hasPermission('contracts.manage') ? `<button class="btn btn-sm" style="color:var(--danger)" onclick="ctDeleteDocument(${c.id}, ${d.id})"><i class="fas fa-trash"></i></button>` : ''}
                         </div>
-                    `).join('') : '<p class="text-muted">Aucun document</p>'}
+                    `).join('') : `<p class="text-muted">${t('contracts.no_documents')}</p>`}
                     ${hasPermission('contracts.manage') ? `
                     <div style="margin-top:12px">
                         <form id="ct-upload-form" onsubmit="ctUploadDocument(event, ${c.id})">
                             <div style="display:flex;gap:8px;align-items:end">
                                 <div style="flex:1">
                                     <select class="form-control" id="ct-doc-type" style="margin-bottom:6px">
-                                        ${Object.entries(CT_DOC_TYPES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}
+                                        <option value="contract">${t('contracts.doc_contract')}</option>
+                                        <option value="annex">${t('contracts.doc_annex')}</option>
+                                        <option value="termination_letter">${t('contracts.doc_termination')}</option>
+                                        <option value="acknowledgment">${t('contracts.doc_acknowledgment')}</option>
+                                        <option value="invoice">${t('contracts.doc_invoice')}</option>
+                                        <option value="other">${t('contracts.doc_other')}</option>
                                     </select>
                                     <input type="file" class="form-control" id="ct-doc-file" accept=".pdf,.jpg,.jpeg,.png" required>
                                 </div>
@@ -762,71 +774,71 @@ async function ctViewContract(id) {
                     </div>
                     ` : ''}
 
-                    <h4 style="margin-top:24px;margin-bottom:12px"><i class="fas fa-bell"></i> Alertes (${alerts.length})</h4>
+                    <h4 style="margin-top:24px;margin-bottom:12px"><i class="fas fa-bell"></i> ${t('contracts.alerts')} (${alerts.length})</h4>
                     ${alerts.length ? alerts.map(a => `
                         <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid var(--gray-200);border-radius:8px;margin-bottom:8px">
                             <div>
-                                <strong>${CT_ALERT_TYPES[a.alert_type]}</strong> - ${a.days_before} jours avant
-                                ${a.last_triggered_at ? `<div style="font-size:0.8em;color:var(--gray-400)">Dernière: ${formatDateTime(a.last_triggered_at)}</div>` : ''}
+                                <strong>${ctAlertTypeLabel(a.alert_type)}</strong> - ${a.days_before} ${t('contracts.days_unit')}
+                                ${a.last_triggered_at ? `<div style="font-size:0.8em;color:var(--gray-400)">${t('contracts.last_alert')}: ${formatDateTime(a.last_triggered_at)}</div>` : ''}
                             </div>
                             <label class="toggle-switch" style="margin:0">
                                 <input type="checkbox" ${a.is_active == 1 ? 'checked' : ''} onchange="ctToggleAlert(${c.id}, ${a.id}, this.checked)">
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
-                    `).join('') : '<p class="text-muted">Aucune alerte</p>'}
+                    `).join('') : `<p class="text-muted">${t('contracts.no_alerts')}</p>`}
                     ${hasPermission('contracts.manage') ? `
-                    <button class="btn btn-sm btn-outline" onclick="ctAddAlertModal(${c.id})" style="margin-top:8px"><i class="fas fa-plus"></i> Ajouter une alerte</button>
+                    <button class="btn btn-sm btn-outline" onclick="ctAddAlertModal(${c.id})" style="margin-top:8px"><i class="fas fa-plus"></i> ${t('contracts.add_alert')}</button>
                     ` : ''}
 
                     ${c.ai_enabled ? `
-                    <h4 style="margin-top:24px;margin-bottom:12px"><i class="fas fa-robot"></i> Analyse IA</h4>
+                    <h4 style="margin-top:24px;margin-bottom:12px"><i class="fas fa-robot"></i> ${t('contracts.ai_analysis')}</h4>
                     ${c.ai_analysis ? `
                         <div style="background:var(--gray-50);padding:16px;border-radius:8px;border-left:4px solid var(--primary-500);max-height:300px;overflow-y:auto;white-space:pre-wrap;font-size:0.9em">${esc(c.ai_analysis)}</div>
-                        <div style="font-size:0.8em;color:var(--gray-400);margin-top:4px">Analysé le ${c.ai_analyzed_at ? formatDateTime(c.ai_analyzed_at) : '-'}</div>
-                    ` : '<p class="text-muted">Pas encore analysé</p>'}
+                        <div style="font-size:0.8em;color:var(--gray-400);margin-top:4px">${t('contracts.analyzed_at')} ${c.ai_analyzed_at ? formatDateTime(c.ai_analyzed_at) : '-'}</div>
+                    ` : `<p class="text-muted">${t('contracts.not_analyzed')}</p>`}
                     ${hasPermission('contracts.analyze') ? `
                     <button class="btn btn-sm btn-primary" onclick="ctAnalyzeContract(${c.id})" style="margin-top:8px" id="ct-analyze-btn">
-                        <i class="fas fa-robot"></i> ${c.ai_analysis ? 'Relancer l\'analyse' : 'Analyser avec l\'IA'}
+                        <i class="fas fa-robot"></i> ${c.ai_analysis ? t('contracts.retry_analysis') : t('contracts.analyze')}
                     </button>
                     ` : ''}
                     ` : ''}
                 </div>
             </div>
         `, 'modal-xl');
-    } catch (e) { toast('Erreur: ' + e.message, 'error'); }
+    } catch (e) { toast(t('contracts.error') + ': ' + e.message, 'error'); }
 }
 
 // ============ ACTIONS SUR CONTRAT ============
 
 async function ctArchiveContract(id) {
-    if (!confirm('Archiver ce contrat ?')) return;
+    if (!confirm(t('contracts.archive_confirm'))) return;
     await ctChangeStatus(id, 'archived');
 }
 
 async function ctReactivateContract(id) {
-    if (!confirm('Réactiver ce contrat ?')) return;
+    if (!confirm(t('contracts.reactivate_confirm'))) return;
     await ctChangeStatus(id, 'active');
 }
 
 async function ctChangeStatus(id, status) {
     try {
         await API.put(`contracts/${id}/status`, { status });
-        toast('Statut mis à jour', 'success');
+        toast(t('contracts.status_updated'), 'success');
         closeModal();
         ctLoadStats();
         ctSwitchTab(ctActiveTab);
-    } catch (e) { toast('Erreur: ' + e.message, 'error'); }
+    } catch (e) { toast(t('contracts.error') + ': ' + e.message, 'error'); }
 }
 
 async function ctDeleteContract(id) {
-    if (!confirm('Supprimer définitivement ce contrat et tous ses documents ?')) return;
+    if (!confirm(t('contracts.delete_confirm'))) return;
     try {
         await API.delete(`contracts/${id}`);
-        toast('Contrat supprimé', 'success');
+        toast(t('contracts.contract_deleted'), 'success');
         ctLoadStats();
         ctSwitchTab(ctActiveTab);
-    } catch (e) { toast('Erreur', 'error'); }
+    } catch (e) { toast(t('contracts.error'), 'error'); }
 }
 
 // ============ DOCUMENTS ============
@@ -844,39 +856,39 @@ async function ctUploadDocument(e, contractId) {
 
     try {
         await API.upload(`contracts/${contractId}/documents`, formData);
-        toast('Document uploadé', 'success');
-        ctViewContract(contractId); // Recharger la vue
-    } catch (e) { toast('Erreur: ' + e.message, 'error'); }
+        toast(t('contracts.doc_uploaded'), 'success');
+        ctViewContract(contractId);
+    } catch (e) { toast(t('contracts.error') + ': ' + e.message, 'error'); }
 }
 
 async function ctDeleteDocument(contractId, docId) {
-    if (!confirm('Supprimer ce document ?')) return;
+    if (!confirm(t('contracts.delete_doc_confirm'))) return;
     try {
         await API.delete(`contracts/${contractId}/documents/${docId}`);
-        toast('Document supprimé', 'success');
+        toast(t('contracts.doc_deleted'), 'success');
         ctViewContract(contractId);
-    } catch (e) { toast('Erreur', 'error'); }
+    } catch (e) { toast(t('contracts.error'), 'error'); }
 }
 
 // ============ ALERTES ============
 
 function ctAddAlertModal(contractId) {
-    openModal('Ajouter une alerte', `
+    openModal(t('contracts.add_alert'), `
         <form onsubmit="ctSaveNewAlert(event, ${contractId})">
             <div class="form-group">
-                <label>Type d'alerte</label>
+                <label>${t('contracts.alert_type')}</label>
                 <select class="form-control" id="ct-new-alert-type">
-                    <option value="expiry">Échéance du contrat</option>
-                    <option value="termination_notice">Préavis de résiliation</option>
-                    <option value="custom">Personnalisée</option>
+                    <option value="expiry">${t('contracts.alert_expiry_label')}</option>
+                    <option value="termination_notice">${t('contracts.alert_termination_label')}</option>
+                    <option value="custom">${t('contracts.alert_custom_label')}</option>
                 </select>
             </div>
             <div class="form-group">
-                <label>Nombre de jours avant</label>
+                <label>${t('contracts.days_before_label')}</label>
                 <input type="number" class="form-control" id="ct-new-alert-days" min="1" value="30" required>
             </div>
             <div style="text-align:right;margin-top:20px">
-                <button type="submit" class="btn btn-primary">Ajouter</button>
+                <button type="submit" class="btn btn-primary">${t('contracts.add')}</button>
             </div>
         </form>
     `, 'modal-md');
@@ -889,10 +901,10 @@ async function ctSaveNewAlert(e, contractId) {
             alert_type: document.getElementById('ct-new-alert-type').value,
             days_before: parseInt(document.getElementById('ct-new-alert-days').value)
         });
-        toast('Alerte ajoutée', 'success');
+        toast(t('contracts.alert_added'), 'success');
         closeModal();
         ctViewContract(contractId);
-    } catch (e) { toast('Erreur: ' + e.message, 'error'); }
+    } catch (e) { toast(t('contracts.error') + ': ' + e.message, 'error'); }
 }
 
 // ============ ANALYSE IA ============
@@ -901,24 +913,24 @@ async function ctAnalyzeContract(id) {
     const btn = document.getElementById('ct-analyze-btn');
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyse en cours...';
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${t('contracts.analyzing')}`;
     }
     try {
         const res = await API.post(`contracts/${id}/analyze`, {});
-        toast('Analyse terminée', 'success');
-        ctViewContract(id); // Recharger pour afficher le résultat
+        toast(t('contracts.analysis_done'), 'success');
+        ctViewContract(id);
     } catch (e) {
-        toast('Erreur: ' + e.message, 'error');
+        toast(t('contracts.error') + ': ' + e.message, 'error');
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-robot"></i> Réessayer l\'analyse';
+            btn.innerHTML = `<i class="fas fa-robot"></i> ${t('contracts.retry_analysis')}`;
         }
     }
 }
 
-// ============ EXPORT ============
+// ============ EXPORT CSV ============
 
-async function ctExportPDF() {
+async function ctExportCSV() {
     try {
         const url = `${API.baseUrl}/contracts/export-pdf?hotel_id=${ctCurrentHotel}&status=all`;
         const response = await fetch(url, {
@@ -930,6 +942,71 @@ async function ctExportPDF() {
         a.download = `contrats_${new Date().toISOString().slice(0, 10)}.csv`;
         a.click();
         window.URL.revokeObjectURL(a.href);
-        toast('Export téléchargé', 'success');
-    } catch (e) { toast('Erreur export', 'error'); }
+        toast(t('contracts.export_downloaded'), 'success');
+    } catch (e) { toast(t('contracts.error'), 'error'); }
+}
+
+// ============ EXPORT PDF ============
+
+async function ctExportPDFDoc() {
+    try {
+        const res = await API.get(`contracts?hotel_id=${ctCurrentHotel}&per_page=200`);
+        const contracts = res.contracts || [];
+        const hotelName = ctHotels.find(h => h.id == ctCurrentHotel)?.name || '';
+        const today = new Date().toLocaleDateString('fr-FR');
+
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<title>${t('contracts.title')} - ${esc(hotelName)}</title>
+<style>
+    body { font-family: 'Inter', Arial, sans-serif; margin: 30px; color: #333; font-size: 12px; }
+    h1 { font-size: 20px; color: #1E3A5F; margin-bottom: 4px; }
+    .subtitle { color: #666; margin-bottom: 24px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    th { background: #1E3A5F; color: #fff; padding: 10px 8px; text-align: left; font-size: 11px; text-transform: uppercase; }
+    td { padding: 8px; border-bottom: 1px solid #e0e0e0; }
+    tr:nth-child(even) { background: #f8f9fa; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+    .badge-success { background: #d4edda; color: #155724; }
+    .badge-warning { background: #fff3cd; color: #856404; }
+    .badge-danger { background: #f8d7da; color: #721c24; }
+    .badge-secondary { background: #e2e3e5; color: #383d41; }
+    .amount { text-align: right; font-weight: 600; }
+    .footer { margin-top: 30px; text-align: center; color: #999; font-size: 10px; border-top: 1px solid #e0e0e0; padding-top: 10px; }
+    @media print { body { margin: 15px; } }
+</style>
+</head><body>
+<h1><i class="fas fa-file-contract"></i> ${t('contracts.title')}</h1>
+<div class="subtitle">${esc(hotelName)} - ${today}</div>
+<table>
+    <thead><tr>
+        <th>${t('contracts.supplier')}</th>
+        <th>${t('contracts.reference')}</th>
+        <th>${t('contracts.category')}</th>
+        <th>${t('contracts.amount')}</th>
+        <th>${t('contracts.frequency')}</th>
+        <th>${t('contracts.start_date')}</th>
+        <th>${t('contracts.end_date')}</th>
+        <th>${t('contracts.status')}</th>
+    </tr></thead>
+    <tbody>
+        ${contracts.map(c => `<tr>
+            <td><strong>${esc(c.supplier_name)}</strong></td>
+            <td>${esc(c.contract_ref || '-')}</td>
+            <td>${c.category_name ? esc(c.category_name) : '-'}</td>
+            <td class="amount">${Number(c.amount).toLocaleString('fr-FR', {minimumFractionDigits:2})} \u20AC</td>
+            <td>${ctFreqLabel(c.amount_frequency)}</td>
+            <td>${c.start_date ? formatDate(c.start_date) : '-'}</td>
+            <td>${c.end_date ? formatDate(c.end_date) : '-'}</td>
+            <td><span class="badge badge-${ctStatusColor(c.status)}">${ctStatusLabel(c.status)}</span></td>
+        </tr>`).join('')}
+    </tbody>
+</table>
+<div class="footer">ACL GESTION - ${t('contracts.title')} - ${esc(hotelName)} - ${today}</div>
+<script>window.onload = function() { window.print(); }</script>
+</body></html>`);
+        printWindow.document.close();
+    } catch (e) { toast(t('contracts.error'), 'error'); }
 }
