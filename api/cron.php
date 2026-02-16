@@ -747,7 +747,7 @@ function sendMaintenanceAlertEmail($to, $subject, $ticket, $alertType = '2days')
  */
 function createNotification($userId, $type, $title, $message = null, $link = null, $referenceId = null) {
     try {
-        $db = Database::getInstance();
+        $db = Database::get();
         // La table notifications n'a pas de colonnes link et reference_id
         // Mapper le type sur les valeurs ENUM valides
         $validTypes = ['info', 'warning', 'danger', 'success'];
@@ -784,7 +784,7 @@ function createNotification($userId, $type, $title, $message = null, $link = nul
 function checkAuditDeadlines() {
     echo "Vérification des échéances d'audit...\n";
     
-    $db = Database::getInstance();
+    $db = Database::get();
     $today = date('Y-m-d');
     
     try {
@@ -1025,7 +1025,7 @@ function notifyAuditOverdue($db, $today) {
 function checkTasksDue() {
     echo "Vérification des tâches à échéance...\n";
     
-    $db = Database::getInstance();
+    $db = Database::get();
     
     try {
         // Tâches à échéance aujourd'hui (non complétées) sur hôtels actifs
