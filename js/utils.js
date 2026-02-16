@@ -394,6 +394,7 @@ function getDefaultPermissions(role) {
             'closures.view': true, 'closures.create': true, 'closures.validate': true, 'closures.edit_all': true, 'closures.add_remise': true, 'closures.add_comment': true,
             'welcome.view': true, 'welcome.manage': true,
             'selfcheckin.view': true, 'selfcheckin.manage': true,
+            'contracts.view': true, 'contracts.create': true, 'contracts.manage': true, 'contracts.delete': true, 'contracts.analyze': true, 'contracts.export': true,
             'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': true,
             'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
             'permissions.manage': false
@@ -412,6 +413,7 @@ function getDefaultPermissions(role) {
             'closures.view': true, 'closures.create': true, 'closures.validate': true, 'closures.edit_all': false, 'closures.add_remise': true, 'closures.add_comment': true,
             'welcome.view': true, 'welcome.manage': true,
             'selfcheckin.view': true, 'selfcheckin.manage': true,
+            'contracts.view': true, 'contracts.create': true, 'contracts.manage': true, 'contracts.delete': false, 'contracts.analyze': true, 'contracts.export': true,
             'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': true,
             'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
             'permissions.manage': false
@@ -430,6 +432,7 @@ function getDefaultPermissions(role) {
             'closures.view': true, 'closures.create': false, 'closures.validate': true, 'closures.edit_all': true, 'closures.add_remise': false, 'closures.add_comment': true,
             'welcome.view': false, 'welcome.manage': false,
             'selfcheckin.view': false, 'selfcheckin.manage': false,
+            'contracts.view': true, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': true,
             'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
             'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
             'permissions.manage': false
@@ -448,6 +451,7 @@ function getDefaultPermissions(role) {
             'closures.view': false, 'closures.create': false, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': false, 'closures.add_comment': false,
             'welcome.view': false, 'welcome.manage': false,
             'selfcheckin.view': false, 'selfcheckin.manage': false,
+            'contracts.view': false, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': false,
             'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': false,
             'dashboard.view': true, 'dashboard.global': false, 'reports.access': true, 'reports.export': true,
             'permissions.manage': false
@@ -466,6 +470,7 @@ function getDefaultPermissions(role) {
             'closures.view': true, 'closures.create': true, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': true, 'closures.add_comment': true,
             'welcome.view': true, 'welcome.manage': false,
             'selfcheckin.view': true, 'selfcheckin.manage': false,
+            'contracts.view': false, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': false,
             'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
             'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
             'permissions.manage': false
@@ -484,6 +489,7 @@ function getDefaultPermissions(role) {
             'closures.view': true, 'closures.create': false, 'closures.validate': false, 'closures.edit_all': false, 'closures.add_remise': false, 'closures.add_comment': false,
             'welcome.view': false, 'welcome.manage': false,
             'selfcheckin.view': false, 'selfcheckin.manage': false,
+            'contracts.view': false, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': false,
             'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
             'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
             'permissions.manage': false

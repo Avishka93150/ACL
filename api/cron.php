@@ -53,6 +53,9 @@ switch ($action) {
     case 'cleanup':
         cleanupOldData();
         break;
+    case 'contracts':
+        checkContractAlerts();
+        break;
     default:
         echo "Usage: php cron.php [dispatch|control|maintenance|leaves_reminder|tasks_due|audit|closure|revenue|price_alerts|cleanup]\n\n";
         echo "Tâches disponibles:\n";
@@ -66,6 +69,7 @@ switch ($action) {
         echo "  revenue         - Actualise les tarifs Xotelo pour tous les hôtels (06h00)\n";
         echo "  price_alerts    - Vérifie les alertes tarifaires après mise à jour (06h15)\n";
         echo "  cleanup         - Nettoyage tokens expirés et anciennes données (03h00)\n";
+        echo "  contracts       - Alertes contrats fournisseurs (échéances, résiliation) (09h00)\n";
         exit(1);
 }
 
@@ -1638,5 +1642,106 @@ function checkPriceAlerts() {
 
     } catch (Exception $e) {
         echo "  ⚠ Erreur checkPriceAlerts: " . $e->getMessage() . "\n";
+    }
+}
+
+// =============================================================================
+// CONTRATS FOURNISSEURS - Alertes échéances et résiliation
+// =============================================================================
+
+/**
+ * Vérifie les alertes configurées pour les contrats fournisseurs.
+ * Met à jour le statut des contrats qui arrivent à échéance.
+ * Envoie des notifications pour les alertes actives.
+ *
+ * À exécuter chaque jour à 09h00 :
+ * php /chemin/api/cron.php contracts
+ */
+function checkContractAlerts() {
+    echo "\n=== ALERTES CONTRATS FOURNISSEURS ===\n\n";
+
+    try {
+        $db = Database::get();
+        $today = date('Y-m-d');
+        $totalAlerts = 0;
+
+        // 1. Mettre à jour automatiquement le statut "expiring" pour les contrats arrivant à échéance dans 90 jours
+        $db->execute(
+            "UPDATE contracts SET status = 'expiring', updated_at = NOW()
+             WHERE status = 'active' AND end_date IS NOT NULL AND end_date <= DATE_ADD(?, INTERVAL 90 DAY) AND end_date > ?",
+            [$today, $today]
+        );
+        echo "  Statuts mis à jour (active → expiring pour contrats < 90j)\n";
+
+        // 2. Vérifier les alertes actives non encore déclenchées aujourd'hui
+        $alerts = $db->query(
+            "SELECT ca.*, c.supplier_name, c.contract_ref, c.end_date, c.termination_notice_days,
+                    c.hotel_id, c.status as contract_status, h.name as hotel_name
+             FROM contract_alerts ca
+             JOIN contracts c ON ca.contract_id = c.id
+             JOIN hotels h ON c.hotel_id = h.id AND h.status = 'active'
+             WHERE ca.is_active = 1
+               AND c.status IN ('active', 'expiring')
+               AND c.end_date IS NOT NULL
+               AND (ca.last_triggered_at IS NULL OR DATE(ca.last_triggered_at) < ?)",
+            [$today]
+        );
+
+        echo "  Alertes actives à vérifier: " . count($alerts) . "\n";
+
+        foreach ($alerts as $alert) {
+            $endDate = $alert['end_date'];
+            $daysBeforeAlert = (int)$alert['days_before'];
+            $shouldTrigger = false;
+            $alertMessage = '';
+            $alertTitle = '';
+
+            if ($alert['alert_type'] === 'expiry') {
+                // Alerte X jours avant la date d'échéance
+                $triggerDate = date('Y-m-d', strtotime($endDate . " -$daysBeforeAlert days"));
+                $shouldTrigger = ($today >= $triggerDate && $today <= $endDate);
+                $daysLeft = (strtotime($endDate) - strtotime($today)) / 86400;
+                $alertTitle = "Contrat {$alert['supplier_name']} : échéance dans " . round($daysLeft) . " jour(s)";
+                $alertMessage = "Le contrat {$alert['supplier_name']} (réf: {$alert['contract_ref']}) pour l'hôtel {$alert['hotel_name']} arrive à échéance le " . date('d/m/Y', strtotime($endDate)) . ".";
+            } elseif ($alert['alert_type'] === 'termination_notice') {
+                // Alerte X jours avant la date limite de résiliation
+                $noticeDays = (int)$alert['termination_notice_days'];
+                $terminationDeadline = date('Y-m-d', strtotime($endDate . " -$noticeDays days"));
+                $triggerDate = date('Y-m-d', strtotime($terminationDeadline . " -$daysBeforeAlert days"));
+                $shouldTrigger = ($today >= $triggerDate && $today <= $terminationDeadline);
+                $daysLeftToNotice = (strtotime($terminationDeadline) - strtotime($today)) / 86400;
+                $alertTitle = "Contrat {$alert['supplier_name']} : préavis de résiliation dans " . round($daysLeftToNotice) . " jour(s)";
+                $alertMessage = "Le contrat {$alert['supplier_name']} (réf: {$alert['contract_ref']}) pour l'hôtel {$alert['hotel_name']} a un délai de préavis de résiliation de {$noticeDays} jours. Date limite pour résilier : " . date('d/m/Y', strtotime($terminationDeadline)) . ".";
+            }
+
+            if (!$shouldTrigger) continue;
+
+            $totalAlerts++;
+            echo "  ⚠ Alerte: {$alertTitle}\n";
+
+            // Notifier les managers de l'hôtel
+            $managers = $db->query(
+                "SELECT DISTINCT u.id, u.email FROM users u
+                 JOIN user_hotels uh ON u.id = uh.user_id
+                 WHERE uh.hotel_id = ? AND u.role IN ('admin', 'groupe_manager', 'hotel_manager') AND u.status = 'active'",
+                [$alert['hotel_id']]
+            );
+
+            foreach ($managers as $m) {
+                createNotification($m['id'], 'warning', $alertTitle, $alertMessage);
+                sendEmail($m['email'], $alertTitle, $alertMessage);
+                echo "    → Notification envoyée à #{$m['id']}\n";
+            }
+
+            // Marquer l'alerte comme déclenchée
+            $db->execute("UPDATE contract_alerts SET last_triggered_at = NOW() WHERE id = ?", [$alert['id']]);
+        }
+
+        echo "\n  ════════════════════════════════════\n";
+        echo "  TOTAL: $totalAlerts alerte(s) déclenchée(s)\n";
+        echo "  ════════════════════════════════════\n";
+
+    } catch (Exception $e) {
+        echo "  ⚠ Erreur checkContractAlerts: " . $e->getMessage() . "\n";
     }
 }

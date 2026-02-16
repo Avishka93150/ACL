@@ -109,6 +109,10 @@ const API = {
     saveSmtpConfig(config) { return this.put('smtp', config); },
     testSmtp(email) { return this.post('smtp/test', { email }); },
 
+    // Contrats Fournisseurs
+    getHotelContractsConfig(hotelId) { return this.get(`hotels/${hotelId}/contracts-config`); },
+    saveHotelContractsConfig(hotelId, config) { return this.put(`hotels/${hotelId}/contracts-config`, config); },
+
     // Maintenance
     getMaintenanceStats() { return this.get('maintenance/stats'); },
     getTickets(params = {}) { 

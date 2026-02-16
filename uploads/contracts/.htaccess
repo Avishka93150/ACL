@@ -1,0 +1,8 @@
+# Sécurité : bloquer l'exécution PHP, autoriser JPG/PNG/PDF uniquement
+<FilesMatch "\.php$">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "\.(?:jpg|jpeg|png|pdf)$">
+    Require all granted
+</FilesMatch>
