@@ -8,7 +8,6 @@ let closureHotels = [];
 let closureSelectedHotel = null;
 let closureConfig = [];
 let closureCurrentView = 'list';
-let closureWorkflowConfigCache = null;
 
 async function loadClosures(container) {
     try {
@@ -105,9 +104,6 @@ async function loadDailyClosures(container) {
         const pendingDate = res.pending_date || null;
         const config = res.config || [];
         closureConfig = config;
-        const workflowConfig = res.workflow_config || null;
-        const workflowSteps = res.workflow_steps || [];
-        closureWorkflowConfigCache = workflowConfig;
         
         const today = new Date();
         const yesterday = new Date(today);
@@ -173,45 +169,6 @@ async function loadDailyClosures(container) {
                                     ${closures.map(c => {
                                         const docsComplete = c.documents_count >= c.required_docs;
                                         const docsClass = c.documents_count === 0 ? 'empty' : (docsComplete ? 'complete' : 'incomplete');
-                                        const currentStep = parseInt(c.current_step) || 0;
-                                        const cashSpent = parseFloat(c.cash_spent) || 0;
-
-                                        // Calculer les étapes applicables pour cette clôture
-                                        const applicableSteps = workflowSteps.filter(ws => {
-                                            const minOk = parseFloat(ws.min_amount) === 0 || cashSpent >= parseFloat(ws.min_amount);
-                                            const maxOk = parseFloat(ws.max_amount) === 0 || cashSpent <= parseFloat(ws.max_amount);
-                                            return minOk && maxOk;
-                                        });
-                                        const totalSteps = applicableSteps.length;
-                                        const hasWorkflow = totalSteps > 0;
-                                        const needsDoubleVal = workflowConfig && parseFloat(workflowConfig.double_validation_above) > 0
-                                            && cashSpent > parseFloat(workflowConfig.double_validation_above);
-
-                                        // Déterminer si l'utilisateur peut valider
-                                        let canValidate = false;
-                                        if (c.status === 'submitted' && hasPermission('closures.validate')) {
-                                            if (hasWorkflow && currentStep < totalSteps) {
-                                                const nextStep = applicableSteps[currentStep];
-                                                canValidate = API.user.role === nextStep.required_role || API.user.role === 'admin';
-                                            } else if (needsDoubleVal && currentStep < 2) {
-                                                if (currentStep === 0) {
-                                                    canValidate = workflowConfig.validator_roles ? workflowConfig.validator_roles.includes(API.user.role) : ['admin','groupe_manager'].includes(API.user.role);
-                                                } else {
-                                                    canValidate = workflowConfig.validator_roles_level2 ? workflowConfig.validator_roles_level2.includes(API.user.role) : API.user.role === 'admin';
-                                                }
-                                            } else {
-                                                canValidate = true;
-                                            }
-                                        }
-
-                                        // Label étape
-                                        let stepInfo = '';
-                                        if (c.status === 'submitted' && hasWorkflow && totalSteps > 0) {
-                                            stepInfo = `<br><small class="text-muted">Étape ${currentStep}/${totalSteps}</small>`;
-                                        } else if (c.status === 'submitted' && needsDoubleVal) {
-                                            stepInfo = `<br><small class="text-muted">Validation ${currentStep}/2</small>`;
-                                        }
-
                                         return `
                                         <tr>
                                             <td class="date-cell">${formatDateLong(c.closure_date)}</td>
@@ -224,20 +181,15 @@ async function loadDailyClosures(container) {
                                                     ${c.documents_count || 0} / ${c.required_docs || 0}
                                                 </span>
                                             </td>
-                                            <td>${closureStatusBadge(c.status)}${stepInfo}</td>
+                                            <td>${closureStatusBadge(c.status)}</td>
                                             <td>${c.submitted_by_name || '<span class="text-muted">-</span>'}</td>
                                             <td class="closure-actions">
                                                 <button class="btn btn-sm btn-outline" onclick="closureOpenDailyForm('${c.closure_date}', ${c.id})" title="Voir/Modifier">
                                                     <i class="fas fa-eye"></i>
                                                 </button>
-                                                ${canValidate ? `
+                                                ${c.status === 'submitted' && hasPermission('closures.validate') ? `
                                                     <button class="btn btn-sm btn-success" onclick="closureValidate(${c.id})" title="Valider">
                                                         <i class="fas fa-check"></i>
-                                                    </button>
-                                                ` : ''}
-                                                ${c.status === 'submitted' && hasPermission('closures.validate') ? `
-                                                    <button class="btn btn-sm btn-danger" onclick="closureReject(${c.id})" title="Rejeter">
-                                                        <i class="fas fa-times"></i>
                                                     </button>
                                                 ` : ''}
                                             </td>
@@ -702,40 +654,28 @@ async function closureSaveDraft() {
 
 async function closureSaveDaily(e) {
     e.preventDefault();
-
+    
     const form = document.getElementById('closure-daily-form');
     if (!form) return;
-
+    
     const cashSpent = parseFloat(form.querySelector('[name="cash_spent"]')?.value) || 0;
     const notes = form.querySelector('[name="notes"]')?.value?.trim() || '';
     const expenseReceipt = form.querySelector('[name="expense_receipt"]')?.files[0];
     const existingReceipt = document.querySelector('#expense-receipt-section .existing-file');
-
-    // Utiliser les seuils du workflow config si disponibles
-    const wfConfig = closureWorkflowConfigCache || {};
-    const commentThreshold = parseFloat(wfConfig.comment_required_above) || 0;
-    const receiptThreshold = parseFloat(wfConfig.receipt_required_above) || 0;
-
-    // Validation commentaire selon seuil
-    if (cashSpent > commentThreshold) {
+    
+    // Validation uniquement si dépenses > 0
+    if (cashSpent > 0) {
+        // Commentaire obligatoire si dépenses
         if (!notes) {
-            const msg = commentThreshold > 0
-                ? `Un commentaire est obligatoire pour les dépenses supérieures à ${commentThreshold.toFixed(2)} €`
-                : 'Un commentaire est obligatoire pour justifier les dépenses';
-            toast(msg, 'error');
+            toast('Un commentaire est obligatoire pour justifier les dépenses', 'error');
             form.querySelector('[name="notes"]')?.focus();
             form.querySelector('[name="notes"]')?.classList.add('input-error');
             return;
         }
-    }
-
-    // Validation justificatif selon seuil
-    if (cashSpent > receiptThreshold) {
+        
+        // Justificatif obligatoire si dépenses
         if (!expenseReceipt && !existingReceipt) {
-            const msg = receiptThreshold > 0
-                ? `Un justificatif est obligatoire pour les dépenses supérieures à ${receiptThreshold.toFixed(2)} €`
-                : 'Un justificatif est obligatoire pour les dépenses';
-            toast(msg, 'error');
+            toast('Un justificatif est obligatoire pour les dépenses', 'error');
             form.querySelector('[name="expense_receipt"]')?.focus();
             return;
         }
@@ -758,30 +698,11 @@ async function closureSaveDaily(e) {
 }
 
 async function closureValidate(id) {
-    if (!confirm('Confirmer la validation de cette clôture ?')) return;
-
+    if (!confirm(t('closures.delete_confirm'))) return;
+    
     try {
-        const res = await API.put(`/closures/daily/${id}/validate`);
-        if (res.status === 'validated') {
-            toast(res.message || t('closures.validated'), 'success');
-        } else if (res.status === 'pending_step' || res.status === 'pending_level2') {
-            toast(res.message || 'Étape validée, en attente de la suite', 'info');
-        } else {
-            toast(t('closures.validated'), 'success');
-        }
-        showClosureTab('daily');
-    } catch (e) {
-        toast(e.message, 'error');
-    }
-}
-
-async function closureReject(id) {
-    const comment = prompt('Motif du rejet (optionnel) :');
-    if (comment === null) return; // Annulé
-
-    try {
-        await API.put(`/closures/daily/${id}/reject`, { comment: comment || '' });
-        toast('Clôture rejetée', 'warning');
+        await API.put(`/closures/daily/${id}/validate`);
+        toast(t('closures.validated'), 'success');
         showClosureTab('daily');
     } catch (e) {
         toast(e.message, 'error');
