@@ -648,6 +648,11 @@ async function ctShowCreateModal(contractId) {
                 <label>${t('contracts.notes')}</label>
                 <textarea class="form-control" id="ct-notes" rows="2">${esc(contract.notes || '')}</textarea>
             </div>
+            <div class="form-group">
+                <label><i class="fas fa-file-pdf" style="color:var(--danger);margin-right:4px"></i>${t('contracts.attach_signed_pdf')}</label>
+                <input type="file" class="form-control" id="ct-signed-pdf" accept=".pdf">
+                <small class="text-muted">${t('contracts.attach_pdf_hint')}</small>
+            </div>
             <div style="text-align:right;margin-top:20px">
                 <button type="button" class="btn btn-outline" onclick="closeModal()">${t('contracts.cancel')}</button>
                 <button type="submit" class="btn btn-primary">${isEdit ? t('contracts.edit') : t('contracts.create')}</button>
@@ -684,14 +689,30 @@ async function ctSaveContract(e, id) {
         notes: document.getElementById('ct-notes').value || null
     };
 
+    const pdfInput = document.getElementById('ct-signed-pdf');
+    const pdfFile = pdfInput && pdfInput.files[0] ? pdfInput.files[0] : null;
+
     try {
+        let contractId = id;
         if (id) {
             await API.put(`contracts/${id}`, data);
             toast(t('contracts.contract_modified'), 'success');
         } else {
-            await API.post('contracts', data);
+            const res = await API.post('contracts', data);
+            contractId = res.id;
             toast(t('contracts.contract_created'), 'success');
         }
+
+        // Upload du PDF signe si un fichier a ete selectionne
+        if (pdfFile && contractId) {
+            const formData = new FormData();
+            formData.append('file', pdfFile);
+            formData.append('type', 'contract');
+            formData.append('label', pdfFile.name);
+            await API.upload(`contracts/${contractId}/documents`, formData);
+            toast(t('contracts.doc_uploaded'), 'success');
+        }
+
         closeModal();
         ctLoadStats();
         ctSwitchTab(ctActiveTab);
