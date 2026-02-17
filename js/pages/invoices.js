@@ -1072,6 +1072,17 @@ async function invRenderVerify(container, invoiceId) {
                 </div>
             </div>
         `;
+
+        // Initialiser les totaux ventilation si en mode multi-taux
+        if (isEditable) {
+            setTimeout(() => {
+                const mainTvaSelect = document.getElementById('inv-main-tva-rate');
+                if (mainTvaSelect && mainTvaSelect.value === 'multi') {
+                    invSyncVentilTotals();
+                }
+                invCheckAmountsCoherence();
+            }, 50);
+        }
     } catch (err) {
         container.innerHTML = '<div class="alert alert-danger">Erreur de chargement de la facture</div>';
         console.error(err);
@@ -1173,39 +1184,108 @@ function invRenderVerifyForm(inv, lines, isEditable) {
             </div>
         </div>
 
-        <!-- Ventilation par catégorie -->
+        <!-- Montants -->
         <div class="card" style="margin-bottom:var(--space-4)">
-            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-                <h3><i class="fas fa-layer-group"></i> Ventilation par catégorie</h3>
-                ${isEditable ? `<button class="btn btn-sm btn-primary" onclick="invAddLine()"><i class="fas fa-plus"></i> Ajouter une ligne</button>` : ''}
-            </div>
-            <div class="table-responsive">
-                <table class="table" id="inv-lines-table">
-                    <thead>
-                        <tr>
-                            <th style="min-width:180px">Catégorie</th>
-                            <th style="width:120px;text-align:right">Montant HT</th>
-                            <th style="width:100px">Taux TVA</th>
-                            <th style="width:110px;text-align:right">Montant TVA</th>
-                            <th style="width:120px;text-align:right">Total TTC</th>
-                            ${isEditable ? '<th style="width:50px"></th>' : ''}
-                        </tr>
-                    </thead>
-                    <tbody id="inv-lines-body">
-                        ${lines.length > 0 ? lines.map((l, i) => invBuildLineRow(i, l, isEditable)).join('') :
-                          (isEditable ? invBuildLineRow(0, {}, true) : '<tr><td colspan="6" class="text-center">Aucune ligne</td></tr>')}
-                    </tbody>
-                    <tfoot>
-                        <tr style="font-weight:var(--font-semibold);background:var(--gray-50)">
-                            <td style="text-align:right">Totaux</td>
-                            <td style="text-align:right" id="inv-total-ht">${invFormatCurrency(inv.total_ht || 0)}</td>
-                            <td></td>
-                            <td style="text-align:right" id="inv-total-tva">${invFormatCurrency(inv.total_tva || 0)}</td>
-                            <td style="text-align:right;font-size:var(--font-size-base)" id="inv-total-ttc"><strong>${invFormatCurrency(inv.total_ttc || 0)}</strong></td>
-                            ${isEditable ? '<td></td>' : ''}
-                        </tr>
-                    </tfoot>
-                </table>
+            <div class="card-header"><h3><i class="fas fa-calculator"></i> Montants</h3></div>
+            <div class="card-body" style="padding:var(--space-4)">
+                ${isEditable ? `
+                    <div class="form-row" style="align-items:flex-end">
+                        <div class="form-group">
+                            <label class="form-label">Total HT ${ocrInvoice && ocrInvoice.total_ht != null ? invOcrBadge('ok') : ''}</label>
+                            <input type="number" id="inv-amount-ht" class="form-control" value="${inv.total_ht || ''}" step="0.01" min="0" placeholder="0.00" oninput="invRecalcFromAmounts()">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Taux TVA</label>
+                            <select id="inv-main-tva-rate" class="form-control" onchange="invRecalcFromAmounts()">
+                                ${(() => {
+                                    const isMulti = invHasMultipleTvaRates(lines);
+                                    const uniqueRates = lines.length > 0 ? [...new Set(lines.map(l => parseFloat(l.tva_rate || 20)))] : [20];
+                                    const singleRate = !isMulti && uniqueRates.length === 1 ? uniqueRates[0] : 20;
+                                    return `
+                                        <option value="20" ${!isMulti && singleRate == 20 ? 'selected' : ''}>20%</option>
+                                        <option value="10" ${!isMulti && singleRate == 10 ? 'selected' : ''}>10%</option>
+                                        <option value="5.5" ${!isMulti && singleRate == 5.5 ? 'selected' : ''}>5,5%</option>
+                                        <option value="2.1" ${!isMulti && singleRate == 2.1 ? 'selected' : ''}>2,1%</option>
+                                        <option value="0" ${!isMulti && singleRate == 0 ? 'selected' : ''}>0%</option>
+                                        <option value="multi" ${isMulti ? 'selected' : ''}>Multi-taux</option>
+                                    `;
+                                })()}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">TVA</label>
+                            <input type="number" id="inv-amount-tva" class="form-control" value="${inv.total_tva || ''}" step="0.01" min="0" placeholder="0.00" oninput="invRecalcFromTva()" style="background:var(--gray-50)">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Total TTC ${ocrInvoice && ocrInvoice.total_ttc != null ? invOcrBadge('ok') : ''}</label>
+                            <input type="number" id="inv-amount-ttc" class="form-control" value="${inv.total_ttc || ''}" step="0.01" min="0" placeholder="0.00" oninput="invRecalcFromTtc()" style="font-weight:var(--font-semibold)">
+                        </div>
+                    </div>
+                    <div id="inv-amounts-warning" style="display:none;margin-top:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--warning-50, #fffbeb);border:1px solid var(--warning-200, #fde68a);border-radius:var(--radius-md);font-size:var(--font-size-sm);color:var(--warning-700, #a16207)">
+                        <i class="fas fa-exclamation-triangle"></i> <span id="inv-amounts-warning-text"></span>
+                    </div>
+
+                    <!-- Ventilation multi-taux TVA -->
+                    <div id="inv-ventilation-section" style="display:${invHasMultipleTvaRates(lines) ? 'block' : 'none'};margin-top:var(--space-4);border-top:1px solid var(--gray-200);padding-top:var(--space-4)">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-3)">
+                            <h4 style="margin:0;font-size:var(--font-size-sm);color:var(--text-secondary)"><i class="fas fa-layer-group"></i> Ventilation par taux de TVA</h4>
+                            <button type="button" class="btn btn-sm btn-outline" onclick="invAddVentilLine()"><i class="fas fa-plus"></i> Ajouter un taux</button>
+                        </div>
+                        <table class="table" id="inv-lines-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:140px;text-align:right">Montant HT</th>
+                                    <th style="width:110px">Taux TVA</th>
+                                    <th style="width:140px;text-align:right">Montant TVA</th>
+                                    <th style="width:140px;text-align:right">Montant TTC</th>
+                                    <th style="width:40px"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="inv-lines-body">
+                                ${invHasMultipleTvaRates(lines) ? lines.map((l, i) => invBuildVentilRow(i, l, true)).join('') : ''}
+                            </tbody>
+                            <tfoot>
+                                <tr style="font-weight:var(--font-semibold);background:var(--gray-50)">
+                                    <td style="text-align:right" id="inv-ventil-total-ht">-</td>
+                                    <td></td>
+                                    <td style="text-align:right" id="inv-ventil-total-tva">-</td>
+                                    <td style="text-align:right" id="inv-ventil-total-ttc">-</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                ` : `
+                    <div style="display:flex;gap:var(--space-6);flex-wrap:wrap">
+                        <div style="text-align:center">
+                            <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-bottom:2px">Total HT</div>
+                            <div style="font-size:var(--font-size-lg);font-weight:var(--font-semibold)">${invFormatCurrency(inv.total_ht || 0)}</div>
+                        </div>
+                        <div style="text-align:center">
+                            <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-bottom:2px">TVA</div>
+                            <div style="font-size:var(--font-size-lg);font-weight:var(--font-semibold)">${invFormatCurrency(inv.total_tva || 0)}</div>
+                        </div>
+                        <div style="text-align:center">
+                            <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-bottom:2px">Total TTC</div>
+                            <div style="font-size:var(--font-size-lg);font-weight:var(--font-bold);color:var(--brand-secondary)">${invFormatCurrency(inv.total_ttc || 0)}</div>
+                        </div>
+                    </div>
+                    ${lines.length > 1 ? `
+                        <div style="margin-top:var(--space-3);border-top:1px solid var(--gray-200);padding-top:var(--space-3)">
+                            <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-bottom:var(--space-2)">Détail par taux TVA</div>
+                            ${lines.map(l => {
+                                const ht = parseFloat(l.total_ht || l.amount_ht || 0);
+                                const rate = parseFloat(l.tva_rate || 20);
+                                const tva = parseFloat(l.tva_amount || (ht * rate / 100));
+                                const ttc = ht + tva;
+                                return `<div style="display:flex;justify-content:space-between;font-size:var(--font-size-sm);padding:2px 0">
+                                    <span>TVA ${rate}%</span>
+                                    <span>HT ${invFormatCurrency(ht)} + TVA ${invFormatCurrency(tva)} = <strong>${invFormatCurrency(ttc)}</strong></span>
+                                </div>`;
+                            }).join('')}
+                        </div>
+                    ` : ''}
+                `}
             </div>
         </div>
 
@@ -1262,39 +1342,24 @@ function invRenderVerifyForm(inv, lines, isEditable) {
     `;
 }
 
-function invBuildLineRow(idx, line, editable) {
+// === HELPERS VENTILATION ===
+
+function invHasMultipleTvaRates(lines) {
+    if (!lines || lines.length <= 1) return false;
+    const rates = new Set(lines.map(l => parseFloat(l.tva_rate || 20)));
+    return rates.size > 1;
+}
+
+function invBuildVentilRow(idx, line, editable) {
     const ht = parseFloat(line.total_ht || line.amount_ht || 0);
     const rate = parseFloat(line.tva_rate || 20);
     const tva = parseFloat(line.tva_amount || (ht * rate / 100));
     const ttc = ht + tva;
-    const desc = line.description || '';
-
-    if (!editable) {
-        return `<tr>
-            <td>
-                ${esc(line.category_name || '-')}
-                ${desc ? `<div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:2px">${esc(desc)}</div>` : ''}
-            </td>
-            <td style="text-align:right">${invFormatCurrency(ht)}</td>
-            <td>${rate}%</td>
-            <td style="text-align:right">${invFormatCurrency(tva)}</td>
-            <td style="text-align:right"><strong>${invFormatCurrency(ttc)}</strong></td>
-        </tr>`;
-    }
 
     return `<tr class="inv-line-row" data-idx="${idx}">
+        <td><input type="number" class="form-control form-control-sm" name="line-ht-${idx}" value="${ht || ''}" step="0.01" min="0" style="text-align:right" oninput="invRecalcVentilRow(${idx})" placeholder="0.00"></td>
         <td>
-            <select class="form-control form-control-sm" name="line-cat-${idx}" onchange="invOnCategoryChange(this, ${idx})" ${line.category_id ? 'style="border-color:var(--success-300, #86efac)"' : ''}>
-                <option value="">— Sélectionner —</option>
-                ${invCategories.map(c => `<option value="${c.id}" ${line.category_id == c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
-                ${hasPermission('categories.manage') ? '<option value="__create__">+ Créer une catégorie</option>' : ''}
-            </select>
-            ${desc ? `<div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:2px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(desc)}"><i class="fas fa-robot" style="font-size:0.6rem"></i> ${esc(desc)}</div>` : ''}
-            <input type="hidden" name="line-desc-${idx}" value="${escAttr(desc)}">
-        </td>
-        <td><input type="number" class="form-control form-control-sm" name="line-ht-${idx}" value="${ht || ''}" step="0.01" min="0" style="text-align:right" oninput="invRecalcTotals()" placeholder="0.00"></td>
-        <td>
-            <select class="form-control form-control-sm" name="line-tva-${idx}" onchange="invRecalcTotals()">
+            <select class="form-control form-control-sm" name="line-tva-${idx}" onchange="invRecalcVentilRow(${idx})">
                 <option value="20" ${rate == 20 ? 'selected' : ''}>20%</option>
                 <option value="10" ${rate == 10 ? 'selected' : ''}>10%</option>
                 <option value="5.5" ${rate == 5.5 ? 'selected' : ''}>5,5%</option>
@@ -1303,32 +1368,189 @@ function invBuildLineRow(idx, line, editable) {
             </select>
         </td>
         <td style="text-align:right;color:var(--text-secondary)" id="line-tva-amount-${idx}">${invFormatCurrency(tva)}</td>
-        <td style="text-align:right;font-weight:var(--font-semibold)" id="line-ttc-${idx}">${invFormatCurrency(ttc)}</td>
-        <td><button type="button" class="btn btn-sm btn-outline text-danger" onclick="invRemoveLine(this)" title="Supprimer"><i class="fas fa-times"></i></button></td>
+        <td><input type="number" class="form-control form-control-sm" name="line-ttc-${idx}" value="${ttc || ''}" step="0.01" min="0" style="text-align:right" oninput="invRecalcVentilRowFromTtc(${idx})" placeholder="0.00"></td>
+        <td><button type="button" class="btn btn-sm btn-outline text-danger" onclick="invRemoveVentilLine(this)" title="Supprimer"><i class="fas fa-times"></i></button></td>
     </tr>`;
 }
 
-function invAddLine() {
+function invAddVentilLine() {
     const tbody = document.getElementById('inv-lines-body');
     if (!tbody) return;
     const rows = tbody.querySelectorAll('.inv-line-row');
     const newIdx = rows.length;
-    tbody.insertAdjacentHTML('beforeend', invBuildLineRow(newIdx, {}, true));
+    tbody.insertAdjacentHTML('beforeend', invBuildVentilRow(newIdx, {}, true));
 }
 
-function invRemoveLine(btn) {
+function invRemoveVentilLine(btn) {
     const row = btn.closest('tr');
     if (row) row.remove();
-    invRecalcTotals();
+    invSyncVentilTotals();
 }
 
-function invOnCategoryChange(select, idx) {
-    if (select.value === '__create__') {
-        select.value = ''; // Reset la sélection
-        invQuickCreateCategory(idx);
-    } else {
-        invRecalcTotals();
+function invRecalcVentilRow(idx) {
+    const htInput = document.querySelector(`[name="line-ht-${idx}"]`);
+    const tvaSelect = document.querySelector(`[name="line-tva-${idx}"]`);
+    const ttcInput = document.querySelector(`[name="line-ttc-${idx}"]`);
+    const tvaEl = document.getElementById(`line-tva-amount-${idx}`);
+    if (!htInput || !tvaSelect) return;
+
+    const ht = parseFloat(htInput.value) || 0;
+    const rate = parseFloat(tvaSelect.value) || 0;
+    const tva = Math.round(ht * rate) / 100;
+    const ttc = Math.round((ht + tva) * 100) / 100;
+
+    if (tvaEl) tvaEl.textContent = invFormatCurrency(tva);
+    if (ttcInput) ttcInput.value = ttc || '';
+
+    invSyncVentilTotals();
+}
+
+function invRecalcVentilRowFromTtc(idx) {
+    const htInput = document.querySelector(`[name="line-ht-${idx}"]`);
+    const tvaSelect = document.querySelector(`[name="line-tva-${idx}"]`);
+    const ttcInput = document.querySelector(`[name="line-ttc-${idx}"]`);
+    const tvaEl = document.getElementById(`line-tva-amount-${idx}`);
+    if (!ttcInput || !tvaSelect) return;
+
+    const ttc = parseFloat(ttcInput.value) || 0;
+    const rate = parseFloat(tvaSelect.value) || 0;
+    const ht = rate > 0 ? Math.round(ttc / (1 + rate / 100) * 100) / 100 : ttc;
+    const tva = Math.round((ttc - ht) * 100) / 100;
+
+    if (htInput) htInput.value = ht || '';
+    if (tvaEl) tvaEl.textContent = invFormatCurrency(tva);
+
+    invSyncVentilTotals();
+}
+
+function invSyncVentilTotals() {
+    const rows = document.querySelectorAll('#inv-lines-body .inv-line-row');
+    let totalHt = 0, totalTva = 0, totalTtc = 0;
+
+    rows.forEach((row, i) => {
+        const idx = row.dataset.idx || i;
+        const htInput = row.querySelector(`[name="line-ht-${idx}"]`);
+        const tvaSelect = row.querySelector(`[name="line-tva-${idx}"]`);
+        const ttcInput = row.querySelector(`[name="line-ttc-${idx}"]`);
+        const ht = parseFloat(htInput?.value) || 0;
+        const rate = parseFloat(tvaSelect?.value) || 0;
+        const tva = Math.round(ht * rate) / 100;
+        const ttc = parseFloat(ttcInput?.value) || (ht + tva);
+        totalHt += ht;
+        totalTva += tva;
+        totalTtc += ttc;
+    });
+
+    // Mettre à jour les totaux de la ventilation
+    const vhtEl = document.getElementById('inv-ventil-total-ht');
+    const vtvaEl = document.getElementById('inv-ventil-total-tva');
+    const vttcEl = document.getElementById('inv-ventil-total-ttc');
+    if (vhtEl) vhtEl.textContent = invFormatCurrency(totalHt);
+    if (vtvaEl) vtvaEl.textContent = invFormatCurrency(totalTva);
+    if (vttcEl) vttcEl.innerHTML = `<strong>${invFormatCurrency(totalTtc)}</strong>`;
+
+    // Synchroniser les champs principaux avec les totaux de la ventilation
+    const mainHt = document.getElementById('inv-amount-ht');
+    const mainTva = document.getElementById('inv-amount-tva');
+    const mainTtc = document.getElementById('inv-amount-ttc');
+    if (mainHt) mainHt.value = Math.round(totalHt * 100) / 100 || '';
+    if (mainTva) mainTva.value = Math.round(totalTva * 100) / 100 || '';
+    if (mainTtc) mainTtc.value = Math.round(totalTtc * 100) / 100 || '';
+
+    invCheckAmountsCoherence();
+}
+
+// === RECALCUL MONTANTS PRINCIPAUX ===
+
+function invRecalcFromAmounts() {
+    const mainTvaSelect = document.getElementById('inv-main-tva-rate');
+    const isMulti = mainTvaSelect && mainTvaSelect.value === 'multi';
+
+    // Afficher/masquer la ventilation
+    const ventilSection = document.getElementById('inv-ventilation-section');
+    if (ventilSection) {
+        ventilSection.style.display = isMulti ? 'block' : 'none';
     }
+
+    if (isMulti) {
+        // En mode multi-taux, ne pas toucher les champs principaux — c'est la ventilation qui les pilote
+        return;
+    }
+
+    const htInput = document.getElementById('inv-amount-ht');
+    const tvaInput = document.getElementById('inv-amount-tva');
+    const ttcInput = document.getElementById('inv-amount-ttc');
+    if (!htInput) return;
+
+    const ht = parseFloat(htInput.value) || 0;
+    const rate = parseFloat(mainTvaSelect?.value) || 0;
+    const tva = Math.round(ht * rate) / 100;
+    const ttc = Math.round((ht + tva) * 100) / 100;
+
+    if (tvaInput) tvaInput.value = tva || '';
+    if (ttcInput) ttcInput.value = ttc || '';
+
+    invCheckAmountsCoherence();
+}
+
+function invRecalcFromTva() {
+    // Quand l'utilisateur modifie le montant TVA directement → recalculer TTC
+    const htInput = document.getElementById('inv-amount-ht');
+    const tvaInput = document.getElementById('inv-amount-tva');
+    const ttcInput = document.getElementById('inv-amount-ttc');
+    if (!htInput || !tvaInput || !ttcInput) return;
+
+    const ht = parseFloat(htInput.value) || 0;
+    const tva = parseFloat(tvaInput.value) || 0;
+    const ttc = Math.round((ht + tva) * 100) / 100;
+    ttcInput.value = ttc || '';
+
+    invCheckAmountsCoherence();
+}
+
+function invRecalcFromTtc() {
+    // Quand l'utilisateur modifie le TTC → recalculer HT en gardant le taux TVA
+    const mainTvaSelect = document.getElementById('inv-main-tva-rate');
+    const htInput = document.getElementById('inv-amount-ht');
+    const tvaInput = document.getElementById('inv-amount-tva');
+    const ttcInput = document.getElementById('inv-amount-ttc');
+    if (!htInput || !ttcInput) return;
+
+    const isMulti = mainTvaSelect && mainTvaSelect.value === 'multi';
+    if (isMulti) return; // En multi-taux, pas de recalcul depuis TTC principal
+
+    const ttc = parseFloat(ttcInput.value) || 0;
+    const rate = parseFloat(mainTvaSelect?.value) || 0;
+    const ht = rate > 0 ? Math.round(ttc / (1 + rate / 100) * 100) / 100 : ttc;
+    const tva = Math.round((ttc - ht) * 100) / 100;
+
+    htInput.value = ht || '';
+    if (tvaInput) tvaInput.value = tva || '';
+
+    invCheckAmountsCoherence();
+}
+
+function invCheckAmountsCoherence() {
+    const htInput = document.getElementById('inv-amount-ht');
+    const tvaInput = document.getElementById('inv-amount-tva');
+    const ttcInput = document.getElementById('inv-amount-ttc');
+    const warning = document.getElementById('inv-amounts-warning');
+    const warningText = document.getElementById('inv-amounts-warning-text');
+    if (!warning || !warningText) return;
+
+    const ht = parseFloat(htInput?.value) || 0;
+    const tva = parseFloat(tvaInput?.value) || 0;
+    const ttc = parseFloat(ttcInput?.value) || 0;
+
+    if (ht > 0 && ttc > 0) {
+        const expectedTtc = Math.round((ht + tva) * 100) / 100;
+        if (Math.abs(expectedTtc - ttc) > 0.02) {
+            warningText.textContent = `Incohérence : HT (${invFormatCurrency(ht)}) + TVA (${invFormatCurrency(tva)}) = ${invFormatCurrency(expectedTtc)} ≠ TTC (${invFormatCurrency(ttc)})`;
+            warning.style.display = 'flex';
+            return;
+        }
+    }
+    warning.style.display = 'none';
 }
 
 function invQuickCreateCategory(lineIdx) {
@@ -1390,37 +1612,9 @@ async function invSaveQuickCategory(event, lineIdx) {
     }
 }
 
+// Legacy alias — redirige vers le nouveau système
 function invRecalcTotals() {
-    const rows = document.querySelectorAll('.inv-line-row');
-    let totalHt = 0, totalTva = 0, totalTtc = 0;
-
-    rows.forEach((row, i) => {
-        const idx = row.dataset.idx || i;
-        const htInput = row.querySelector(`[name="line-ht-${idx}"]`);
-        const tvaSelect = row.querySelector(`[name="line-tva-${idx}"]`);
-
-        if (!htInput || !tvaSelect) return;
-        const ht = parseFloat(htInput.value) || 0;
-        const rate = parseFloat(tvaSelect.value) || 0;
-        const tva = Math.round(ht * rate) / 100;
-        const ttc = ht + tva;
-
-        const tvaEl = document.getElementById(`line-tva-amount-${idx}`);
-        const ttcEl = document.getElementById(`line-ttc-${idx}`);
-        if (tvaEl) tvaEl.textContent = invFormatCurrency(tva);
-        if (ttcEl) ttcEl.innerHTML = `<strong>${invFormatCurrency(ttc)}</strong>`;
-
-        totalHt += ht;
-        totalTva += tva;
-        totalTtc += ttc;
-    });
-
-    const htEl = document.getElementById('inv-total-ht');
-    const tvaEl = document.getElementById('inv-total-tva');
-    const ttcEl = document.getElementById('inv-total-ttc');
-    if (htEl) htEl.textContent = invFormatCurrency(totalHt);
-    if (tvaEl) tvaEl.textContent = invFormatCurrency(totalTva);
-    if (ttcEl) ttcEl.innerHTML = `<strong>${invFormatCurrency(totalTtc)}</strong>`;
+    invSyncVentilTotals();
 }
 
 // === SUPPLIER AUTOCOMPLETE ===
@@ -1482,27 +1676,63 @@ function invQuickCreateSupplier(prefillName) {
     const dd = document.getElementById('inv-supplier-dropdown');
     if (dd) dd.style.display = 'none';
 
+    // Récupérer les données OCR du fournisseur si disponibles
+    const ocrSup = invLastOcrResult && invLastOcrResult.ocr_supplier ? invLastOcrResult.ocr_supplier :
+                   (invLastOcrResult && invLastOcrResult.data && invLastOcrResult.data.supplier ? invLastOcrResult.data.supplier : null);
+
+    const name = prefillName || (ocrSup ? ocrSup.name : '') || '';
+    const siret = (ocrSup && ocrSup.siret) || '';
+    const tvaNumber = (ocrSup && ocrSup.tva_number) || '';
+    const address = (ocrSup && ocrSup.address) || '';
+    const email = (ocrSup && ocrSup.contact_email) || '';
+    const phone = (ocrSup && ocrSup.contact_phone) || '';
+    const iban = (ocrSup && ocrSup.iban) || '';
+    const bic = (ocrSup && ocrSup.bic) || '';
+
+    // Déduire le mode de paiement si IBAN présent
+    const paymentMethod = iban ? 'virement_manuel' : 'virement_manuel';
+
+    const hasOcrData = ocrSup && (siret || tvaNumber || address || iban);
+
     openModal('Nouveau fournisseur', `
         <form onsubmit="invSaveQuickSupplier(event)">
+            ${hasOcrData ? `
+                <div style="margin-bottom:var(--space-3);padding:var(--space-2) var(--space-3);background:var(--primary-50, #eff6ff);border:1px solid var(--primary-200, #bfdbfe);border-radius:var(--radius-md);font-size:var(--font-size-sm);display:flex;align-items:center;gap:var(--space-2)">
+                    <i class="fas fa-robot" style="color:var(--brand-secondary)"></i>
+                    <span>Champs pré-remplis depuis la lecture OCR de la facture</span>
+                </div>
+            ` : ''}
             <div class="form-row">
                 <div class="form-group"><label class="form-label required">Raison sociale</label>
-                    <input type="text" id="qsup-name" class="form-control" value="${esc(prefillName || '')}" required></div>
+                    <input type="text" id="qsup-name" class="form-control" value="${esc(name)}" required></div>
                 <div class="form-group"><label class="form-label">SIRET</label>
-                    <input type="text" id="qsup-siret" class="form-control" maxlength="14"></div>
+                    <input type="text" id="qsup-siret" class="form-control" value="${esc(siret)}" maxlength="14"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">N° TVA intracommunautaire</label>
+                    <input type="text" id="qsup-tva" class="form-control" value="${esc(tvaNumber)}" placeholder="FR12345678901"></div>
+                <div class="form-group"><label class="form-label">Adresse</label>
+                    <input type="text" id="qsup-address" class="form-control" value="${esc(address)}" placeholder="Adresse complète"></div>
             </div>
             <div class="form-row">
                 <div class="form-group"><label class="form-label">Email contact</label>
-                    <input type="email" id="qsup-email" class="form-control"></div>
+                    <input type="email" id="qsup-email" class="form-control" value="${esc(email)}"></div>
                 <div class="form-group"><label class="form-label">Téléphone</label>
-                    <input type="text" id="qsup-phone" class="form-control"></div>
+                    <input type="text" id="qsup-phone" class="form-control" value="${esc(phone)}"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">IBAN</label>
+                    <input type="text" id="qsup-iban" class="form-control" value="${esc(iban)}" placeholder="FR76 ..."></div>
+                <div class="form-group"><label class="form-label">BIC/SWIFT</label>
+                    <input type="text" id="qsup-bic" class="form-control" value="${esc(bic)}"></div>
             </div>
             <div class="form-row">
                 <div class="form-group"><label class="form-label">Mode de paiement</label>
                     <select id="qsup-payment" class="form-control">
-                        <option value="virement_manuel">Virement</option>
-                        <option value="cheque">Chèque</option>
-                        <option value="prelevement">Prélèvement</option>
-                        <option value="autre">Autre</option>
+                        <option value="virement_manuel" ${paymentMethod === 'virement_manuel' ? 'selected' : ''}>Virement</option>
+                        <option value="cheque" ${paymentMethod === 'cheque' ? 'selected' : ''}>Chèque</option>
+                        <option value="prelevement" ${paymentMethod === 'prelevement' ? 'selected' : ''}>Prélèvement</option>
+                        <option value="autre" ${paymentMethod === 'autre' ? 'selected' : ''}>Autre</option>
                     </select></div>
                 <div class="form-group"><label class="form-label">Catégorie</label>
                     <select id="qsup-category" class="form-control">
@@ -1523,8 +1753,12 @@ async function invSaveQuickSupplier(event) {
     const data = {
         name: document.getElementById('qsup-name').value,
         siret: document.getElementById('qsup-siret').value || null,
+        tva_number: document.getElementById('qsup-tva').value || null,
+        address_street: document.getElementById('qsup-address').value || null,
         contact_email: document.getElementById('qsup-email').value || null,
         contact_phone: document.getElementById('qsup-phone').value || null,
+        iban: document.getElementById('qsup-iban').value || null,
+        bic: document.getElementById('qsup-bic').value || null,
         payment_method: document.getElementById('qsup-payment').value,
         category_id: document.getElementById('qsup-category').value || null,
         payment_delay_days: 30,
@@ -1598,47 +1832,63 @@ async function invSaveInvoice(targetStatus) {
     const paymentMethod = document.getElementById('inv-payment-method')?.value;
     const notes = document.getElementById('inv-notes')?.value;
 
-    // Collecter les lignes
-    const rows = document.querySelectorAll('.inv-line-row');
+    // Récupérer les montants principaux
+    const mainHtInput = document.getElementById('inv-amount-ht');
+    const mainTvaInput = document.getElementById('inv-amount-tva');
+    const mainTtcInput = document.getElementById('inv-amount-ttc');
+    const mainTvaRate = document.getElementById('inv-main-tva-rate');
+    const isMultiTva = mainTvaRate && mainTvaRate.value === 'multi';
+    const isFormEditable = !!mainHtInput;
+
+    let totalHt = parseFloat(mainHtInput?.value) || 0;
+    let totalTva = parseFloat(mainTvaInput?.value) || 0;
+    let totalTtc = parseFloat(mainTtcInput?.value) || 0;
+
+    // Collecter les lignes de ventilation (uniquement en mode multi-taux)
     const lines = [];
-    let totalHt = 0, totalTva = 0, totalTtc = 0;
+    if (isMultiTva) {
+        const rows = document.querySelectorAll('#inv-lines-body .inv-line-row');
+        rows.forEach((row, i) => {
+            const idx = row.dataset.idx || i;
+            const htInput = row.querySelector(`[name="line-ht-${idx}"]`);
+            const tvaSelect = row.querySelector(`[name="line-tva-${idx}"]`);
+            const ttcInput = row.querySelector(`[name="line-ttc-${idx}"]`);
 
-    rows.forEach((row, i) => {
-        const idx = row.dataset.idx || i;
-        const catSelect = row.querySelector(`[name="line-cat-${idx}"]`);
-        const htInput = row.querySelector(`[name="line-ht-${idx}"]`);
-        const tvaSelect = row.querySelector(`[name="line-tva-${idx}"]`);
-        const descInput = row.querySelector(`[name="line-desc-${idx}"]`);
+            const ht = parseFloat(htInput?.value) || 0;
+            const rate = parseFloat(tvaSelect?.value) || 0;
+            if (ht === 0) return;
 
-        const ht = parseFloat(htInput?.value) || 0;
-        const rate = parseFloat(tvaSelect?.value) || 0;
-        if (ht === 0) return; // Ignorer les lignes vides
+            const tva = Math.round(ht * rate) / 100;
+            const ttc = parseFloat(ttcInput?.value) || (ht + tva);
 
-        const tva = Math.round(ht * rate) / 100;
-        const ttc = ht + tva;
-        totalHt += ht;
-        totalTva += tva;
-        totalTtc += ttc;
-
-        lines.push({
-            category_id: catSelect?.value || null,
-            description: descInput?.value || '',
-            amount_ht: ht,
-            tva_rate: rate,
-            tva_amount: tva,
-            total_ttc: ttc
+            lines.push({
+                amount_ht: ht,
+                tva_rate: rate,
+                tva_amount: tva,
+                total_ttc: Math.round(ttc * 100) / 100
+            });
         });
-    });
+    } else if (isFormEditable) {
+        // Mode taux unique : créer une seule ligne avec le taux principal
+        const singleRate = parseFloat(mainTvaRate?.value) || 0;
+        if (totalHt > 0) {
+            lines.push({
+                amount_ht: totalHt,
+                tva_rate: singleRate,
+                tva_amount: totalTva,
+                total_ttc: totalTtc
+            });
+        }
+    }
 
     // Validation
     if (targetStatus === 'approved') {
         if (!supplierId) { toast('Veuillez sélectionner un fournisseur', 'warning'); return; }
         if (!invoiceDate) { toast('Veuillez renseigner la date de facture', 'warning'); return; }
-        if (lines.length === 0) { toast('Ajoutez au moins une ligne de ventilation', 'warning'); return; }
+        if (totalTtc <= 0) { toast('Veuillez renseigner le montant TTC', 'warning'); return; }
     }
 
     // Si le formulaire n'est pas éditable (ex: passage à payée), envoyer seulement le statut
-    const isFormEditable = rows.length > 0;
     const data = isFormEditable ? {
         supplier_id: supplierId || null,
         invoice_number: invoiceNumber || null,
