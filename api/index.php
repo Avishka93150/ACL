@@ -11860,7 +11860,7 @@ try {
 
             // --- POST /contracts/categories ---
             if ($method === 'POST' && $id === 'categories') {
-                if (!hasPermission($userRole, 'contracts.manage')) json_error('Accès refusé', 403);
+                if (!hasPermission($userRole, 'contracts.manage') && !hasPermission($userRole, 'categories.manage')) json_error('Accès refusé', 403);
                 $data = get_input();
                 if (empty($data['name']) || empty($data['hotel_id'])) json_error('Nom et hôtel requis');
                 $insertId = db()->insert(
@@ -11872,7 +11872,7 @@ try {
 
             // --- PUT /contracts/categories/{catId} ---
             if ($method === 'PUT' && $id === 'categories' && $action && is_numeric($action)) {
-                if (!hasPermission($userRole, 'contracts.manage')) json_error('Accès refusé', 403);
+                if (!hasPermission($userRole, 'contracts.manage') && !hasPermission($userRole, 'categories.manage')) json_error('Accès refusé', 403);
                 $data = get_input();
                 $sets = []; $params = [];
                 if (isset($data['name'])) { $sets[] = 'name = ?'; $params[] = $data['name']; }
@@ -11886,7 +11886,7 @@ try {
 
             // --- DELETE /contracts/categories/{catId} ---
             if ($method === 'DELETE' && $id === 'categories' && $action && is_numeric($action)) {
-                if (!hasPermission($userRole, 'contracts.delete')) json_error('Accès refusé', 403);
+                if (!hasPermission($userRole, 'contracts.delete') && !hasPermission($userRole, 'categories.manage')) json_error('Accès refusé', 403);
                 // Dissocier les contrats de cette catégorie
                 db()->execute("UPDATE contracts SET category_id = NULL WHERE category_id = ?", [(int)$action]);
                 db()->execute("DELETE FROM contract_categories WHERE id = ?", [(int)$action]);
@@ -13398,35 +13398,36 @@ try {
                 // Vérifier les transitions de statut autorisées
                 $validTransitions = [
                     'draft' => ['draft', 'approved', 'paid'],
-                    'rejected' => ['draft', 'approved'],
+                    'rejected' => ['draft', 'approved', 'paid'],
                     'approved' => ['approved', 'paid', 'draft'],
                     'paid' => ['paid', 'approved'],
-                    'pending_review' => ['draft', 'approved'],
-                    'pending_approval' => ['draft', 'approved'],
+                    'pending_review' => ['draft', 'approved', 'paid'],
+                    'pending_approval' => ['draft', 'approved', 'paid'],
                     'pending_payment' => ['approved', 'paid'],
                     'payment_initiated' => ['approved', 'paid'],
                     'cancelled' => ['draft']
                 ];
-                $allowed = $validTransitions[$invoice['status']] ?? ['draft'];
+                $allowed = $validTransitions[$invoice['status']] ?? ['draft', 'approved', 'paid'];
                 if (!in_array($newStatus, $allowed)) json_error('Transition de statut non autorisée');
 
-                // Construire les champs de mise à jour
+                // Construire les champs de mise à jour (seuls les champs envoyés sont mis à jour)
                 $updates = [
-                    'supplier_id' => !empty($data['supplier_id']) ? (int)$data['supplier_id'] : null,
-                    'invoice_number' => $data['invoice_number'] ?? null,
-                    'invoice_date' => $data['invoice_date'] ?? null,
-                    'due_date' => $data['due_date'] ?? null,
-                    'total_ht' => isset($data['total_ht']) ? (float)$data['total_ht'] : null,
-                    'total_tva' => isset($data['total_tva']) ? (float)$data['total_tva'] : null,
-                    'total_ttc' => isset($data['total_ttc']) ? (float)$data['total_ttc'] : null,
-                    'currency' => $data['currency'] ?? 'EUR',
-                    'notes' => $data['notes'] ?? null,
-                    'po_number' => $data['po_number'] ?? null,
-                    'accounting_code' => $data['accounting_code'] ?? null,
-                    'payment_method' => $data['payment_method'] ?? 'virement',
                     'status' => $newStatus,
                     'updated_at' => date('Y-m-d H:i:s')
                 ];
+                if (array_key_exists('supplier_id', $data)) $updates['supplier_id'] = !empty($data['supplier_id']) ? (int)$data['supplier_id'] : null;
+                if (array_key_exists('invoice_number', $data)) $updates['invoice_number'] = $data['invoice_number'];
+                if (array_key_exists('invoice_date', $data)) $updates['invoice_date'] = $data['invoice_date'] ?: null;
+                if (array_key_exists('due_date', $data)) $updates['due_date'] = $data['due_date'] ?: null;
+                if (array_key_exists('total_ht', $data)) $updates['total_ht'] = (float)$data['total_ht'];
+                if (array_key_exists('total_tva', $data)) $updates['total_tva'] = (float)$data['total_tva'];
+                if (array_key_exists('total_ttc', $data)) $updates['total_ttc'] = (float)$data['total_ttc'];
+                if (array_key_exists('currency', $data)) $updates['currency'] = $data['currency'] ?? 'EUR';
+                if (array_key_exists('notes', $data)) $updates['notes'] = $data['notes'];
+                if (array_key_exists('po_number', $data)) $updates['po_number'] = $data['po_number'];
+                if (array_key_exists('accounting_code', $data)) $updates['accounting_code'] = $data['accounting_code'];
+                if (array_key_exists('payment_method', $data)) $updates['payment_method'] = $data['payment_method'] ?? 'virement';
+                if (array_key_exists('payment_reference', $data)) $updates['payment_reference'] = $data['payment_reference'];
 
                 // Ajuster les champs selon le changement de statut
                 if ($newStatus === 'approved' && $invoice['status'] !== 'approved') {
