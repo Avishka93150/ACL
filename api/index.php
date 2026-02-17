@@ -12626,8 +12626,12 @@ try {
                         'paid' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'paid' $hotelFilter"),
                         'rejected' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'rejected' $hotelFilter"),
                         'overdue' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE due_date < CURDATE() AND status NOT IN ('paid','cancelled','rejected') $hotelFilter"),
-                        'total_due' => (float)(db()->queryOne("SELECT COALESCE(SUM(total_ttc), 0) as total FROM supplier_invoices WHERE status IN ('approved','pending_payment') $hotelFilter")['total'] ?? 0),
-                        'total_paid_month' => (float)(db()->queryOne("SELECT COALESCE(SUM(total_ttc), 0) as total FROM supplier_invoices WHERE status = 'paid' AND MONTH(paid_at) = MONTH(CURDATE()) AND YEAR(paid_at) = YEAR(CURDATE()) $hotelFilter")['total'] ?? 0)
+                        'total_all' => (float)(db()->queryOne("SELECT COALESCE(SUM(total_ttc), 0) as t FROM supplier_invoices WHERE 1=1 $hotelFilter")['t'] ?? 0),
+                        'total_draft' => (float)(db()->queryOne("SELECT COALESCE(SUM(total_ttc), 0) as t FROM supplier_invoices WHERE status = 'draft' $hotelFilter")['t'] ?? 0),
+                        'total_due' => (float)(db()->queryOne("SELECT COALESCE(SUM(total_ttc), 0) as t FROM supplier_invoices WHERE status IN ('approved','pending_payment','pending_review','pending_approval') $hotelFilter")['t'] ?? 0),
+                        'total_overdue' => (float)(db()->queryOne("SELECT COALESCE(SUM(total_ttc), 0) as t FROM supplier_invoices WHERE due_date < CURDATE() AND status NOT IN ('paid','cancelled','rejected') $hotelFilter")['t'] ?? 0),
+                        'total_paid' => (float)(db()->queryOne("SELECT COALESCE(SUM(total_ttc), 0) as t FROM supplier_invoices WHERE status = 'paid' $hotelFilter")['t'] ?? 0),
+                        'total_paid_month' => (float)(db()->queryOne("SELECT COALESCE(SUM(total_ttc), 0) as t FROM supplier_invoices WHERE status = 'paid' AND MONTH(paid_at) = MONTH(CURDATE()) AND YEAR(paid_at) = YEAR(CURDATE()) $hotelFilter")['t'] ?? 0)
                     ];
                 } catch (Exception $e) {}
                 json_out(['stats' => $stats]);
@@ -13135,7 +13139,15 @@ try {
                         $where = ["si.hotel_id = ?"];
                         $params = [(int)$_GET['hotel_id']];
                     }
-                    if (!empty($_GET['status'])) { $where[] = "si.status = ?"; $params[] = $_GET['status']; }
+                    if (!empty($_GET['status'])) {
+                        if ($_GET['status'] === 'overdue') {
+                            $where[] = "si.due_date < CURDATE() AND si.status NOT IN ('paid','cancelled','rejected')";
+                        } elseif ($_GET['status'] === 'approved') {
+                            $where[] = "si.status IN ('approved','pending_review','pending_approval','pending_payment','payment_initiated')";
+                        } else {
+                            $where[] = "si.status = ?"; $params[] = $_GET['status'];
+                        }
+                    }
                     if (!empty($_GET['supplier_id'])) { $where[] = "si.supplier_id = ?"; $params[] = (int)$_GET['supplier_id']; }
                     if (!empty($_GET['period_from'])) { $where[] = "si.invoice_date >= ?"; $params[] = $_GET['period_from']; }
                     if (!empty($_GET['period_to'])) { $where[] = "si.invoice_date <= ?"; $params[] = $_GET['period_to']; }
@@ -13916,7 +13928,9 @@ try {
                 $invoice = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [(int)$id]);
                 if (!$invoice) json_error('Facture non trouvée', 404);
                 if (!in_array($invoice['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
-                if ($invoice['status'] !== 'draft') json_error('Seuls les brouillons peuvent être supprimés');
+                if ($invoice['status'] !== 'draft' && $userRole !== 'admin') {
+                    json_error('Seuls les brouillons peuvent être supprimés. Contactez un administrateur.');
+                }
 
                 // Supprimer les lignes, documents, validations
                 db()->execute("DELETE FROM supplier_invoice_lines WHERE invoice_id = ?", [(int)$id]);

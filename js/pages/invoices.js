@@ -201,17 +201,49 @@ async function invRenderFactures(content) {
             <input type="file" id="inv-file-input" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="invHandleFiles(this.files)">
         </div>
 
-        <!-- Filtres -->
+        <!-- Boutons filtres avec stats -->
+        <div id="inv-filter-buttons" style="display:flex;gap:var(--space-3);margin-bottom:var(--space-4);flex-wrap:wrap">
+            <div style="flex:1;min-width:150px;cursor:pointer" onclick="invSetFilter('')">
+                <div class="card" id="inv-filter-all" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--gray-400);transition:all 0.2s">
+                    <div style="font-size:var(--font-size-xs);color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px">Toutes</div>
+                    <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--text-primary)" id="inv-stat-all-count">-</div>
+                    <div style="font-size:var(--font-size-xs);color:var(--text-tertiary)" id="inv-stat-all-total"></div>
+                </div>
+            </div>
+            <div style="flex:1;min-width:150px;cursor:pointer" onclick="invSetFilter('draft')">
+                <div class="card" id="inv-filter-draft" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--gray-500);transition:all 0.2s">
+                    <div style="font-size:var(--font-size-xs);color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px"><i class="fas fa-pencil-alt"></i> Brouillons</div>
+                    <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--text-primary)" id="inv-stat-draft-count">-</div>
+                    <div style="font-size:var(--font-size-xs);color:var(--text-tertiary)" id="inv-stat-draft-total"></div>
+                </div>
+            </div>
+            <div style="flex:1;min-width:150px;cursor:pointer" onclick="invSetFilter('overdue')">
+                <div class="card" id="inv-filter-overdue" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--danger-500, #ef4444);transition:all 0.2s">
+                    <div style="font-size:var(--font-size-xs);color:var(--danger-500, #ef4444);text-transform:uppercase;letter-spacing:0.5px"><i class="fas fa-exclamation-triangle"></i> En retard</div>
+                    <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--danger-500, #ef4444)" id="inv-stat-overdue-count">-</div>
+                    <div style="font-size:var(--font-size-xs);color:var(--text-tertiary)" id="inv-stat-overdue-total"></div>
+                </div>
+            </div>
+            <div style="flex:1;min-width:150px;cursor:pointer" onclick="invSetFilter('approved')">
+                <div class="card" id="inv-filter-approved" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--warning-500, #f59e0b);transition:all 0.2s">
+                    <div style="font-size:var(--font-size-xs);color:var(--warning-500, #f59e0b);text-transform:uppercase;letter-spacing:0.5px"><i class="fas fa-clock"></i> À payer</div>
+                    <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--text-primary)" id="inv-stat-approved-count">-</div>
+                    <div style="font-size:var(--font-size-xs);color:var(--text-tertiary)" id="inv-stat-approved-total"></div>
+                </div>
+            </div>
+            <div style="flex:1;min-width:150px;cursor:pointer" onclick="invSetFilter('paid')">
+                <div class="card" id="inv-filter-paid" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--success-500, #22c55e);transition:all 0.2s">
+                    <div style="font-size:var(--font-size-xs);color:var(--success-500, #22c55e);text-transform:uppercase;letter-spacing:0.5px"><i class="fas fa-check-circle"></i> Payées</div>
+                    <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--text-primary)" id="inv-stat-paid-count">-</div>
+                    <div style="font-size:var(--font-size-xs);color:var(--text-tertiary)" id="inv-stat-paid-total"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Barre de recherche -->
         <div class="card" style="margin-bottom:var(--space-4)">
-            <div style="padding:var(--space-3) var(--space-4);display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap">
-                <select class="form-control" style="max-width:180px" onchange="invListStatus=this.value;invListPage=1;invLoadList()">
-                    <option value="">Tous les statuts</option>
-                    <option value="draft" ${invListStatus === 'draft' ? 'selected' : ''}>Brouillons</option>
-                    <option value="approved" ${invListStatus === 'approved' ? 'selected' : ''}>À payer</option>
-                    <option value="paid" ${invListStatus === 'paid' ? 'selected' : ''}>Payées</option>
-                    <option value="rejected" ${invListStatus === 'rejected' ? 'selected' : ''}>Rejetées</option>
-                </select>
-                <div style="flex:1;min-width:200px">
+            <div style="padding:var(--space-3) var(--space-4);display:flex;gap:var(--space-3);align-items:center">
+                <div style="flex:1">
                     <input type="text" class="form-control" placeholder="Rechercher par fournisseur ou n° facture..."
                            value="${esc(invListSearch)}" oninput="invListSearch=this.value;clearTimeout(invSearchTimer);invSearchTimer=setTimeout(()=>{invListPage=1;invLoadList()},400)">
                 </div>
@@ -240,7 +272,54 @@ async function invRenderFactures(content) {
         </div>
     `;
 
+    invLoadStats();
     await invLoadList();
+}
+
+function invSetFilter(filter) {
+    invListStatus = filter;
+    invListPage = 1;
+    invHighlightActiveFilter();
+    invLoadList();
+}
+
+function invHighlightActiveFilter() {
+    ['all', 'draft', 'overdue', 'approved', 'paid'].forEach(f => {
+        const card = document.getElementById('inv-filter-' + f);
+        if (!card) return;
+        const key = f === 'all' ? '' : f;
+        if (invListStatus === key) {
+            card.style.boxShadow = '0 0 0 2px var(--brand-secondary)';
+            card.style.transform = 'translateY(-2px)';
+        } else {
+            card.style.boxShadow = '';
+            card.style.transform = '';
+        }
+    });
+}
+
+async function invLoadStats() {
+    try {
+        const res = await API.get(`invoices/stats?hotel_id=${invCurrentHotel}`);
+        const s = res.stats || {};
+        const allCount = (s.draft || 0) + (s.approved || 0) + (s.pending_review || 0) + (s.pending_approval || 0) + (s.pending_payment || 0) + (s.payment_initiated || 0) + (s.paid || 0) + (s.rejected || 0);
+        const apayerCount = (s.approved || 0) + (s.pending_review || 0) + (s.pending_approval || 0) + (s.pending_payment || 0) + (s.payment_initiated || 0);
+
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+        set('inv-stat-all-count', allCount);
+        set('inv-stat-all-total', s.total_all ? invFormatCurrency(s.total_all) : '');
+        set('inv-stat-draft-count', s.draft || 0);
+        set('inv-stat-draft-total', s.total_draft ? invFormatCurrency(s.total_draft) : '');
+        set('inv-stat-overdue-count', s.overdue || 0);
+        set('inv-stat-overdue-total', s.total_overdue ? invFormatCurrency(s.total_overdue) : '');
+        set('inv-stat-approved-count', apayerCount);
+        set('inv-stat-approved-total', s.total_due ? invFormatCurrency(s.total_due) : '');
+        set('inv-stat-paid-count', s.paid || 0);
+        set('inv-stat-paid-total', s.total_paid ? invFormatCurrency(s.total_paid) : '');
+
+        invHighlightActiveFilter();
+    } catch (e) {}
 }
 
 async function invLoadList() {
@@ -310,7 +389,7 @@ async function invLoadList() {
                                 <td>${invStatusBadge(inv.status)}</td>
                                 <td onclick="event.stopPropagation()">
                                     <button class="btn btn-sm btn-outline" onclick="invOpenVerify(${inv.id})" title="Voir / Modifier"><i class="fas fa-eye"></i></button>
-                                    ${inv.status === 'draft' ? `<button class="btn btn-sm btn-outline text-danger" onclick="invDeleteInvoice(${inv.id})" title="Supprimer"><i class="fas fa-trash"></i></button>` : ''}
+                                    ${inv.status === 'draft' || (API.user && API.user.role === 'admin') ? `<button class="btn btn-sm btn-outline text-danger" onclick="invDeleteInvoice(${inv.id}, '${inv.status}')" title="Supprimer"><i class="fas fa-trash"></i></button>` : ''}
                                 </td>
                             </tr>`;
                         }).join('')}
@@ -863,8 +942,8 @@ function invRenderVerifyForm(inv, lines, isEditable) {
                     ` : ''}
                 </div>
                 <div>
-                    ${inv.status === 'draft' && hasPermission('invoices.delete') ? `
-                        <button class="btn btn-outline text-danger" onclick="invDeleteInvoice(${inv.id})"><i class="fas fa-trash"></i> Supprimer</button>
+                    ${(inv.status === 'draft' && hasPermission('invoices.delete')) || (API.user && API.user.role === 'admin') ? `
+                        <button class="btn btn-outline text-danger" onclick="invDeleteInvoice(${inv.id}, '${inv.status}')"><i class="fas fa-trash"></i> Supprimer</button>
                     ` : ''}
                 </div>
             </div>
@@ -1281,18 +1360,45 @@ async function invSaveInvoice(targetStatus) {
         const statusLabels = { draft: 'Brouillon enregistré', approved: 'Facture validée — à payer', paid: 'Facture marquée comme payée' };
         toast(statusLabels[targetStatus] || 'Enregistré', 'success');
 
-        // Recharger la vérification pour refléter le nouveau statut
-        invRenderVerify(_invContainer, invCurrentInvoice);
+        // Rafraîchir les stats
+        invLoadStats();
+
+        // Après validation (approved) ou paiement (paid) : passer à la facture suivante
+        if (targetStatus === 'approved' || targetStatus === 'paid') {
+            const nextId = await invFindNextInvoice(invCurrentInvoice);
+            if (nextId) {
+                toast('Facture suivante...', 'info');
+                invCurrentInvoice = nextId;
+                invRenderVerify(_invContainer, nextId);
+            } else {
+                toast('Plus de factures à traiter dans cette sélection', 'info');
+                invBackToList();
+            }
+        } else {
+            invRenderVerify(_invContainer, invCurrentInvoice);
+        }
     } catch (err) {
         toast(err.message || 'Erreur lors de la sauvegarde', 'error');
     }
 }
 
-async function invDeleteInvoice(id) {
-    if (!confirm('Supprimer cette facture ?')) return;
+async function invDeleteInvoice(id, status) {
+    let msg = 'Supprimer cette facture ?';
+    if (status && status !== 'draft') {
+        const label = invStatusLabel(status);
+        msg = `ATTENTION : Cette facture est en statut « ${label} ».\n\nCette action est irréversible. Voulez-vous vraiment la supprimer ?`;
+    }
+    if (!confirm(msg)) return;
+
+    // Double confirmation pour les factures non-brouillon
+    if (status && status !== 'draft') {
+        if (!confirm('Confirmez-vous la suppression définitive de cette facture ?')) return;
+    }
+
     try {
         await API.delete(`invoices/${id}`);
         toast('Facture supprimée', 'success');
+        invLoadStats();
         invBackToList();
     } catch (err) {
         toast(err.message || 'Erreur', 'error');
@@ -1303,6 +1409,32 @@ function invBackToList() {
     invCurrentView = 'list';
     invCurrentInvoice = null;
     invRenderMain(_invContainer);
+}
+
+async function invFindNextInvoice(currentId) {
+    try {
+        // Chercher les factures dans le même filtre, exclure celle qu'on vient de traiter
+        let url = `invoices?hotel_id=${invCurrentHotel}&per_page=50`;
+        if (invListStatus) url += `&status=${invListStatus}`;
+        if (invListSearch) url += `&search=${encodeURIComponent(invListSearch)}`;
+
+        const res = await API.get(url);
+        const invoices = res.invoices || [];
+
+        // Trouver la première facture qui n'est pas celle courante et qui est éditable (draft) ou à valider
+        const editableStatuses = ['draft', 'pending_review', 'pending_approval'];
+        const next = invoices.find(inv => inv.id !== currentId && editableStatuses.includes(inv.status));
+        if (next) return next.id;
+
+        // Sinon chercher n'importe quelle facture non payée après la courante
+        const idx = invoices.findIndex(inv => inv.id === currentId);
+        const remaining = invoices.filter((inv, i) => inv.id !== currentId && inv.status !== 'paid');
+        if (remaining.length > 0) return remaining[0].id;
+
+        return null;
+    } catch (e) {
+        return null;
+    }
 }
 
 // ============================================================
