@@ -13182,8 +13182,14 @@ try {
                 if (!$invoice) json_error('Facture non trouvée', 404);
                 if (!in_array($invoice['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
 
-                // Lignes
-                $lines = db()->query("SELECT * FROM supplier_invoice_lines WHERE invoice_id = ? ORDER BY position", [(int)$id]);
+                // Lignes (avec nom de catégorie)
+                $lines = db()->query(
+                    "SELECT sil.*, cc.name as category_name, cc.color as category_color
+                     FROM supplier_invoice_lines sil
+                     LEFT JOIN contract_categories cc ON sil.category_id = cc.id
+                     WHERE sil.invoice_id = ? ORDER BY sil.position",
+                    [(int)$id]
+                );
                 $invoice['lines'] = $lines;
 
                 // Documents
@@ -13359,7 +13365,19 @@ try {
                 }
 
                 rgpdLog($userId, 'create', 'supplier_invoice', $invoiceId, json_encode(['hotel_id' => $hotelId]));
-                json_out(['success' => true, 'id' => $invoiceId, 'ocr' => $ocrResult], 201);
+
+                // Recharger la facture pour renvoyer les données complètes
+                $createdInvoice = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [$invoiceId]);
+                $lines = db()->query("SELECT * FROM supplier_invoice_lines WHERE invoice_id = ? ORDER BY position", [$invoiceId]);
+
+                json_out([
+                    'success' => true,
+                    'id' => $invoiceId,
+                    'file_url' => 'uploads/invoices/' . $filename,
+                    'invoice' => $createdInvoice,
+                    'lines' => $lines,
+                    'ocr' => $ocrResult
+                ], 201);
             }
 
             // --- PUT /invoices/{id} (modifier brouillon) ---
@@ -13369,62 +13387,109 @@ try {
                 $invoice = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [(int)$id]);
                 if (!$invoice) json_error('Facture non trouvée', 404);
                 if (!in_array($invoice['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
-                if (!in_array($invoice['status'], ['draft', 'rejected'])) json_error('Seuls les brouillons et factures rejetées peuvent être modifiés');
 
                 $data = get_input();
 
-                db()->execute(
-                    "UPDATE supplier_invoices SET supplier_id = ?, invoice_number = ?, invoice_date = ?, due_date = ?,
-                     total_ht = ?, total_tva = ?, total_ttc = ?, currency = ?, notes = ?, tags = ?,
-                     po_number = ?, accounting_code = ?, payment_method = ?, updated_at = ? WHERE id = ?",
-                    [
-                        !empty($data['supplier_id']) ? (int)$data['supplier_id'] : null,
-                        $data['invoice_number'] ?? null,
-                        $data['invoice_date'] ?? null,
-                        $data['due_date'] ?? null,
-                        isset($data['total_ht']) ? (float)$data['total_ht'] : null,
-                        isset($data['total_tva']) ? (float)$data['total_tva'] : null,
-                        isset($data['total_ttc']) ? (float)$data['total_ttc'] : null,
-                        $data['currency'] ?? 'EUR',
-                        $data['notes'] ?? null,
-                        $data['tags'] ?? null,
-                        $data['po_number'] ?? null,
-                        $data['accounting_code'] ?? null,
-                        $data['payment_method'] ?? 'fintecture',
-                        date('Y-m-d H:i:s'),
-                        (int)$id
-                    ]
-                );
+                // Déterminer le nouveau statut
+                $newStatus = $data['status'] ?? $invoice['status'];
+                $allowedStatuses = ['draft', 'approved', 'paid', 'rejected'];
+                if (!in_array($newStatus, $allowedStatuses)) $newStatus = $invoice['status'];
+
+                // Vérifier les transitions de statut autorisées
+                $validTransitions = [
+                    'draft' => ['draft', 'approved', 'paid'],
+                    'rejected' => ['draft', 'approved'],
+                    'approved' => ['approved', 'paid', 'draft'],
+                    'paid' => ['paid', 'approved'],
+                    'pending_review' => ['draft', 'approved'],
+                    'pending_approval' => ['draft', 'approved'],
+                    'pending_payment' => ['approved', 'paid'],
+                    'payment_initiated' => ['approved', 'paid'],
+                    'cancelled' => ['draft']
+                ];
+                $allowed = $validTransitions[$invoice['status']] ?? ['draft'];
+                if (!in_array($newStatus, $allowed)) json_error('Transition de statut non autorisée');
+
+                // Construire les champs de mise à jour
+                $updates = [
+                    'supplier_id' => !empty($data['supplier_id']) ? (int)$data['supplier_id'] : null,
+                    'invoice_number' => $data['invoice_number'] ?? null,
+                    'invoice_date' => $data['invoice_date'] ?? null,
+                    'due_date' => $data['due_date'] ?? null,
+                    'total_ht' => isset($data['total_ht']) ? (float)$data['total_ht'] : null,
+                    'total_tva' => isset($data['total_tva']) ? (float)$data['total_tva'] : null,
+                    'total_ttc' => isset($data['total_ttc']) ? (float)$data['total_ttc'] : null,
+                    'currency' => $data['currency'] ?? 'EUR',
+                    'notes' => $data['notes'] ?? null,
+                    'po_number' => $data['po_number'] ?? null,
+                    'accounting_code' => $data['accounting_code'] ?? null,
+                    'payment_method' => $data['payment_method'] ?? 'virement',
+                    'status' => $newStatus,
+                    'updated_at' => date('Y-m-d H:i:s')
+                ];
+
+                // Ajuster les champs selon le changement de statut
+                if ($newStatus === 'approved' && $invoice['status'] !== 'approved') {
+                    $updates['approved_by'] = $userId;
+                    $updates['approved_at'] = date('Y-m-d H:i:s');
+                }
+                if ($newStatus === 'paid' && $invoice['status'] !== 'paid') {
+                    $updates['paid_by'] = $userId;
+                    $updates['paid_at'] = date('Y-m-d H:i:s');
+                    $updates['payment_reference'] = $data['payment_reference'] ?? null;
+                    if (!hasPermission($userRole, 'invoices.pay')) json_error('Accès refusé pour marquer comme payé', 403);
+                }
+
+                $setClauses = [];
+                $setParams = [];
+                foreach ($updates as $col => $val) {
+                    $setClauses[] = "$col = ?";
+                    $setParams[] = $val;
+                }
+                $setParams[] = (int)$id;
+                db()->execute("UPDATE supplier_invoices SET " . implode(', ', $setClauses) . " WHERE id = ?", $setParams);
 
                 // Mettre à jour les lignes si fournies
-                if (isset($data['lines'])) {
+                if (isset($data['lines']) && is_array($data['lines'])) {
                     db()->execute("DELETE FROM supplier_invoice_lines WHERE invoice_id = ?", [(int)$id]);
                     $pos = 0;
                     foreach ($data['lines'] as $line) {
-                        $unitPrice = (float)($line['unit_price_ht'] ?? 0);
-                        $qty = (float)($line['quantity'] ?? 1);
+                        $lineHt = (float)($line['amount_ht'] ?? $line['total_ht'] ?? 0);
                         $tvaRate = (float)($line['tva_rate'] ?? 20);
-                        $lineHt = (float)($line['total_ht'] ?? $unitPrice * $qty);
-                        $lineTva = $lineHt * $tvaRate / 100;
-                        $lineTtc = $lineHt + $lineTva;
+                        $tvaAmount = round($lineHt * $tvaRate / 100, 2);
+                        $lineTtc = round($lineHt + $tvaAmount, 2);
 
                         db()->insert('supplier_invoice_lines', [
                             'invoice_id' => (int)$id,
+                            'category_id' => !empty($line['category_id']) ? (int)$line['category_id'] : null,
                             'description' => $line['description'] ?? '',
-                            'quantity' => $qty,
-                            'unit_price_ht' => $unitPrice,
+                            'quantity' => 1,
+                            'unit_price_ht' => $lineHt,
                             'tva_rate' => $tvaRate,
-                            'tva_amount' => round($lineTva, 2),
-                            'total_ht' => round($lineHt, 2),
-                            'total_ttc' => round($lineTtc, 2),
+                            'tva_amount' => $tvaAmount,
+                            'total_ht' => $lineHt,
+                            'total_ttc' => $lineTtc,
                             'accounting_code' => $line['accounting_code'] ?? null,
                             'position' => $pos++
                         ]);
                     }
                 }
 
+                // Historique d'approbation si changement de statut
+                if ($newStatus !== $invoice['status']) {
+                    $actionMap = ['approved' => 'approve', 'paid' => 'confirm_payment', 'rejected' => 'reject', 'draft' => 'review'];
+                    $approvalAction = $actionMap[$newStatus] ?? 'review';
+                    db()->insert('invoice_approvals', [
+                        'invoice_id' => (int)$id,
+                        'user_id' => $userId,
+                        'action' => $approvalAction,
+                        'comment' => $data['comment'] ?? null,
+                        'created_at' => date('Y-m-d H:i:s')
+                    ]);
+                }
+
                 rgpdLog($userId, 'update', 'supplier_invoice', (int)$id);
-                json_out(['success' => true]);
+                json_out(['success' => true, 'status' => $newStatus]);
             }
 
             // --- PUT /invoices/{id}/submit ---
