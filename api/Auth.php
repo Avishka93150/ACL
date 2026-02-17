@@ -69,7 +69,14 @@ class Auth {
             }
         }
         
-        if (!preg_match('/Bearer\s+(.+)/i', $header, $matches)) return null;
+        if (!preg_match('/Bearer\s+(.+)/i', $header, $matches)) {
+            // Fallback : token en query string (pour les téléchargements via window.open)
+            if (!empty($_GET['token'])) {
+                $matches = [null, $_GET['token']];
+            } else {
+                return null;
+            }
+        }
         
         $tokenData = self::verifyToken($matches[1]);
         if (!$tokenData) return null;
