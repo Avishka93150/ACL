@@ -12749,7 +12749,8 @@ try {
                 $whereClause = 'WHERE ' . implode(' AND ', $where);
                 $query = "SELECT si.*, s.name as supplier_name, s.siret as supplier_siret,
                                  h.name as hotel_name, cc.name as category_name,
-                                 approved_u.name as approved_by_name, paid_u.name as paid_by_name
+                                 CONCAT(approved_u.first_name, ' ', approved_u.last_name) as approved_by_name,
+                                 CONCAT(paid_u.first_name, ' ', paid_u.last_name) as paid_by_name
                           FROM supplier_invoices si
                           LEFT JOIN suppliers s ON si.supplier_id = s.id
                           LEFT JOIN hotels h ON si.hotel_id = h.id
@@ -12786,7 +12787,8 @@ try {
                 $invoices = db()->query(
                     "SELECT si.*, s.name as supplier_name, s.siret as supplier_siret,
                             h.name as hotel_name, cc.name as category_name,
-                            approved_u.name as approved_by_name, paid_u.name as paid_by_name
+                            CONCAT(approved_u.first_name, ' ', approved_u.last_name) as approved_by_name,
+                            CONCAT(paid_u.first_name, ' ', paid_u.last_name) as paid_by_name
                      FROM supplier_invoices si
                      LEFT JOIN suppliers s ON si.supplier_id = s.id
                      LEFT JOIN hotels h ON si.hotel_id = h.id
@@ -13190,7 +13192,7 @@ try {
 
                 // Historique validations
                 $approvals = db()->query(
-                    "SELECT ia.*, u.name as user_name, u.role as user_role
+                    "SELECT ia.*, CONCAT(u.first_name, ' ', u.last_name) as user_name, u.role as user_role
                      FROM invoice_approvals ia
                      JOIN users u ON ia.user_id = u.id
                      WHERE ia.invoice_id = ?
