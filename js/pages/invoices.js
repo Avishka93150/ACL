@@ -453,7 +453,6 @@ function invRenderVerifyForm(inv, lines, isEditable) {
                     <thead>
                         <tr>
                             <th style="min-width:180px">Catégorie</th>
-                            <th style="min-width:100px">Description</th>
                             <th style="width:120px;text-align:right">Montant HT</th>
                             <th style="width:100px">Taux TVA</th>
                             <th style="width:110px;text-align:right">Montant TVA</th>
@@ -463,11 +462,11 @@ function invRenderVerifyForm(inv, lines, isEditable) {
                     </thead>
                     <tbody id="inv-lines-body">
                         ${lines.length > 0 ? lines.map((l, i) => invBuildLineRow(i, l, isEditable)).join('') :
-                          (isEditable ? invBuildLineRow(0, {}, true) : '<tr><td colspan="7" class="text-center">Aucune ligne</td></tr>')}
+                          (isEditable ? invBuildLineRow(0, {}, true) : '<tr><td colspan="6" class="text-center">Aucune ligne</td></tr>')}
                     </tbody>
                     <tfoot>
                         <tr style="font-weight:var(--font-semibold);background:var(--gray-50)">
-                            <td colspan="${isEditable ? 2 : 2}" style="text-align:right">Totaux</td>
+                            <td style="text-align:right">Totaux</td>
                             <td style="text-align:right" id="inv-total-ht">${invFormatCurrency(inv.total_ht || 0)}</td>
                             <td></td>
                             <td style="text-align:right" id="inv-total-tva">${invFormatCurrency(inv.total_tva || 0)}</td>
@@ -534,7 +533,6 @@ function invBuildLineRow(idx, line, editable) {
     if (!editable) {
         return `<tr>
             <td>${esc(line.category_name || '-')}</td>
-            <td>${esc(line.description || '-')}</td>
             <td style="text-align:right">${invFormatCurrency(ht)}</td>
             <td>${rate}%</td>
             <td style="text-align:right">${invFormatCurrency(tva)}</td>
@@ -549,7 +547,6 @@ function invBuildLineRow(idx, line, editable) {
                 ${invCategories.map(c => `<option value="${c.id}" ${line.category_id == c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
             </select>
         </td>
-        <td><input type="text" class="form-control form-control-sm" name="line-desc-${idx}" value="${esc(line.description || '')}" placeholder="Optionnel"></td>
         <td><input type="number" class="form-control form-control-sm" name="line-ht-${idx}" value="${ht || ''}" step="0.01" min="0" style="text-align:right" oninput="invRecalcTotals()" placeholder="0.00"></td>
         <td>
             <select class="form-control form-control-sm" name="line-tva-${idx}" onchange="invRecalcTotals()">
@@ -627,10 +624,11 @@ function invSupplierAutocomplete(query) {
             const res = await API.get(`suppliers/search?q=${encodeURIComponent(query)}&hotel_id=${invCurrentHotel}`);
             const suppliers = res.suppliers || [];
 
+            let html = '';
             if (suppliers.length === 0) {
-                dropdown.innerHTML = '<div style="padding:var(--space-3);color:var(--text-secondary);font-size:var(--font-size-sm)">Aucun fournisseur trouvé</div>';
+                html = '<div style="padding:var(--space-3);color:var(--text-secondary);font-size:var(--font-size-sm)">Aucun fournisseur trouvé</div>';
             } else {
-                dropdown.innerHTML = suppliers.map(s => `
+                html = suppliers.map(s => `
                     <div style="padding:var(--space-2) var(--space-3);cursor:pointer;border-bottom:1px solid var(--gray-100);font-size:var(--font-size-sm)"
                          onmouseover="this.style.background='var(--gray-50)'"
                          onmouseout="this.style.background=''"
@@ -640,6 +638,20 @@ function invSupplierAutocomplete(query) {
                     </div>
                 `).join('');
             }
+
+            // Bouton "Créer un fournisseur" si permission
+            if (hasPermission('suppliers.manage')) {
+                html += `
+                    <div style="padding:var(--space-2) var(--space-3);cursor:pointer;border-top:2px solid var(--gray-200);font-size:var(--font-size-sm);color:var(--brand-secondary);font-weight:var(--font-semibold)"
+                         onmouseover="this.style.background='var(--primary-50)'"
+                         onmouseout="this.style.background=''"
+                         onclick="invQuickCreateSupplier('${escAttr(query)}')">
+                        <i class="fas fa-plus-circle"></i> Créer « ${esc(query)} »
+                    </div>
+                `;
+            }
+
+            dropdown.innerHTML = html;
             dropdown.style.display = 'block';
         } catch (e) {
             dropdown.style.display = 'none';
@@ -651,6 +663,74 @@ function invSelectSupplier(id, name) {
     document.getElementById('inv-supplier-id').value = id;
     document.getElementById('inv-supplier-search').value = name;
     document.getElementById('inv-supplier-dropdown').style.display = 'none';
+}
+
+function invQuickCreateSupplier(prefillName) {
+    const dd = document.getElementById('inv-supplier-dropdown');
+    if (dd) dd.style.display = 'none';
+
+    openModal('Nouveau fournisseur', `
+        <form onsubmit="invSaveQuickSupplier(event)">
+            <div class="form-row">
+                <div class="form-group"><label class="form-label required">Raison sociale</label>
+                    <input type="text" id="qsup-name" class="form-control" value="${esc(prefillName || '')}" required></div>
+                <div class="form-group"><label class="form-label">SIRET</label>
+                    <input type="text" id="qsup-siret" class="form-control" maxlength="14"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">Email contact</label>
+                    <input type="email" id="qsup-email" class="form-control"></div>
+                <div class="form-group"><label class="form-label">Téléphone</label>
+                    <input type="text" id="qsup-phone" class="form-control"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">Mode de paiement</label>
+                    <select id="qsup-payment" class="form-control">
+                        <option value="virement_manuel">Virement</option>
+                        <option value="cheque">Chèque</option>
+                        <option value="prelevement">Prélèvement</option>
+                        <option value="autre">Autre</option>
+                    </select></div>
+                <div class="form-group"><label class="form-label">Catégorie</label>
+                    <select id="qsup-category" class="form-control">
+                        <option value="">— Aucune —</option>
+                        ${invCategories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+                    </select></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Créer et sélectionner</button>
+            </div>
+        </form>
+    `, 'modal-lg');
+}
+
+async function invSaveQuickSupplier(event) {
+    event.preventDefault();
+    const data = {
+        name: document.getElementById('qsup-name').value,
+        siret: document.getElementById('qsup-siret').value || null,
+        contact_email: document.getElementById('qsup-email').value || null,
+        contact_phone: document.getElementById('qsup-phone').value || null,
+        payment_method: document.getElementById('qsup-payment').value,
+        category_id: document.getElementById('qsup-category').value || null,
+        payment_delay_days: 30,
+        hotel_ids: [invCurrentHotel]
+    };
+
+    try {
+        const res = await API.post('suppliers', data);
+        toast('Fournisseur créé', 'success');
+        closeModal();
+
+        // Auto-sélectionner le fournisseur créé
+        const newId = res.id || res.supplier_id;
+        if (newId) {
+            invSelectSupplier(newId, data.name);
+        }
+    } catch (err) {
+        toast(err.message || 'Erreur lors de la création', 'error');
+    }
 }
 
 // === SAVE ===
@@ -672,7 +752,6 @@ async function invSaveInvoice(targetStatus) {
     rows.forEach((row, i) => {
         const idx = row.dataset.idx || i;
         const catSelect = row.querySelector(`[name="line-cat-${idx}"]`);
-        const descInput = row.querySelector(`[name="line-desc-${idx}"]`);
         const htInput = row.querySelector(`[name="line-ht-${idx}"]`);
         const tvaSelect = row.querySelector(`[name="line-tva-${idx}"]`);
 
@@ -688,7 +767,6 @@ async function invSaveInvoice(targetStatus) {
 
         lines.push({
             category_id: catSelect?.value || null,
-            description: descInput?.value || '',
             amount_ht: ht,
             tva_rate: rate,
             tva_amount: tva,
