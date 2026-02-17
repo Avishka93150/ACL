@@ -2320,16 +2320,14 @@ try {
                 // Tâches récentes
                 try {
                     $recent['tasks'] = db()->query(
-                        "SELECT t.*, b.name as board_name, c.name as column_name,
-                                CONCAT(u.first_name, ' ', u.last_name) as assigned_name
-                         FROM tasks t 
-                         LEFT JOIN task_boards b ON t.board_id = b.id 
+                        "SELECT DISTINCT t.*, b.name as board_name, c.name as column_name
+                         FROM tasks t
+                         INNER JOIN task_assignees ta ON ta.task_id = t.id AND ta.user_id = ?
+                         LEFT JOIN task_boards b ON t.board_id = b.id
                          LEFT JOIN task_columns c ON t.column_id = c.id
-                         LEFT JOIN users u ON t.assigned_to = u.id 
-                         WHERE t.is_completed = 0" .
-                         ($user['role'] !== 'admin' ? " AND (t.assigned_to = ? OR t.created_by = ?)" : "") .
-                        " ORDER BY t.due_date ASC, t.created_at DESC LIMIT 5",
-                        $user['role'] !== 'admin' ? [$user['id'], $user['id']] : []
+                         WHERE t.is_completed = 0
+                         ORDER BY t.due_date ASC, t.created_at DESC LIMIT 5",
+                        [$user['id']]
                     );
                 } catch (Exception $e) { $recent['tasks'] = []; }
                 
