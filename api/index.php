@@ -12310,6 +12310,1587 @@ try {
             json_error('Endpoint contracts non trouvé', 404);
             break;
 
+        // ==================== FOURNISSEURS ====================
+        case 'suppliers':
+            $user = require_auth();
+            $userRole = $user['role'];
+            $userId = $user['id'];
+            $userHotelIds = $user['hotel_ids'] ?? [];
+
+            // --- GET /suppliers/search?q=xxx&hotel_id=X ---
+            if ($method === 'GET' && $id === 'search') {
+                if (!hasPermission($userRole, 'suppliers.manage') && !hasPermission($userRole, 'invoices.create')) json_error('Accès refusé', 403);
+                $q = trim($_GET['q'] ?? '');
+                $hotelId = (int)($_GET['hotel_id'] ?? 0);
+                if (!$hotelId || !in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
+                if (strlen($q) < 2) json_out(['suppliers' => []]);
+
+                $suppliers = db()->query(
+                    "SELECT s.id, s.name, s.siret, s.tva_number, s.contact_email, s.contact_phone,
+                            s.iban, s.bic, s.payment_method, s.payment_delay_days, s.category_id,
+                            s.address_street, s.address_zip, s.address_city, s.address_country
+                     FROM suppliers s
+                     JOIN hotel_suppliers hs ON s.id = hs.supplier_id
+                     WHERE hs.hotel_id = ? AND hs.is_active = 1 AND s.is_active = 1
+                       AND (s.name LIKE ? OR s.siret LIKE ?)
+                     ORDER BY s.name LIMIT 20",
+                    [$hotelId, "%$q%", "%$q%"]
+                );
+                json_out(['suppliers' => $suppliers]);
+            }
+
+            // --- GET /suppliers ---
+            if ($method === 'GET' && !$id) {
+                if (!hasPermission($userRole, 'suppliers.manage')) json_error('Accès refusé', 403);
+                $hotelId = (int)($_GET['hotel_id'] ?? 0);
+                if ($hotelId && !in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
+
+                $where = [];
+                $params = [];
+
+                if ($hotelId) {
+                    $where[] = "hs.hotel_id = ?";
+                    $params[] = $hotelId;
+                } else {
+                    $hotelList = implode(',', array_map('intval', $userHotelIds));
+                    $where[] = "hs.hotel_id IN ($hotelList)";
+                }
+
+                if (isset($_GET['category_id']) && $_GET['category_id'] !== '') {
+                    $where[] = "s.category_id = ?";
+                    $params[] = (int)$_GET['category_id'];
+                }
+                if (isset($_GET['is_active']) && $_GET['is_active'] !== '') {
+                    $where[] = "s.is_active = ?";
+                    $params[] = (int)$_GET['is_active'];
+                }
+                if (!empty($_GET['search'])) {
+                    $where[] = "(s.name LIKE ? OR s.siret LIKE ? OR s.contact_email LIKE ?)";
+                    $search = '%' . trim($_GET['search']) . '%';
+                    $params[] = $search;
+                    $params[] = $search;
+                    $params[] = $search;
+                }
+
+                $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+                $query = "SELECT DISTINCT s.*, cc.name as category_name, cc.color as category_color
+                          FROM suppliers s
+                          JOIN hotel_suppliers hs ON s.id = hs.supplier_id
+                          LEFT JOIN contract_categories cc ON s.category_id = cc.id
+                          $whereClause
+                          ORDER BY s.name";
+
+                $result = paginate($query, $params);
+                json_out(['suppliers' => $result['data'], 'pagination' => $result['pagination']]);
+            }
+
+            // --- GET /suppliers/{id} ---
+            if ($method === 'GET' && $id && is_numeric($id) && !$action) {
+                if (!hasPermission($userRole, 'suppliers.manage')) json_error('Accès refusé', 403);
+                $supplier = db()->queryOne("SELECT s.*, cc.name as category_name, cc.color as category_color FROM suppliers s LEFT JOIN contract_categories cc ON s.category_id = cc.id WHERE s.id = ?", [(int)$id]);
+                if (!$supplier) json_error('Fournisseur non trouvé', 404);
+
+                // Vérifier accès via hotel_suppliers
+                $linked = db()->count("SELECT COUNT(*) FROM hotel_suppliers hs WHERE hs.supplier_id = ? AND hs.hotel_id IN (" . implode(',', array_map('intval', $userHotelIds)) . ")", [(int)$id]);
+                if (!$linked && $userRole !== 'admin') json_error('Accès non autorisé', 403);
+
+                // Charger les hôtels affectés
+                $hotels = db()->query("SELECT hs.hotel_id, hs.is_active, h.name as hotel_name FROM hotel_suppliers hs JOIN hotels h ON hs.hotel_id = h.id WHERE hs.supplier_id = ?", [(int)$id]);
+                $supplier['hotels'] = $hotels;
+
+                json_out(['supplier' => $supplier]);
+            }
+
+            // --- GET /suppliers/{id}/invoices ---
+            if ($method === 'GET' && $id && is_numeric($id) && $action === 'invoices') {
+                if (!hasPermission($userRole, 'invoices.view')) json_error('Accès refusé', 403);
+                $hotelList = implode(',', array_map('intval', $userHotelIds));
+                $query = "SELECT si.*, h.name as hotel_name
+                          FROM supplier_invoices si
+                          JOIN hotels h ON si.hotel_id = h.id
+                          WHERE si.supplier_id = ? AND si.hotel_id IN ($hotelList)
+                          ORDER BY si.invoice_date DESC";
+                $result = paginate($query, [(int)$id]);
+                json_out(['invoices' => $result['data'], 'pagination' => $result['pagination']]);
+            }
+
+            // --- POST /suppliers ---
+            if ($method === 'POST' && !$id) {
+                if (!hasPermission($userRole, 'suppliers.manage')) json_error('Accès refusé', 403);
+                $data = get_input();
+
+                if (empty($data['name'])) json_error('La raison sociale est obligatoire');
+
+                // Vérifier unicité SIRET
+                if (!empty($data['siret'])) {
+                    $existing = db()->queryOne("SELECT id FROM suppliers WHERE siret = ?", [$data['siret']]);
+                    if ($existing) json_error('Un fournisseur avec ce SIRET existe déjà (ID: ' . $existing['id'] . ')');
+                }
+
+                $hotelIds = $data['hotel_ids'] ?? [];
+                if (empty($hotelIds)) json_error('Au moins un hôtel doit être sélectionné');
+
+                // Vérifier droits sur les hôtels
+                foreach ($hotelIds as $hId) {
+                    if (!in_array((int)$hId, $userHotelIds)) json_error('Accès non autorisé à l\'hôtel ' . $hId, 403);
+                }
+
+                $supplierId = db()->insert('suppliers', [
+                    'name' => $data['name'],
+                    'siret' => $data['siret'] ?? null,
+                    'tva_number' => $data['tva_number'] ?? null,
+                    'address_street' => $data['address_street'] ?? null,
+                    'address_zip' => $data['address_zip'] ?? null,
+                    'address_city' => $data['address_city'] ?? null,
+                    'address_country' => $data['address_country'] ?? 'FR',
+                    'contact_name' => $data['contact_name'] ?? null,
+                    'contact_email' => $data['contact_email'] ?? null,
+                    'contact_phone' => $data['contact_phone'] ?? null,
+                    'iban' => $data['iban'] ?? null,
+                    'bic' => $data['bic'] ?? null,
+                    'payment_method' => $data['payment_method'] ?? 'virement_manuel',
+                    'payment_delay_days' => (int)($data['payment_delay_days'] ?? 30),
+                    'category_id' => !empty($data['category_id']) ? (int)$data['category_id'] : null,
+                    'notes' => $data['notes'] ?? null,
+                    'is_active' => 1,
+                    'created_by' => $userId,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]);
+
+                // Affecter aux hôtels
+                foreach ($hotelIds as $hId) {
+                    db()->insert('hotel_suppliers', [
+                        'hotel_id' => (int)$hId,
+                        'supplier_id' => $supplierId,
+                        'is_active' => 1,
+                        'created_at' => date('Y-m-d H:i:s')
+                    ]);
+                }
+
+                rgpdLog($userId, 'create', 'supplier', $supplierId, json_encode(['name' => $data['name']]));
+                json_out(['success' => true, 'id' => $supplierId], 201);
+            }
+
+            // --- PUT /suppliers/{id} ---
+            if ($method === 'PUT' && $id && is_numeric($id) && !$action) {
+                if (!hasPermission($userRole, 'suppliers.manage')) json_error('Accès refusé', 403);
+
+                $supplier = db()->queryOne("SELECT * FROM suppliers WHERE id = ?", [(int)$id]);
+                if (!$supplier) json_error('Fournisseur non trouvé', 404);
+
+                $linked = db()->count("SELECT COUNT(*) FROM hotel_suppliers WHERE supplier_id = ? AND hotel_id IN (" . implode(',', array_map('intval', $userHotelIds)) . ")", [(int)$id]);
+                if (!$linked && $userRole !== 'admin') json_error('Accès non autorisé', 403);
+
+                $data = get_input();
+                if (empty($data['name'])) json_error('La raison sociale est obligatoire');
+
+                // Vérifier unicité SIRET (hors soi-même)
+                if (!empty($data['siret'])) {
+                    $existing = db()->queryOne("SELECT id FROM suppliers WHERE siret = ? AND id != ?", [$data['siret'], (int)$id]);
+                    if ($existing) json_error('Un autre fournisseur avec ce SIRET existe déjà');
+                }
+
+                $sets = [
+                    'name = ?', 'siret = ?', 'tva_number = ?',
+                    'address_street = ?', 'address_zip = ?', 'address_city = ?', 'address_country = ?',
+                    'contact_name = ?', 'contact_email = ?', 'contact_phone = ?',
+                    'payment_method = ?', 'payment_delay_days = ?',
+                    'category_id = ?', 'notes = ?', 'updated_at = ?'
+                ];
+                $params = [
+                    $data['name'],
+                    $data['siret'] ?? null, $data['tva_number'] ?? null,
+                    $data['address_street'] ?? null, $data['address_zip'] ?? null,
+                    $data['address_city'] ?? null, $data['address_country'] ?? 'FR',
+                    $data['contact_name'] ?? null, $data['contact_email'] ?? null, $data['contact_phone'] ?? null,
+                    $data['payment_method'] ?? 'virement_manuel',
+                    (int)($data['payment_delay_days'] ?? 30),
+                    !empty($data['category_id']) ? (int)$data['category_id'] : null,
+                    $data['notes'] ?? null,
+                    date('Y-m-d H:i:s')
+                ];
+
+                // IBAN/BIC : ne mettre à jour que si fourni
+                if (isset($data['iban'])) {
+                    $sets[] = 'iban = ?';
+                    $params[] = $data['iban'];
+                }
+                if (isset($data['bic'])) {
+                    $sets[] = 'bic = ?';
+                    $params[] = $data['bic'];
+                }
+
+                $params[] = (int)$id;
+                db()->execute("UPDATE suppliers SET " . implode(', ', $sets) . " WHERE id = ?", $params);
+
+                rgpdLog($userId, 'update', 'supplier', (int)$id, json_encode(['name' => $data['name']]));
+                json_out(['success' => true]);
+            }
+
+            // --- PUT /suppliers/{id}/hotels ---
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'hotels') {
+                if (!hasPermission($userRole, 'suppliers.manage')) json_error('Accès refusé', 403);
+                if (!in_array($userRole, ['admin', 'groupe_manager'])) json_error('Réservé aux managers groupe et admins', 403);
+
+                $supplier = db()->queryOne("SELECT id FROM suppliers WHERE id = ?", [(int)$id]);
+                if (!$supplier) json_error('Fournisseur non trouvé', 404);
+
+                $data = get_input();
+                $hotelIds = $data['hotel_ids'] ?? [];
+
+                foreach ($hotelIds as $hId) {
+                    if (!in_array((int)$hId, $userHotelIds)) json_error('Accès non autorisé à l\'hôtel ' . $hId, 403);
+                }
+
+                // Désactiver les anciennes liaisons pour les hôtels de l'utilisateur
+                $hotelList = implode(',', array_map('intval', $userHotelIds));
+                db()->execute("UPDATE hotel_suppliers SET is_active = 0 WHERE supplier_id = ? AND hotel_id IN ($hotelList)", [(int)$id]);
+
+                // Activer/créer les nouvelles
+                foreach ($hotelIds as $hId) {
+                    $existing = db()->queryOne("SELECT id FROM hotel_suppliers WHERE supplier_id = ? AND hotel_id = ?", [(int)$id, (int)$hId]);
+                    if ($existing) {
+                        db()->execute("UPDATE hotel_suppliers SET is_active = 1 WHERE id = ?", [$existing['id']]);
+                    } else {
+                        db()->insert('hotel_suppliers', [
+                            'hotel_id' => (int)$hId,
+                            'supplier_id' => (int)$id,
+                            'is_active' => 1,
+                            'created_at' => date('Y-m-d H:i:s')
+                        ]);
+                    }
+                }
+
+                rgpdLog($userId, 'update', 'supplier_hotels', (int)$id, json_encode(['hotel_ids' => $hotelIds]));
+                json_out(['success' => true]);
+            }
+
+            // --- DELETE /suppliers/{id} ---
+            if ($method === 'DELETE' && $id && is_numeric($id)) {
+                if (!hasPermission($userRole, 'suppliers.manage')) json_error('Accès refusé', 403);
+
+                $supplier = db()->queryOne("SELECT id, name FROM suppliers WHERE id = ?", [(int)$id]);
+                if (!$supplier) json_error('Fournisseur non trouvé', 404);
+
+                $linked = db()->count("SELECT COUNT(*) FROM hotel_suppliers WHERE supplier_id = ? AND hotel_id IN (" . implode(',', array_map('intval', $userHotelIds)) . ")", [(int)$id]);
+                if (!$linked && $userRole !== 'admin') json_error('Accès non autorisé', 403);
+
+                // Soft delete : désactiver au lieu de supprimer
+                db()->execute("UPDATE suppliers SET is_active = 0, updated_at = ? WHERE id = ?", [date('Y-m-d H:i:s'), (int)$id]);
+                db()->execute("UPDATE hotel_suppliers SET is_active = 0 WHERE supplier_id = ? AND hotel_id IN (" . implode(',', array_map('intval', $userHotelIds)) . ")", [(int)$id]);
+
+                rgpdLog($userId, 'deactivate', 'supplier', (int)$id, json_encode(['name' => $supplier['name']]));
+                json_out(['success' => true]);
+            }
+
+            json_error('Endpoint suppliers non trouvé', 404);
+            break;
+
+        // ==================== FACTURES FOURNISSEURS ====================
+        case 'invoices':
+            require_once __DIR__ . '/OcrClient.php';
+            require_once __DIR__ . '/FintectureClient.php';
+
+            $user = require_auth();
+            $userRole = $user['role'];
+            $userId = $user['id'];
+            $userHotelIds = $user['hotel_ids'] ?? [];
+            $hotelList = implode(',', array_map('intval', $userHotelIds));
+
+            // --- GET /invoices/stats ---
+            if ($method === 'GET' && $id === 'stats') {
+                if (!hasPermission($userRole, 'invoices.view')) json_error('Accès refusé', 403);
+                $hotelId = (int)($_GET['hotel_id'] ?? 0);
+                $hotelFilter = $hotelId && in_array($hotelId, $userHotelIds) ? "AND hotel_id = $hotelId" : "AND hotel_id IN ($hotelList)";
+
+                $stats = [
+                    'draft' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'draft' $hotelFilter"),
+                    'pending_review' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'pending_review' $hotelFilter"),
+                    'pending_approval' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'pending_approval' $hotelFilter"),
+                    'approved' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'approved' $hotelFilter"),
+                    'pending_payment' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'pending_payment' $hotelFilter"),
+                    'payment_initiated' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'payment_initiated' $hotelFilter"),
+                    'paid' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'paid' $hotelFilter"),
+                    'rejected' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'rejected' $hotelFilter"),
+                    'overdue' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE due_date < CURDATE() AND status NOT IN ('paid','cancelled','rejected') $hotelFilter"),
+                    'total_due' => (float)(db()->queryOne("SELECT COALESCE(SUM(total_ttc), 0) as total FROM supplier_invoices WHERE status IN ('approved','pending_payment') $hotelFilter")['total'] ?? 0),
+                    'total_paid_month' => (float)(db()->queryOne("SELECT COALESCE(SUM(total_ttc), 0) as total FROM supplier_invoices WHERE status = 'paid' AND MONTH(paid_at) = MONTH(CURDATE()) AND YEAR(paid_at) = YEAR(CURDATE()) $hotelFilter")['total'] ?? 0)
+                ];
+                json_out(['stats' => $stats]);
+            }
+
+            // --- GET /invoices/reporting ---
+            if ($method === 'GET' && $id === 'reporting') {
+                if (!hasPermission($userRole, 'invoices.view')) json_error('Accès refusé', 403);
+                $hotelId = (int)($_GET['hotel_id'] ?? 0);
+                $year = (int)($_GET['year'] ?? date('Y'));
+                $hotelFilter = $hotelId && in_array($hotelId, $userHotelIds) ? "AND si.hotel_id = $hotelId" : "AND si.hotel_id IN ($hotelList)";
+
+                $data = db()->query(
+                    "SELECT cc.id as category_id, cc.name as category_name, cc.color,
+                            MONTH(si.invoice_date) as month,
+                            SUM(si.total_ttc) as total
+                     FROM supplier_invoices si
+                     LEFT JOIN suppliers s ON si.supplier_id = s.id
+                     LEFT JOIN contract_categories cc ON s.category_id = cc.id
+                     WHERE YEAR(si.invoice_date) = ? AND si.status IN ('approved','pending_payment','payment_initiated','paid')
+                       $hotelFilter
+                     GROUP BY cc.id, cc.name, cc.color, MONTH(si.invoice_date)
+                     ORDER BY cc.name, month",
+                    [$year]
+                );
+
+                // Données année précédente pour comparaison
+                $prevYear = db()->query(
+                    "SELECT cc.id as category_id,
+                            MONTH(si.invoice_date) as month,
+                            SUM(si.total_ttc) as total
+                     FROM supplier_invoices si
+                     LEFT JOIN suppliers s ON si.supplier_id = s.id
+                     LEFT JOIN contract_categories cc ON s.category_id = cc.id
+                     WHERE YEAR(si.invoice_date) = ? AND si.status IN ('approved','pending_payment','payment_initiated','paid')
+                       $hotelFilter
+                     GROUP BY cc.id, MONTH(si.invoice_date)",
+                    [$year - 1]
+                );
+
+                json_out(['reporting' => $data, 'previous_year' => $prevYear, 'year' => $year]);
+            }
+
+            // --- GET /invoices/reporting/export ---
+            if ($method === 'GET' && $id === 'reporting' && $action === 'export') {
+                if (!hasPermission($userRole, 'invoices.export')) json_error('Accès refusé', 403);
+                $hotelId = (int)($_GET['hotel_id'] ?? 0);
+                $year = (int)($_GET['year'] ?? date('Y'));
+                $hotelFilter = $hotelId && in_array($hotelId, $userHotelIds) ? "AND si.hotel_id = $hotelId" : "AND si.hotel_id IN ($hotelList)";
+
+                $data = db()->query(
+                    "SELECT COALESCE(cc.name, 'Non catégorisé') as category_name,
+                            MONTH(si.invoice_date) as month,
+                            SUM(si.total_ttc) as total
+                     FROM supplier_invoices si
+                     LEFT JOIN suppliers s ON si.supplier_id = s.id
+                     LEFT JOIN contract_categories cc ON s.category_id = cc.id
+                     WHERE YEAR(si.invoice_date) = ? AND si.status IN ('approved','pending_payment','payment_initiated','paid')
+                       $hotelFilter
+                     GROUP BY cc.name, MONTH(si.invoice_date)
+                     ORDER BY cc.name, month",
+                    [$year]
+                );
+
+                // Construire CSV
+                $months = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+                $csv = "\xEF\xBB\xBF"; // BOM UTF-8
+                $csv .= "Catégorie;" . implode(';', $months) . ";Total\n";
+
+                $categories = [];
+                foreach ($data as $row) {
+                    $cat = $row['category_name'];
+                    if (!isset($categories[$cat])) $categories[$cat] = array_fill(1, 12, 0);
+                    $categories[$cat][(int)$row['month']] = (float)$row['total'];
+                }
+
+                foreach ($categories as $cat => $monthData) {
+                    $total = array_sum($monthData);
+                    $csv .= $cat . ';';
+                    for ($m = 1; $m <= 12; $m++) {
+                        $csv .= number_format($monthData[$m], 2, ',', ' ') . ';';
+                    }
+                    $csv .= number_format($total, 2, ',', ' ') . "\n";
+                }
+
+                header('Content-Type: text/csv; charset=utf-8');
+                header('Content-Disposition: attachment; filename="reporting_depenses_' . $year . '.csv"');
+                echo $csv;
+                exit;
+            }
+
+            // --- GET /invoices/extract ---
+            if ($method === 'GET' && $id === 'extract' && !$action) {
+                if (!hasPermission($userRole, 'invoices.export')) json_error('Accès refusé', 403);
+
+                $where = ["si.hotel_id IN ($hotelList)"];
+                $params = [];
+
+                // Filtres par dates
+                if (!empty($_GET['invoice_date_from'])) { $where[] = "si.invoice_date >= ?"; $params[] = $_GET['invoice_date_from']; }
+                if (!empty($_GET['invoice_date_to'])) { $where[] = "si.invoice_date <= ?"; $params[] = $_GET['invoice_date_to']; }
+                if (!empty($_GET['created_from'])) { $where[] = "si.created_at >= ?"; $params[] = $_GET['created_from'] . ' 00:00:00'; }
+                if (!empty($_GET['created_to'])) { $where[] = "si.created_at <= ?"; $params[] = $_GET['created_to'] . ' 23:59:59'; }
+                if (!empty($_GET['paid_from'])) { $where[] = "si.paid_at >= ?"; $params[] = $_GET['paid_from'] . ' 00:00:00'; }
+                if (!empty($_GET['paid_to'])) { $where[] = "si.paid_at <= ?"; $params[] = $_GET['paid_to'] . ' 23:59:59'; }
+                if (!empty($_GET['due_date_from'])) { $where[] = "si.due_date >= ?"; $params[] = $_GET['due_date_from']; }
+                if (!empty($_GET['due_date_to'])) { $where[] = "si.due_date <= ?"; $params[] = $_GET['due_date_to']; }
+
+                if (!empty($_GET['status'])) { $where[] = "si.status = ?"; $params[] = $_GET['status']; }
+                if (!empty($_GET['supplier_id'])) { $where[] = "si.supplier_id = ?"; $params[] = (int)$_GET['supplier_id']; }
+                if (!empty($_GET['hotel_id']) && in_array((int)$_GET['hotel_id'], $userHotelIds)) {
+                    $where[] = "si.hotel_id = ?"; $params[] = (int)$_GET['hotel_id'];
+                }
+                if (!empty($_GET['category_id'])) { $where[] = "s.category_id = ?"; $params[] = (int)$_GET['category_id']; }
+
+                $whereClause = 'WHERE ' . implode(' AND ', $where);
+                $query = "SELECT si.*, s.name as supplier_name, s.siret as supplier_siret,
+                                 h.name as hotel_name, cc.name as category_name,
+                                 approved_u.name as approved_by_name, paid_u.name as paid_by_name
+                          FROM supplier_invoices si
+                          LEFT JOIN suppliers s ON si.supplier_id = s.id
+                          LEFT JOIN hotels h ON si.hotel_id = h.id
+                          LEFT JOIN contract_categories cc ON s.category_id = cc.id
+                          LEFT JOIN users approved_u ON si.approved_by = approved_u.id
+                          LEFT JOIN users paid_u ON si.paid_by = paid_u.id
+                          $whereClause
+                          ORDER BY si.invoice_date DESC";
+                $result = paginate($query, $params);
+                json_out(['invoices' => $result['data'], 'pagination' => $result['pagination']]);
+            }
+
+            // --- GET /invoices/extract/csv ---
+            if ($method === 'GET' && $id === 'extract' && $action === 'csv') {
+                if (!hasPermission($userRole, 'invoices.export')) json_error('Accès refusé', 403);
+
+                $where = ["si.hotel_id IN ($hotelList)"];
+                $params = [];
+                if (!empty($_GET['invoice_date_from'])) { $where[] = "si.invoice_date >= ?"; $params[] = $_GET['invoice_date_from']; }
+                if (!empty($_GET['invoice_date_to'])) { $where[] = "si.invoice_date <= ?"; $params[] = $_GET['invoice_date_to']; }
+                if (!empty($_GET['created_from'])) { $where[] = "si.created_at >= ?"; $params[] = $_GET['created_from'] . ' 00:00:00'; }
+                if (!empty($_GET['created_to'])) { $where[] = "si.created_at <= ?"; $params[] = $_GET['created_to'] . ' 23:59:59'; }
+                if (!empty($_GET['paid_from'])) { $where[] = "si.paid_at >= ?"; $params[] = $_GET['paid_from'] . ' 00:00:00'; }
+                if (!empty($_GET['paid_to'])) { $where[] = "si.paid_at <= ?"; $params[] = $_GET['paid_to'] . ' 23:59:59'; }
+                if (!empty($_GET['due_date_from'])) { $where[] = "si.due_date >= ?"; $params[] = $_GET['due_date_from']; }
+                if (!empty($_GET['due_date_to'])) { $where[] = "si.due_date <= ?"; $params[] = $_GET['due_date_to']; }
+                if (!empty($_GET['status'])) { $where[] = "si.status = ?"; $params[] = $_GET['status']; }
+                if (!empty($_GET['supplier_id'])) { $where[] = "si.supplier_id = ?"; $params[] = (int)$_GET['supplier_id']; }
+                if (!empty($_GET['hotel_id']) && in_array((int)$_GET['hotel_id'], $userHotelIds)) {
+                    $where[] = "si.hotel_id = ?"; $params[] = (int)$_GET['hotel_id'];
+                }
+
+                $whereClause = 'WHERE ' . implode(' AND ', $where);
+                $invoices = db()->query(
+                    "SELECT si.*, s.name as supplier_name, s.siret as supplier_siret,
+                            h.name as hotel_name, cc.name as category_name,
+                            approved_u.name as approved_by_name, paid_u.name as paid_by_name
+                     FROM supplier_invoices si
+                     LEFT JOIN suppliers s ON si.supplier_id = s.id
+                     LEFT JOIN hotels h ON si.hotel_id = h.id
+                     LEFT JOIN contract_categories cc ON s.category_id = cc.id
+                     LEFT JOIN users approved_u ON si.approved_by = approved_u.id
+                     LEFT JOIN users paid_u ON si.paid_by = paid_u.id
+                     $whereClause
+                     ORDER BY si.invoice_date DESC",
+                    $params
+                );
+
+                $csv = "\xEF\xBB\xBF"; // BOM UTF-8
+                $csv .= "N° Facture;Fournisseur;SIRET;Catégorie;Hôtel;Date facture;Date échéance;HT;TVA;TTC;Statut;Code comptable;N° BC;Validé par;Réf paiement;Date paiement;Payé par\n";
+                foreach ($invoices as $inv) {
+                    $csv .= implode(';', [
+                        $inv['invoice_number'] ?? '',
+                        $inv['supplier_name'] ?? '',
+                        $inv['supplier_siret'] ?? '',
+                        $inv['category_name'] ?? '',
+                        $inv['hotel_name'] ?? '',
+                        $inv['invoice_date'] ?? '',
+                        $inv['due_date'] ?? '',
+                        number_format((float)($inv['total_ht'] ?? 0), 2, ',', ''),
+                        number_format((float)($inv['total_tva'] ?? 0), 2, ',', ''),
+                        number_format((float)($inv['total_ttc'] ?? 0), 2, ',', ''),
+                        $inv['status'] ?? '',
+                        $inv['accounting_code'] ?? '',
+                        $inv['po_number'] ?? '',
+                        $inv['approved_by_name'] ?? '',
+                        $inv['payment_reference'] ?? '',
+                        $inv['paid_at'] ?? '',
+                        $inv['paid_by_name'] ?? ''
+                    ]) . "\n";
+                }
+
+                header('Content-Type: text/csv; charset=utf-8');
+                header('Content-Disposition: attachment; filename="extraction_factures_' . date('Y-m-d') . '.csv"');
+                echo $csv;
+                exit;
+            }
+
+            // --- GET /invoices/extract/pdf ---
+            if ($method === 'GET' && $id === 'extract' && $action === 'pdf') {
+                if (!hasPermission($userRole, 'invoices.export')) json_error('Accès refusé', 403);
+
+                $where = ["si.hotel_id IN ($hotelList)"];
+                $params = [];
+                if (!empty($_GET['invoice_date_from'])) { $where[] = "si.invoice_date >= ?"; $params[] = $_GET['invoice_date_from']; }
+                if (!empty($_GET['invoice_date_to'])) { $where[] = "si.invoice_date <= ?"; $params[] = $_GET['invoice_date_to']; }
+                if (!empty($_GET['created_from'])) { $where[] = "si.created_at >= ?"; $params[] = $_GET['created_from'] . ' 00:00:00'; }
+                if (!empty($_GET['created_to'])) { $where[] = "si.created_at <= ?"; $params[] = $_GET['created_to'] . ' 23:59:59'; }
+                if (!empty($_GET['paid_from'])) { $where[] = "si.paid_at >= ?"; $params[] = $_GET['paid_from'] . ' 00:00:00'; }
+                if (!empty($_GET['paid_to'])) { $where[] = "si.paid_at <= ?"; $params[] = $_GET['paid_to'] . ' 23:59:59'; }
+                if (!empty($_GET['due_date_from'])) { $where[] = "si.due_date >= ?"; $params[] = $_GET['due_date_from']; }
+                if (!empty($_GET['due_date_to'])) { $where[] = "si.due_date <= ?"; $params[] = $_GET['due_date_to']; }
+                if (!empty($_GET['status'])) { $where[] = "si.status = ?"; $params[] = $_GET['status']; }
+                if (!empty($_GET['supplier_id'])) { $where[] = "si.supplier_id = ?"; $params[] = (int)$_GET['supplier_id']; }
+                if (!empty($_GET['hotel_id']) && in_array((int)$_GET['hotel_id'], $userHotelIds)) {
+                    $where[] = "si.hotel_id = ?"; $params[] = (int)$_GET['hotel_id'];
+                }
+
+                $whereClause = 'WHERE ' . implode(' AND ', $where);
+                $invoices = db()->query(
+                    "SELECT si.*, s.name as supplier_name, h.name as hotel_name
+                     FROM supplier_invoices si
+                     LEFT JOIN suppliers s ON si.supplier_id = s.id
+                     LEFT JOIN hotels h ON si.hotel_id = h.id
+                     $whereClause
+                     ORDER BY si.invoice_date DESC",
+                    $params
+                );
+
+                $totalHt = $totalTva = $totalTtc = 0;
+                foreach ($invoices as $inv) {
+                    $totalHt += (float)($inv['total_ht'] ?? 0);
+                    $totalTva += (float)($inv['total_tva'] ?? 0);
+                    $totalTtc += (float)($inv['total_ttc'] ?? 0);
+                }
+
+                // Retourner les données pour génération PDF côté client (jsPDF)
+                json_out([
+                    'invoices' => $invoices,
+                    'totals' => ['ht' => $totalHt, 'tva' => $totalTva, 'ttc' => $totalTtc],
+                    'period' => [
+                        'from' => $_GET['invoice_date_from'] ?? $_GET['created_from'] ?? '',
+                        'to' => $_GET['invoice_date_to'] ?? $_GET['created_to'] ?? ''
+                    ],
+                    'generated_at' => date('Y-m-d H:i:s')
+                ]);
+            }
+
+            // --- GET /invoices/export ---
+            if ($method === 'GET' && $id === 'export') {
+                if (!hasPermission($userRole, 'invoices.export')) json_error('Accès refusé', 403);
+                $hotelId = (int)($_GET['hotel_id'] ?? 0);
+                $hotelFilter = $hotelId && in_array($hotelId, $userHotelIds) ? "AND si.hotel_id = $hotelId" : "AND si.hotel_id IN ($hotelList)";
+
+                $invoices = db()->query(
+                    "SELECT si.*, s.name as supplier_name, h.name as hotel_name
+                     FROM supplier_invoices si
+                     LEFT JOIN suppliers s ON si.supplier_id = s.id
+                     LEFT JOIN hotels h ON si.hotel_id = h.id
+                     WHERE 1=1 $hotelFilter
+                     ORDER BY si.invoice_date DESC"
+                );
+
+                $csv = "\xEF\xBB\xBF";
+                $csv .= "N° Facture;Fournisseur;Hôtel;Date;Échéance;HT;TVA;TTC;Statut\n";
+                foreach ($invoices as $inv) {
+                    $csv .= implode(';', [
+                        $inv['invoice_number'] ?? '', $inv['supplier_name'] ?? '', $inv['hotel_name'] ?? '',
+                        $inv['invoice_date'] ?? '', $inv['due_date'] ?? '',
+                        number_format((float)($inv['total_ht'] ?? 0), 2, ',', ''),
+                        number_format((float)($inv['total_tva'] ?? 0), 2, ',', ''),
+                        number_format((float)($inv['total_ttc'] ?? 0), 2, ',', ''),
+                        $inv['status'] ?? ''
+                    ]) . "\n";
+                }
+                header('Content-Type: text/csv; charset=utf-8');
+                header('Content-Disposition: attachment; filename="factures_' . date('Y-m-d') . '.csv"');
+                echo $csv;
+                exit;
+            }
+
+            // --- GET /invoices/approval-rules ---
+            if ($method === 'GET' && $id === 'approval-rules' && !$action) {
+                if (!hasPermission($userRole, 'invoices.configure')) json_error('Accès refusé', 403);
+                $hotelId = (int)($_GET['hotel_id'] ?? 0);
+                if (!$hotelId || !in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
+
+                $rules = db()->query(
+                    "SELECT iar.*, cc.name as category_name FROM invoice_approval_rules iar
+                     LEFT JOIN contract_categories cc ON iar.supplier_category_id = cc.id
+                     WHERE iar.hotel_id = ? ORDER BY iar.sort_order, iar.min_amount",
+                    [$hotelId]
+                );
+                json_out(['rules' => $rules]);
+            }
+
+            // --- POST /invoices/approval-rules ---
+            if ($method === 'POST' && $id === 'approval-rules' && !$action) {
+                if (!hasPermission($userRole, 'invoices.configure')) json_error('Accès refusé', 403);
+                $data = get_input();
+                $hotelId = (int)($data['hotel_id'] ?? 0);
+                if (!$hotelId || !in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
+
+                $ruleId = db()->insert('invoice_approval_rules', [
+                    'hotel_id' => $hotelId,
+                    'name' => $data['name'] ?? 'Règle',
+                    'min_amount' => (float)($data['min_amount'] ?? 0),
+                    'max_amount' => isset($data['max_amount']) && $data['max_amount'] !== '' ? (float)$data['max_amount'] : null,
+                    'required_role' => $data['required_role'] ?? 'hotel_manager',
+                    'requires_double_approval' => !empty($data['requires_double_approval']) ? 1 : 0,
+                    'second_approver_role' => $data['second_approver_role'] ?? null,
+                    'supplier_category_id' => !empty($data['supplier_category_id']) ? (int)$data['supplier_category_id'] : null,
+                    'is_active' => 1,
+                    'sort_order' => (int)($data['sort_order'] ?? 0),
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]);
+                json_out(['success' => true, 'id' => $ruleId], 201);
+            }
+
+            // --- PUT /invoices/approval-rules/{ruleId} ---
+            if ($method === 'PUT' && $id === 'approval-rules' && $action && is_numeric($action)) {
+                if (!hasPermission($userRole, 'invoices.configure')) json_error('Accès refusé', 403);
+                $ruleId = (int)$action;
+                $rule = db()->queryOne("SELECT * FROM invoice_approval_rules WHERE id = ?", [$ruleId]);
+                if (!$rule) json_error('Règle non trouvée', 404);
+                if (!in_array($rule['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $data = get_input();
+                db()->execute(
+                    "UPDATE invoice_approval_rules SET name = ?, min_amount = ?, max_amount = ?, required_role = ?,
+                     requires_double_approval = ?, second_approver_role = ?, supplier_category_id = ?,
+                     is_active = ?, sort_order = ?, updated_at = ? WHERE id = ?",
+                    [
+                        $data['name'] ?? $rule['name'],
+                        (float)($data['min_amount'] ?? $rule['min_amount']),
+                        isset($data['max_amount']) && $data['max_amount'] !== '' ? (float)$data['max_amount'] : null,
+                        $data['required_role'] ?? $rule['required_role'],
+                        !empty($data['requires_double_approval']) ? 1 : 0,
+                        $data['second_approver_role'] ?? null,
+                        !empty($data['supplier_category_id']) ? (int)$data['supplier_category_id'] : null,
+                        isset($data['is_active']) ? (int)$data['is_active'] : 1,
+                        (int)($data['sort_order'] ?? $rule['sort_order']),
+                        date('Y-m-d H:i:s'),
+                        $ruleId
+                    ]
+                );
+                json_out(['success' => true]);
+            }
+
+            // --- DELETE /invoices/approval-rules/{ruleId} ---
+            if ($method === 'DELETE' && $id === 'approval-rules' && $action && is_numeric($action)) {
+                if (!hasPermission($userRole, 'invoices.configure')) json_error('Accès refusé', 403);
+                $ruleId = (int)$action;
+                $rule = db()->queryOne("SELECT * FROM invoice_approval_rules WHERE id = ?", [$ruleId]);
+                if (!$rule) json_error('Règle non trouvée', 404);
+                if (!in_array($rule['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                db()->execute("DELETE FROM invoice_approval_rules WHERE id = ?", [$ruleId]);
+                json_out(['success' => true]);
+            }
+
+            // --- POST /invoices/approval-rules/replicate ---
+            if ($method === 'POST' && $id === 'approval-rules' && $action === 'replicate') {
+                if (!hasPermission($userRole, 'invoices.configure')) json_error('Accès refusé', 403);
+                if (!in_array($userRole, ['admin', 'groupe_manager'])) json_error('Réservé aux admins et managers groupe', 403);
+
+                $data = get_input();
+                $sourceHotelId = (int)($data['source_hotel_id'] ?? 0);
+                $targetHotelIds = $data['target_hotel_ids'] ?? [];
+
+                if (!$sourceHotelId || !in_array($sourceHotelId, $userHotelIds)) json_error('Hôtel source non autorisé', 403);
+                if (empty($targetHotelIds)) json_error('Aucun hôtel cible sélectionné');
+
+                $sourceRules = db()->query("SELECT * FROM invoice_approval_rules WHERE hotel_id = ? AND is_active = 1", [$sourceHotelId]);
+                if (empty($sourceRules)) json_error('Aucune règle à répliquer pour cet hôtel');
+
+                $replicated = 0;
+                foreach ($targetHotelIds as $targetId) {
+                    $targetId = (int)$targetId;
+                    if (!in_array($targetId, $userHotelIds)) continue;
+                    if ($targetId === $sourceHotelId) continue;
+
+                    // Supprimer les règles existantes
+                    db()->execute("DELETE FROM invoice_approval_rules WHERE hotel_id = ?", [$targetId]);
+
+                    // Copier les règles source
+                    foreach ($sourceRules as $rule) {
+                        db()->insert('invoice_approval_rules', [
+                            'hotel_id' => $targetId,
+                            'name' => $rule['name'],
+                            'min_amount' => $rule['min_amount'],
+                            'max_amount' => $rule['max_amount'],
+                            'required_role' => $rule['required_role'],
+                            'requires_double_approval' => $rule['requires_double_approval'],
+                            'second_approver_role' => $rule['second_approver_role'],
+                            'supplier_category_id' => $rule['supplier_category_id'],
+                            'is_active' => 1,
+                            'sort_order' => $rule['sort_order'],
+                            'created_at' => date('Y-m-d H:i:s'),
+                            'updated_at' => date('Y-m-d H:i:s')
+                        ]);
+                    }
+                    $replicated++;
+                }
+
+                json_out(['success' => true, 'replicated_count' => $replicated]);
+            }
+
+            // --- GET /invoices/fintecture-config ---
+            if ($method === 'GET' && $id === 'fintecture-config') {
+                if (!hasPermission($userRole, 'invoices.configure')) json_error('Accès refusé', 403);
+                $hotelId = (int)($_GET['hotel_id'] ?? 0);
+                if (!$hotelId || !in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
+
+                $config = db()->queryOne(
+                    "SELECT id, hotel_id, app_id, IF(app_secret IS NOT NULL AND app_secret != '', 1, 0) as has_secret,
+                            private_key_path, environment, IF(webhook_secret IS NOT NULL AND webhook_secret != '', 1, 0) as has_webhook_secret,
+                            is_active, created_at, updated_at
+                     FROM fintecture_config WHERE hotel_id = ?",
+                    [$hotelId]
+                );
+                json_out(['config' => $config ?: ['hotel_id' => $hotelId, 'is_active' => 0, 'environment' => 'sandbox']]);
+            }
+
+            // --- PUT /invoices/fintecture-config ---
+            if ($method === 'PUT' && $id === 'fintecture-config') {
+                if (!hasPermission($userRole, 'invoices.configure')) json_error('Accès refusé', 403);
+                $data = get_input();
+                $hotelId = (int)($data['hotel_id'] ?? 0);
+                if (!$hotelId || !in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
+
+                $existing = db()->queryOne("SELECT id FROM fintecture_config WHERE hotel_id = ?", [$hotelId]);
+
+                if ($existing) {
+                    $sets = ['environment = ?', 'is_active = ?', 'updated_at = ?'];
+                    $params = [$data['environment'] ?? 'sandbox', !empty($data['is_active']) ? 1 : 0, date('Y-m-d H:i:s')];
+
+                    if (!empty($data['app_id'])) { $sets[] = 'app_id = ?'; $params[] = $data['app_id']; }
+                    if (!empty($data['app_secret'])) { $sets[] = 'app_secret = ?'; $params[] = $data['app_secret']; }
+                    if (isset($data['private_key_path'])) { $sets[] = 'private_key_path = ?'; $params[] = $data['private_key_path']; }
+                    if (!empty($data['webhook_secret'])) { $sets[] = 'webhook_secret = ?'; $params[] = $data['webhook_secret']; }
+
+                    $params[] = $hotelId;
+                    db()->execute("UPDATE fintecture_config SET " . implode(', ', $sets) . " WHERE hotel_id = ?", $params);
+                } else {
+                    db()->insert('fintecture_config', [
+                        'hotel_id' => $hotelId,
+                        'app_id' => $data['app_id'] ?? null,
+                        'app_secret' => $data['app_secret'] ?? null,
+                        'private_key_path' => $data['private_key_path'] ?? null,
+                        'environment' => $data['environment'] ?? 'sandbox',
+                        'webhook_secret' => $data['webhook_secret'] ?? null,
+                        'is_active' => !empty($data['is_active']) ? 1 : 0,
+                        'created_at' => date('Y-m-d H:i:s'),
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ]);
+                }
+
+                // Tester la connexion si demandé
+                if (!empty($data['test_connection'])) {
+                    $client = FintectureClient::fromHotelConfig($hotelId);
+                    $testResult = $client ? $client->testConnection() : ['success' => false, 'error' => 'Configuration incomplète'];
+                    json_out(['success' => true, 'test' => $testResult]);
+                }
+
+                json_out(['success' => true]);
+            }
+
+            // --- GET /invoices/ocr-status ---
+            if ($method === 'GET' && $id === 'ocr-status') {
+                if (!hasPermission($userRole, 'invoices.configure')) json_error('Accès refusé', 403);
+                $prereqs = OcrClient::checkPrerequisites();
+                // Récupérer la config IA depuis hotel_contracts_config (sera migré vers ai_config)
+                $aiConfigs = db()->query("SELECT hotel_id, ai_enabled FROM hotel_contracts_config WHERE hotel_id IN ($hotelList)");
+                json_out(['prerequisites' => $prereqs, 'ai_configs' => $aiConfigs]);
+            }
+
+            // --- GET /invoices (liste) ---
+            if ($method === 'GET' && !$id) {
+                if (!hasPermission($userRole, 'invoices.view')) json_error('Accès refusé', 403);
+
+                $where = ["si.hotel_id IN ($hotelList)"];
+                $params = [];
+
+                if (!empty($_GET['hotel_id']) && in_array((int)$_GET['hotel_id'], $userHotelIds)) {
+                    $where = ["si.hotel_id = ?"];
+                    $params = [(int)$_GET['hotel_id']];
+                }
+                if (!empty($_GET['status'])) { $where[] = "si.status = ?"; $params[] = $_GET['status']; }
+                if (!empty($_GET['supplier_id'])) { $where[] = "si.supplier_id = ?"; $params[] = (int)$_GET['supplier_id']; }
+                if (!empty($_GET['period_from'])) { $where[] = "si.invoice_date >= ?"; $params[] = $_GET['period_from']; }
+                if (!empty($_GET['period_to'])) { $where[] = "si.invoice_date <= ?"; $params[] = $_GET['period_to']; }
+                if (!empty($_GET['search'])) {
+                    $where[] = "(si.invoice_number LIKE ? OR s.name LIKE ?)";
+                    $search = '%' . trim($_GET['search']) . '%';
+                    $params[] = $search;
+                    $params[] = $search;
+                }
+
+                $whereClause = 'WHERE ' . implode(' AND ', $where);
+                $query = "SELECT si.*, s.name as supplier_name, h.name as hotel_name,
+                                 cc.name as category_name, cc.color as category_color
+                          FROM supplier_invoices si
+                          LEFT JOIN suppliers s ON si.supplier_id = s.id
+                          LEFT JOIN hotels h ON si.hotel_id = h.id
+                          LEFT JOIN contract_categories cc ON s.category_id = cc.id
+                          $whereClause
+                          ORDER BY si.created_at DESC";
+
+                $result = paginate($query, $params);
+                json_out(['invoices' => $result['data'], 'pagination' => $result['pagination']]);
+            }
+
+            // --- GET /invoices/{id} (détail) ---
+            if ($method === 'GET' && $id && is_numeric($id) && !$action) {
+                if (!hasPermission($userRole, 'invoices.view')) json_error('Accès refusé', 403);
+
+                $invoice = db()->queryOne(
+                    "SELECT si.*, s.name as supplier_name, s.siret as supplier_siret,
+                            s.iban as supplier_iban, s.bic as supplier_bic,
+                            s.payment_method as supplier_payment_method,
+                            h.name as hotel_name, cc.name as category_name, cc.color as category_color
+                     FROM supplier_invoices si
+                     LEFT JOIN suppliers s ON si.supplier_id = s.id
+                     LEFT JOIN hotels h ON si.hotel_id = h.id
+                     LEFT JOIN contract_categories cc ON s.category_id = cc.id
+                     WHERE si.id = ?",
+                    [(int)$id]
+                );
+                if (!$invoice) json_error('Facture non trouvée', 404);
+                if (!in_array($invoice['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                // Lignes
+                $lines = db()->query("SELECT * FROM supplier_invoice_lines WHERE invoice_id = ? ORDER BY position", [(int)$id]);
+                $invoice['lines'] = $lines;
+
+                // Documents
+                $docs = db()->query("SELECT * FROM invoice_documents WHERE invoice_id = ? ORDER BY uploaded_at DESC", [(int)$id]);
+                $invoice['documents'] = $docs;
+
+                // Historique validations
+                $approvals = db()->query(
+                    "SELECT ia.*, u.name as user_name, u.role as user_role
+                     FROM invoice_approvals ia
+                     JOIN users u ON ia.user_id = u.id
+                     WHERE ia.invoice_id = ?
+                     ORDER BY ia.created_at DESC",
+                    [(int)$id]
+                );
+                $invoice['approvals'] = $approvals;
+
+                // Paiements
+                $payments = db()->query("SELECT * FROM invoice_payments WHERE invoice_id = ? ORDER BY initiated_at DESC", [(int)$id]);
+                $invoice['payments'] = $payments;
+
+                json_out(['invoice' => $invoice]);
+            }
+
+            // --- POST /invoices (upload + OCR + création brouillon) ---
+            if ($method === 'POST' && !$id) {
+                if (!hasPermission($userRole, 'invoices.create')) json_error('Accès refusé', 403);
+
+                $hotelId = (int)($_POST['hotel_id'] ?? 0);
+                if (!$hotelId || !in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
+
+                // Upload du fichier
+                if (!isset($_FILES['file'])) json_error('Aucun fichier fourni');
+                $uploadError = validateUpload($_FILES['file'], 'any');
+                if ($uploadError) json_error($uploadError);
+
+                $ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
+                $filename = uniqid('inv_') . '.' . $ext;
+                $uploadDir = __DIR__ . '/../uploads/invoices/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0775, true);
+                $filePath = $uploadDir . $filename;
+
+                if (!move_uploaded_file($_FILES['file']['tmp_name'], $filePath)) {
+                    json_error('Erreur lors de l\'upload du fichier');
+                }
+
+                // Créer le brouillon
+                $supplierId = !empty($_POST['supplier_id']) ? (int)$_POST['supplier_id'] : null;
+                $invoiceId = db()->insert('supplier_invoices', [
+                    'hotel_id' => $hotelId,
+                    'supplier_id' => $supplierId,
+                    'original_file' => 'uploads/invoices/' . $filename,
+                    'ocr_status' => 'pending',
+                    'status' => 'draft',
+                    'created_by' => $userId,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]);
+
+                // Ajouter le document
+                db()->insert('invoice_documents', [
+                    'invoice_id' => $invoiceId,
+                    'file_url' => 'uploads/invoices/' . $filename,
+                    'file_name' => $_FILES['file']['name'],
+                    'file_type' => $ext,
+                    'document_type' => 'invoice',
+                    'uploaded_by' => $userId,
+                    'uploaded_at' => date('Y-m-d H:i:s')
+                ]);
+
+                // OCR si pas de skip
+                $skipOcr = !empty($_POST['skip_ocr']);
+                $ocrResult = null;
+
+                if (!$skipOcr) {
+                    db()->execute("UPDATE supplier_invoices SET ocr_status = 'processing' WHERE id = ?", [$invoiceId]);
+
+                    // Récupérer la clé API IA
+                    $aiConfig = db()->queryOne("SELECT * FROM hotel_contracts_config WHERE hotel_id = ? AND ai_enabled = 1", [$hotelId]);
+                    $apiKey = $aiConfig['anthropic_api_key'] ?? null;
+
+                    $ocrResult = OcrClient::processInvoice($filePath, $apiKey);
+
+                    if ($ocrResult['success'] && $ocrResult['data']) {
+                        $ocrData = $ocrResult['data'];
+
+                        // Mettre à jour la facture avec les données OCR
+                        $updates = [
+                            'ocr_status' => 'completed',
+                            'ocr_raw_data' => json_encode($ocrResult),
+                            'ocr_confidence' => $ocrResult['confidence'],
+                            'ocr_processed_at' => date('Y-m-d H:i:s'),
+                            'updated_at' => date('Y-m-d H:i:s')
+                        ];
+
+                        if (isset($ocrData['invoice'])) {
+                            $inv = $ocrData['invoice'];
+                            if (!empty($inv['invoice_number'])) $updates['invoice_number'] = $inv['invoice_number'];
+                            if (!empty($inv['invoice_date'])) $updates['invoice_date'] = $inv['invoice_date'];
+                            if (!empty($inv['due_date'])) $updates['due_date'] = $inv['due_date'];
+                            if (isset($inv['total_ht'])) $updates['total_ht'] = (float)$inv['total_ht'];
+                            if (isset($inv['total_tva'])) $updates['total_tva'] = (float)$inv['total_tva'];
+                            if (isset($inv['total_ttc'])) $updates['total_ttc'] = (float)$inv['total_ttc'];
+                            if (!empty($inv['currency'])) $updates['currency'] = $inv['currency'];
+                            if (!empty($inv['po_number'])) $updates['po_number'] = $inv['po_number'];
+                        }
+
+                        // Auto-match fournisseur par SIRET/nom
+                        if (!$supplierId && isset($ocrData['supplier'])) {
+                            $ocrSupplier = $ocrData['supplier'];
+                            $matchedSupplier = null;
+
+                            if (!empty($ocrSupplier['siret'])) {
+                                $matchedSupplier = db()->queryOne(
+                                    "SELECT s.id FROM suppliers s JOIN hotel_suppliers hs ON s.id = hs.supplier_id WHERE s.siret = ? AND hs.hotel_id = ? AND hs.is_active = 1",
+                                    [$ocrSupplier['siret'], $hotelId]
+                                );
+                            }
+                            if (!$matchedSupplier && !empty($ocrSupplier['name'])) {
+                                $matchedSupplier = db()->queryOne(
+                                    "SELECT s.id FROM suppliers s JOIN hotel_suppliers hs ON s.id = hs.supplier_id WHERE s.name LIKE ? AND hs.hotel_id = ? AND hs.is_active = 1",
+                                    ['%' . $ocrSupplier['name'] . '%', $hotelId]
+                                );
+                            }
+
+                            if ($matchedSupplier) {
+                                $updates['supplier_id'] = $matchedSupplier['id'];
+                            }
+                        }
+
+                        // Construire la requête UPDATE
+                        $setClauses = [];
+                        $setParams = [];
+                        foreach ($updates as $col => $val) {
+                            $setClauses[] = "$col = ?";
+                            $setParams[] = $val;
+                        }
+                        $setParams[] = $invoiceId;
+                        db()->execute("UPDATE supplier_invoices SET " . implode(', ', $setClauses) . " WHERE id = ?", $setParams);
+
+                        // Créer les lignes de facture
+                        if (!empty($ocrData['line_items'])) {
+                            $pos = 0;
+                            foreach ($ocrData['line_items'] as $line) {
+                                $unitPrice = (float)($line['unit_price_ht'] ?? 0);
+                                $qty = (float)($line['quantity'] ?? 1);
+                                $tvaRate = (float)($line['tva_rate'] ?? 20);
+                                $lineHt = (float)($line['total_ht'] ?? $unitPrice * $qty);
+                                $lineTva = $lineHt * $tvaRate / 100;
+                                $lineTtc = $lineHt + $lineTva;
+
+                                db()->insert('supplier_invoice_lines', [
+                                    'invoice_id' => $invoiceId,
+                                    'description' => $line['description'] ?? '',
+                                    'quantity' => $qty,
+                                    'unit_price_ht' => $unitPrice,
+                                    'tva_rate' => $tvaRate,
+                                    'tva_amount' => round($lineTva, 2),
+                                    'total_ht' => round($lineHt, 2),
+                                    'total_ttc' => round($lineTtc, 2),
+                                    'position' => $pos++
+                                ]);
+                            }
+                        }
+                    } else {
+                        // OCR échoué ou pas de clé API
+                        $ocrStatus = $apiKey ? 'failed' : 'skipped';
+                        db()->execute(
+                            "UPDATE supplier_invoices SET ocr_status = ?, ocr_raw_data = ?, ocr_processed_at = ?, updated_at = ? WHERE id = ?",
+                            [$ocrStatus, json_encode($ocrResult), date('Y-m-d H:i:s'), date('Y-m-d H:i:s'), $invoiceId]
+                        );
+                    }
+                }
+
+                rgpdLog($userId, 'create', 'supplier_invoice', $invoiceId, json_encode(['hotel_id' => $hotelId]));
+                json_out(['success' => true, 'id' => $invoiceId, 'ocr' => $ocrResult], 201);
+            }
+
+            // --- PUT /invoices/{id} (modifier brouillon) ---
+            if ($method === 'PUT' && $id && is_numeric($id) && !$action) {
+                if (!hasPermission($userRole, 'invoices.edit')) json_error('Accès refusé', 403);
+
+                $invoice = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [(int)$id]);
+                if (!$invoice) json_error('Facture non trouvée', 404);
+                if (!in_array($invoice['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                if (!in_array($invoice['status'], ['draft', 'rejected'])) json_error('Seuls les brouillons et factures rejetées peuvent être modifiés');
+
+                $data = get_input();
+
+                db()->execute(
+                    "UPDATE supplier_invoices SET supplier_id = ?, invoice_number = ?, invoice_date = ?, due_date = ?,
+                     total_ht = ?, total_tva = ?, total_ttc = ?, currency = ?, notes = ?, tags = ?,
+                     po_number = ?, accounting_code = ?, payment_method = ?, updated_at = ? WHERE id = ?",
+                    [
+                        !empty($data['supplier_id']) ? (int)$data['supplier_id'] : null,
+                        $data['invoice_number'] ?? null,
+                        $data['invoice_date'] ?? null,
+                        $data['due_date'] ?? null,
+                        isset($data['total_ht']) ? (float)$data['total_ht'] : null,
+                        isset($data['total_tva']) ? (float)$data['total_tva'] : null,
+                        isset($data['total_ttc']) ? (float)$data['total_ttc'] : null,
+                        $data['currency'] ?? 'EUR',
+                        $data['notes'] ?? null,
+                        $data['tags'] ?? null,
+                        $data['po_number'] ?? null,
+                        $data['accounting_code'] ?? null,
+                        $data['payment_method'] ?? 'fintecture',
+                        date('Y-m-d H:i:s'),
+                        (int)$id
+                    ]
+                );
+
+                // Mettre à jour les lignes si fournies
+                if (isset($data['lines'])) {
+                    db()->execute("DELETE FROM supplier_invoice_lines WHERE invoice_id = ?", [(int)$id]);
+                    $pos = 0;
+                    foreach ($data['lines'] as $line) {
+                        $unitPrice = (float)($line['unit_price_ht'] ?? 0);
+                        $qty = (float)($line['quantity'] ?? 1);
+                        $tvaRate = (float)($line['tva_rate'] ?? 20);
+                        $lineHt = (float)($line['total_ht'] ?? $unitPrice * $qty);
+                        $lineTva = $lineHt * $tvaRate / 100;
+                        $lineTtc = $lineHt + $lineTva;
+
+                        db()->insert('supplier_invoice_lines', [
+                            'invoice_id' => (int)$id,
+                            'description' => $line['description'] ?? '',
+                            'quantity' => $qty,
+                            'unit_price_ht' => $unitPrice,
+                            'tva_rate' => $tvaRate,
+                            'tva_amount' => round($lineTva, 2),
+                            'total_ht' => round($lineHt, 2),
+                            'total_ttc' => round($lineTtc, 2),
+                            'accounting_code' => $line['accounting_code'] ?? null,
+                            'position' => $pos++
+                        ]);
+                    }
+                }
+
+                rgpdLog($userId, 'update', 'supplier_invoice', (int)$id);
+                json_out(['success' => true]);
+            }
+
+            // --- PUT /invoices/{id}/submit ---
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'submit') {
+                if (!hasPermission($userRole, 'invoices.create')) json_error('Accès refusé', 403);
+
+                $invoice = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [(int)$id]);
+                if (!$invoice) json_error('Facture non trouvée', 404);
+                if (!in_array($invoice['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                if ($invoice['status'] !== 'draft') json_error('Seuls les brouillons peuvent être soumis');
+
+                // Validations
+                if (empty($invoice['supplier_id'])) json_error('Le fournisseur est obligatoire');
+                if (empty($invoice['invoice_number'])) json_error('Le numéro de facture est obligatoire');
+                if (empty($invoice['total_ttc'])) json_error('Le montant TTC est obligatoire');
+
+                db()->execute(
+                    "UPDATE supplier_invoices SET status = 'pending_review', submitted_by = ?, submitted_at = ?, updated_at = ? WHERE id = ?",
+                    [$userId, date('Y-m-d H:i:s'), date('Y-m-d H:i:s'), (int)$id]
+                );
+
+                db()->insert("INSERT INTO invoice_approvals (invoice_id, user_id, action, created_at) VALUES (?, ?, 'submit', NOW())",
+                    [(int)$id, $userId]);
+
+                // Notification aux vérificateurs
+                $reviewers = db()->query(
+                    "SELECT u.id FROM users u JOIN user_hotels uh ON u.id = uh.user_id
+                     WHERE uh.hotel_id = ? AND u.role IN ('admin','groupe_manager','hotel_manager','comptabilite') AND u.id != ?",
+                    [$invoice['hotel_id'], $userId]
+                );
+                foreach ($reviewers as $reviewer) {
+                    createNotification($reviewer['id'], 'info', 'Nouvelle facture à vérifier',
+                        'Facture ' . ($invoice['invoice_number'] ?? '#' . $id) . ' soumise pour vérification');
+                }
+
+                rgpdLog($userId, 'submit', 'supplier_invoice', (int)$id);
+                json_out(['success' => true]);
+            }
+
+            // --- PUT /invoices/{id}/review ---
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'review') {
+                if (!hasPermission($userRole, 'invoices.review')) json_error('Accès refusé', 403);
+
+                $invoice = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [(int)$id]);
+                if (!$invoice) json_error('Facture non trouvée', 404);
+                if (!in_array($invoice['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                if ($invoice['status'] !== 'pending_review') json_error('Cette facture n\'est pas en attente de vérification');
+
+                $data = get_input();
+
+                db()->execute(
+                    "UPDATE supplier_invoices SET status = 'pending_approval', reviewed_by = ?, reviewed_at = ?, updated_at = ? WHERE id = ?",
+                    [$userId, date('Y-m-d H:i:s'), date('Y-m-d H:i:s'), (int)$id]
+                );
+
+                $comment = $data['comment'] ?? null;
+                db()->insert("INSERT INTO invoice_approvals (invoice_id, user_id, action, comment, created_at) VALUES (?, ?, 'review', ?, NOW())",
+                    [(int)$id, $userId, $comment]);
+
+                // Notification aux approbateurs
+                $approvers = db()->query(
+                    "SELECT u.id FROM users u JOIN user_hotels uh ON u.id = uh.user_id
+                     WHERE uh.hotel_id = ? AND u.role IN ('admin','groupe_manager','hotel_manager') AND u.id != ?",
+                    [$invoice['hotel_id'], $userId]
+                );
+                foreach ($approvers as $approver) {
+                    createNotification($approver['id'], 'info', 'Facture à approuver',
+                        'Facture ' . ($invoice['invoice_number'] ?? '#' . $id) . ' vérifiée, en attente d\'approbation');
+                }
+
+                rgpdLog($userId, 'review', 'supplier_invoice', (int)$id);
+                json_out(['success' => true]);
+            }
+
+            // --- PUT /invoices/{id}/approve ---
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'approve') {
+                if (!hasPermission($userRole, 'invoices.approve')) json_error('Accès refusé', 403);
+
+                $invoice = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [(int)$id]);
+                if (!$invoice) json_error('Facture non trouvée', 404);
+                if (!in_array($invoice['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                if ($invoice['status'] !== 'pending_approval') json_error('Cette facture n\'est pas en attente d\'approbation');
+
+                $data = get_input();
+                $totalTtc = (float)$invoice['total_ttc'];
+
+                // Charger les règles d'approbation de l'hôtel
+                $rules = db()->query(
+                    "SELECT * FROM invoice_approval_rules WHERE hotel_id = ? AND is_active = 1 ORDER BY sort_order, min_amount",
+                    [$invoice['hotel_id']]
+                );
+
+                // Trouver la règle applicable
+                $applicableRule = null;
+                $supplierCategoryId = null;
+                if ($invoice['supplier_id']) {
+                    $supplier = db()->queryOne("SELECT category_id FROM suppliers WHERE id = ?", [$invoice['supplier_id']]);
+                    $supplierCategoryId = $supplier['category_id'] ?? null;
+                }
+
+                foreach ($rules as $rule) {
+                    $minOk = $totalTtc >= (float)$rule['min_amount'];
+                    $maxOk = $rule['max_amount'] === null || $totalTtc <= (float)$rule['max_amount'];
+                    $catOk = $rule['supplier_category_id'] === null || $rule['supplier_category_id'] == $supplierCategoryId;
+
+                    if ($minOk && $maxOk && $catOk) {
+                        $applicableRule = $rule;
+                        break;
+                    }
+                }
+
+                // Vérifier le rôle requis
+                if ($applicableRule) {
+                    $roleHierarchy = ['employee' => 0, 'receptionniste' => 1, 'comptabilite' => 2, 'rh' => 2, 'hotel_manager' => 3, 'groupe_manager' => 4, 'admin' => 5];
+                    $userLevel = $roleHierarchy[$userRole] ?? 0;
+                    $requiredLevel = $roleHierarchy[$applicableRule['required_role']] ?? 0;
+
+                    if ($userLevel < $requiredLevel) {
+                        json_error('Votre rôle (' . $userRole . ') ne permet pas d\'approuver ce montant. Rôle requis : ' . $applicableRule['required_role']);
+                    }
+
+                    // Double validation
+                    if ($applicableRule['requires_double_approval']) {
+                        $existingApprovals = db()->count(
+                            "SELECT COUNT(*) FROM invoice_approvals WHERE invoice_id = ? AND action = 'approve'",
+                            [(int)$id]
+                        );
+
+                        if ($existingApprovals === 0) {
+                            // Première approbation
+                            db()->insert("INSERT INTO invoice_approvals (invoice_id, user_id, action, comment, created_at) VALUES (?, ?, 'approve', ?, NOW())",
+                                [(int)$id, $userId, $data['comment'] ?? 'Première approbation']);
+
+                            // Notifier pour la deuxième
+                            $secondRole = $applicableRule['second_approver_role'] ?? 'admin';
+                            $secondApprovers = db()->query(
+                                "SELECT u.id FROM users u JOIN user_hotels uh ON u.id = uh.user_id
+                                 WHERE uh.hotel_id = ? AND u.role = ? AND u.id != ?",
+                                [$invoice['hotel_id'], $secondRole, $userId]
+                            );
+                            foreach ($secondApprovers as $approver) {
+                                createNotification($approver['id'], 'warning', 'Double validation requise',
+                                    'Facture ' . ($invoice['invoice_number'] ?? '#' . $id) . ' — première approbation effectuée, votre validation est requise');
+                            }
+
+                            rgpdLog($userId, 'first_approve', 'supplier_invoice', (int)$id);
+                            json_out(['success' => true, 'message' => 'Première approbation enregistrée. Double validation requise.', 'needs_second_approval' => true]);
+                        } else {
+                            // Vérifier que ce n'est pas le même utilisateur
+                            $firstApprover = db()->queryOne(
+                                "SELECT user_id FROM invoice_approvals WHERE invoice_id = ? AND action = 'approve' ORDER BY created_at ASC LIMIT 1",
+                                [(int)$id]
+                            );
+                            if ($firstApprover && (int)$firstApprover['user_id'] === $userId) {
+                                json_error('La double validation nécessite deux approbateurs différents');
+                            }
+
+                            // Deuxième approbation - vérifier le rôle du 2ème valideur
+                            if ($applicableRule['second_approver_role']) {
+                                $secondLevel = $roleHierarchy[$applicableRule['second_approver_role']] ?? 0;
+                                if ($userLevel < $secondLevel) {
+                                    json_error('Rôle insuffisant pour la seconde validation. Rôle requis : ' . $applicableRule['second_approver_role']);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Approuver
+                db()->execute(
+                    "UPDATE supplier_invoices SET status = 'approved', approved_by = ?, approved_at = ?, updated_at = ? WHERE id = ?",
+                    [$userId, date('Y-m-d H:i:s'), date('Y-m-d H:i:s'), (int)$id]
+                );
+
+                $comment = $data['comment'] ?? null;
+                db()->insert("INSERT INTO invoice_approvals (invoice_id, user_id, action, comment, created_at) VALUES (?, ?, 'approve', ?, NOW())",
+                    [(int)$id, $userId, $comment]);
+
+                // Notification
+                if ($invoice['submitted_by']) {
+                    createNotification($invoice['submitted_by'], 'success', 'Facture approuvée',
+                        'Votre facture ' . ($invoice['invoice_number'] ?? '#' . $id) . ' a été approuvée');
+                }
+
+                rgpdLog($userId, 'approve', 'supplier_invoice', (int)$id);
+                json_out(['success' => true]);
+            }
+
+            // --- PUT /invoices/{id}/reject ---
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'reject') {
+                if (!hasPermission($userRole, 'invoices.approve')) json_error('Accès refusé', 403);
+
+                $invoice = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [(int)$id]);
+                if (!$invoice) json_error('Facture non trouvée', 404);
+                if (!in_array($invoice['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                if (!in_array($invoice['status'], ['pending_review', 'pending_approval'])) {
+                    json_error('Cette facture ne peut pas être rejetée dans son état actuel');
+                }
+
+                $data = get_input();
+                if (empty($data['reason'])) json_error('Le motif de rejet est obligatoire');
+
+                db()->execute(
+                    "UPDATE supplier_invoices SET status = 'rejected', rejection_reason = ?, updated_at = ? WHERE id = ?",
+                    [$data['reason'], date('Y-m-d H:i:s'), (int)$id]
+                );
+
+                db()->insert("INSERT INTO invoice_approvals (invoice_id, user_id, action, comment, created_at) VALUES (?, ?, 'reject', ?, NOW())",
+                    [(int)$id, $userId, $data['reason']]);
+
+                if ($invoice['submitted_by']) {
+                    createNotification($invoice['submitted_by'], 'danger', 'Facture rejetée',
+                        'Votre facture ' . ($invoice['invoice_number'] ?? '#' . $id) . ' a été rejetée : ' . $data['reason']);
+                }
+
+                rgpdLog($userId, 'reject', 'supplier_invoice', (int)$id);
+                json_out(['success' => true]);
+            }
+
+            // --- POST /invoices/{id}/pay (initier paiement Fintecture) ---
+            if ($method === 'POST' && $id && is_numeric($id) && $action === 'pay') {
+                if (!hasPermission($userRole, 'invoices.pay')) json_error('Accès refusé', 403);
+
+                $invoice = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [(int)$id]);
+                if (!$invoice) json_error('Facture non trouvée', 404);
+                if (!in_array($invoice['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                if (!in_array($invoice['status'], ['approved', 'pending_payment'])) {
+                    json_error('Seules les factures approuvées peuvent être payées');
+                }
+
+                if (!$invoice['supplier_id']) json_error('Aucun fournisseur associé à cette facture');
+                $supplier = db()->queryOne("SELECT * FROM suppliers WHERE id = ?", [$invoice['supplier_id']]);
+                if (!$supplier) json_error('Fournisseur introuvable');
+
+                $data = get_input();
+
+                if ($invoice['payment_method'] === 'fintecture' || ($data['payment_method'] ?? '') === 'fintecture') {
+                    // Paiement via Fintecture
+                    if (empty($supplier['iban'])) json_error('IBAN du fournisseur non renseigné');
+
+                    $fintecture = FintectureClient::fromHotelConfig($invoice['hotel_id']);
+                    if (!$fintecture) json_error('Fintecture n\'est pas configuré pour cet hôtel');
+
+                    $redirectUrl = APP_URL . '/#invoices?payment_callback=' . $invoice['id'];
+
+                    try {
+                        $paymentResult = $fintecture->initiatePayment($invoice, $supplier, $redirectUrl);
+
+                        // Enregistrer le paiement
+                        $paymentId = db()->insert('invoice_payments', [
+                            'invoice_id' => (int)$id,
+                            'amount' => (float)$invoice['total_ttc'],
+                            'payment_method' => 'fintecture',
+                            'fintecture_session_id' => $paymentResult['session_id'],
+                            'fintecture_status' => 'initiated',
+                            'status' => 'initiated',
+                            'initiated_by' => $userId,
+                            'initiated_at' => date('Y-m-d H:i:s')
+                        ]);
+
+                        db()->execute(
+                            "UPDATE supplier_invoices SET status = 'payment_initiated', fintecture_session_id = ?,
+                             fintecture_status = 'initiated', payment_method = 'fintecture', updated_at = ? WHERE id = ?",
+                            [$paymentResult['session_id'], date('Y-m-d H:i:s'), (int)$id]
+                        );
+
+                        db()->insert("INSERT INTO invoice_approvals (invoice_id, user_id, action, comment, created_at) VALUES (?, ?, 'request_payment', 'Paiement Fintecture initié', NOW())",
+                            [(int)$id, $userId]);
+
+                        rgpdLog($userId, 'initiate_payment', 'supplier_invoice', (int)$id, json_encode(['method' => 'fintecture', 'session_id' => $paymentResult['session_id']]));
+
+                        json_out([
+                            'success' => true,
+                            'payment_id' => $paymentId,
+                            'session_id' => $paymentResult['session_id'],
+                            'redirect_url' => $paymentResult['redirect_url']
+                        ]);
+                    } catch (Exception $e) {
+                        json_error('Erreur Fintecture : ' . $e->getMessage());
+                    }
+                } else {
+                    // Marquer comme en attente de paiement manuel
+                    db()->execute(
+                        "UPDATE supplier_invoices SET status = 'pending_payment', payment_method = 'manual', updated_at = ? WHERE id = ?",
+                        [date('Y-m-d H:i:s'), (int)$id]
+                    );
+                    db()->insert("INSERT INTO invoice_approvals (invoice_id, user_id, action, comment, created_at) VALUES (?, ?, 'request_payment', 'Paiement manuel demandé', NOW())",
+                        [(int)$id, $userId]);
+                    json_out(['success' => true, 'message' => 'Facture en attente de paiement manuel']);
+                }
+            }
+
+            // --- PUT /invoices/{id}/mark-paid ---
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'mark-paid') {
+                if (!hasPermission($userRole, 'invoices.pay')) json_error('Accès refusé', 403);
+
+                $invoice = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [(int)$id]);
+                if (!$invoice) json_error('Facture non trouvée', 404);
+                if (!in_array($invoice['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                if (!in_array($invoice['status'], ['approved', 'pending_payment', 'payment_initiated'])) {
+                    json_error('Cette facture ne peut pas être marquée comme payée');
+                }
+
+                $data = get_input();
+                $paymentRef = $data['payment_reference'] ?? null;
+
+                db()->execute(
+                    "UPDATE supplier_invoices SET status = 'paid', payment_method = 'manual',
+                     payment_reference = ?, paid_at = ?, paid_by = ?, updated_at = ? WHERE id = ?",
+                    [$paymentRef, date('Y-m-d H:i:s'), $userId, date('Y-m-d H:i:s'), (int)$id]
+                );
+
+                // Enregistrer le paiement
+                db()->insert('invoice_payments', [
+                    'invoice_id' => (int)$id,
+                    'amount' => (float)$invoice['total_ttc'],
+                    'payment_method' => 'manual',
+                    'payment_reference' => $paymentRef,
+                    'status' => 'completed',
+                    'initiated_by' => $userId,
+                    'initiated_at' => date('Y-m-d H:i:s'),
+                    'completed_at' => date('Y-m-d H:i:s')
+                ]);
+
+                db()->insert("INSERT INTO invoice_approvals (invoice_id, user_id, action, comment, created_at) VALUES (?, ?, 'confirm_payment', ?, NOW())",
+                    [(int)$id, $userId, 'Paiement manuel — Réf: ' . ($paymentRef ?? 'N/A')]);
+
+                if ($invoice['submitted_by']) {
+                    createNotification($invoice['submitted_by'], 'success', 'Facture payée',
+                        'La facture ' . ($invoice['invoice_number'] ?? '#' . $id) . ' a été payée');
+                }
+
+                rgpdLog($userId, 'mark_paid', 'supplier_invoice', (int)$id, json_encode(['reference' => $paymentRef]));
+                json_out(['success' => true]);
+            }
+
+            // --- POST /invoices/{id}/documents ---
+            if ($method === 'POST' && $id && is_numeric($id) && $action === 'documents') {
+                if (!hasPermission($userRole, 'invoices.edit')) json_error('Accès refusé', 403);
+
+                $invoice = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [(int)$id]);
+                if (!$invoice) json_error('Facture non trouvée', 404);
+                if (!in_array($invoice['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                if (!isset($_FILES['document'])) json_error('Aucun fichier fourni');
+                $uploadError = validateUpload($_FILES['document'], 'any');
+                if ($uploadError) json_error($uploadError);
+
+                $ext = strtolower(pathinfo($_FILES['document']['name'], PATHINFO_EXTENSION));
+                $filename = uniqid('doc_') . '.' . $ext;
+                $uploadDir = __DIR__ . '/../uploads/invoices/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0775, true);
+                $filePath = $uploadDir . $filename;
+
+                if (!move_uploaded_file($_FILES['document']['tmp_name'], $filePath)) {
+                    json_error('Erreur lors de l\'upload');
+                }
+
+                $docType = $_POST['document_type'] ?? 'other';
+                $docId = db()->insert('invoice_documents', [
+                    'invoice_id' => (int)$id,
+                    'file_url' => 'uploads/invoices/' . $filename,
+                    'file_name' => $_FILES['document']['name'],
+                    'file_type' => $ext,
+                    'document_type' => $docType,
+                    'uploaded_by' => $userId,
+                    'uploaded_at' => date('Y-m-d H:i:s')
+                ]);
+
+                json_out(['success' => true, 'id' => $docId, 'file_url' => 'uploads/invoices/' . $filename]);
+            }
+
+            // --- DELETE /invoices/{id} ---
+            if ($method === 'DELETE' && $id && is_numeric($id)) {
+                if (!hasPermission($userRole, 'invoices.delete')) json_error('Accès refusé', 403);
+
+                $invoice = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [(int)$id]);
+                if (!$invoice) json_error('Facture non trouvée', 404);
+                if (!in_array($invoice['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+                if ($invoice['status'] !== 'draft') json_error('Seuls les brouillons peuvent être supprimés');
+
+                // Supprimer les lignes, documents, validations
+                db()->execute("DELETE FROM supplier_invoice_lines WHERE invoice_id = ?", [(int)$id]);
+                db()->execute("DELETE FROM invoice_documents WHERE invoice_id = ?", [(int)$id]);
+                db()->execute("DELETE FROM invoice_approvals WHERE invoice_id = ?", [(int)$id]);
+                db()->execute("DELETE FROM invoice_payments WHERE invoice_id = ?", [(int)$id]);
+                db()->execute("DELETE FROM supplier_invoices WHERE id = ?", [(int)$id]);
+
+                rgpdLog($userId, 'delete', 'supplier_invoice', (int)$id);
+                json_out(['success' => true]);
+            }
+
+            json_error('Endpoint invoices non trouvé', 404);
+            break;
+
+        // ==================== WEBHOOK FINTECTURE (public) ====================
+        case 'fintecture_webhook':
+            require_once __DIR__ . '/FintectureClient.php';
+
+            if ($method !== 'POST') json_error('Méthode non autorisée', 405);
+
+            $rawPayload = get_raw_input();
+            $signature = $_SERVER['HTTP_X_FINTECTURE_SIGNATURE'] ?? $_SERVER['HTTP_SIGNATURE'] ?? '';
+
+            // Parser le payload
+            $webhookData = FintectureClient::parseWebhookPayload($rawPayload);
+            if (!$webhookData) json_error('Payload invalide', 400);
+
+            $sessionId = $webhookData['session_id'];
+
+            // Trouver la facture associée
+            $invoice = db()->queryOne(
+                "SELECT si.*, fc.webhook_secret FROM supplier_invoices si
+                 LEFT JOIN fintecture_config fc ON si.hotel_id = fc.hotel_id
+                 WHERE si.fintecture_session_id = ?",
+                [$sessionId]
+            );
+
+            if (!$invoice) {
+                // Log l'événement même si pas de facture trouvée
+                error_log("Fintecture webhook: session $sessionId not found");
+                json_out(['received' => true]);
+            }
+
+            // Vérifier la signature
+            if (!empty($invoice['webhook_secret'])) {
+                if (!FintectureClient::verifyWebhook($rawPayload, $signature, $invoice['webhook_secret'])) {
+                    error_log("Fintecture webhook: invalid signature for session $sessionId");
+                    json_error('Signature invalide', 401);
+                }
+            }
+
+            $newStatus = $webhookData['status'];
+
+            // Mettre à jour le paiement
+            $payment = db()->queryOne(
+                "SELECT * FROM invoice_payments WHERE fintecture_session_id = ? ORDER BY initiated_at DESC LIMIT 1",
+                [$sessionId]
+            );
+
+            if ($payment) {
+                $paymentUpdates = [
+                    'fintecture_status' => $webhookData['fintecture_status'],
+                    'status' => $newStatus,
+                    'webhook_data' => json_encode($webhookData['raw'])
+                ];
+                if (!empty($webhookData['provider'])) {
+                    $paymentUpdates['fintecture_provider'] = $webhookData['provider'];
+                }
+                if ($newStatus === 'completed') {
+                    $paymentUpdates['completed_at'] = date('Y-m-d H:i:s');
+                }
+
+                $sets = [];
+                $params = [];
+                foreach ($paymentUpdates as $col => $val) {
+                    $sets[] = "$col = ?";
+                    $params[] = $val;
+                }
+                $params[] = $payment['id'];
+                db()->execute("UPDATE invoice_payments SET " . implode(', ', $sets) . " WHERE id = ?", $params);
+            }
+
+            // Mettre à jour la facture
+            $invoiceUpdates = ['fintecture_status' => $webhookData['fintecture_status'], 'updated_at' => date('Y-m-d H:i:s')];
+
+            if ($newStatus === 'completed') {
+                $invoiceUpdates['status'] = 'paid';
+                $invoiceUpdates['paid_at'] = date('Y-m-d H:i:s');
+                $invoiceUpdates['payment_reference'] = 'Fintecture: ' . $sessionId;
+
+                // Notification
+                if ($invoice['created_by']) {
+                    createNotification($invoice['created_by'], 'success', 'Paiement reçu',
+                        'Le paiement de la facture ' . ($invoice['invoice_number'] ?? '#' . $invoice['id']) . ' a été confirmé');
+                }
+
+                db()->insert("INSERT INTO invoice_approvals (invoice_id, user_id, action, comment, created_at) VALUES (?, 0, 'confirm_payment', 'Paiement confirmé par Fintecture', NOW())",
+                    [$invoice['id']]);
+
+            } elseif ($newStatus === 'failed' || $newStatus === 'cancelled') {
+                $invoiceUpdates['status'] = 'approved'; // Retour à approuvé pour permettre un nouveau paiement
+
+                if ($invoice['created_by']) {
+                    createNotification($invoice['created_by'], 'danger', 'Paiement échoué',
+                        'Le paiement de la facture ' . ($invoice['invoice_number'] ?? '#' . $invoice['id']) . ' a échoué');
+                }
+            }
+
+            $sets = [];
+            $params = [];
+            foreach ($invoiceUpdates as $col => $val) {
+                $sets[] = "$col = ?";
+                $params[] = $val;
+            }
+            $params[] = $invoice['id'];
+            db()->execute("UPDATE supplier_invoices SET " . implode(', ', $sets) . " WHERE id = ?", $params);
+
+            json_out(['received' => true, 'status' => $newStatus]);
+            break;
+
         default:
             json_error('Endpoint non trouvé', 404);
     }
