@@ -7885,7 +7885,8 @@ try {
                 
                 $documents = [];
                 $fieldValues = [];
-                
+                $linkedInvoice = null;
+
                 if ($closure) {
                     $documents = db()->query(
                         "SELECT * FROM closure_documents WHERE closure_id = ?",
@@ -7895,14 +7896,20 @@ try {
                         "SELECT * FROM closure_field_values WHERE closure_id = ?",
                         [$closure['id']]
                     );
+                    // Vérifier si une facture fournisseur est liée
+                    $linkedInvoice = db()->queryOne(
+                        "SELECT id, invoice_number, status, total_ttc FROM supplier_invoices WHERE closure_id = ?",
+                        [$closure['id']]
+                    );
                 }
-                
+
                 json_out([
                     'success' => true,
                     'closure' => $closure ?: [],
                     'config' => $config,
                     'documents' => $documents,
-                    'field_values' => $fieldValues
+                    'field_values' => $fieldValues,
+                    'linked_invoice' => $linkedInvoice
                 ]);
             }
             
@@ -8014,7 +8021,151 @@ try {
                     }
                 }
 
-                json_out(['success' => true, 'id' => $closureId]);
+                // Créer une facture fournisseur si dépense avec justificatif
+                $invoiceId = null;
+                if ($status === 'submitted' && $cashSpent > 0 && !empty($expenseReceipt)) {
+                    // Vérifier qu'on n'a pas déjà créé une facture pour cette clôture
+                    $existingInvoice = db()->queryOne(
+                        "SELECT id FROM supplier_invoices WHERE closure_id = ?",
+                        [$closureId]
+                    );
+
+                    if (!$existingInvoice) {
+                        try {
+                            require_once __DIR__ . '/OcrClient.php';
+
+                            // Copier le fichier dans uploads/invoices/
+                            $srcPath = __DIR__ . '/../' . $expenseReceipt;
+                            $invUploadDir = __DIR__ . '/../uploads/invoices/';
+                            if (!is_dir($invUploadDir)) mkdir($invUploadDir, 0775, true);
+
+                            $ext = strtolower(pathinfo($expenseReceipt, PATHINFO_EXTENSION));
+                            $invFilename = uniqid('inv_closure_') . '.' . $ext;
+                            $invFilePath = $invUploadDir . $invFilename;
+
+                            if (copy($srcPath, $invFilePath)) {
+                                $invFileUrl = 'uploads/invoices/' . $invFilename;
+
+                                // Créer le brouillon facture
+                                $invoiceId = db()->insert('supplier_invoices', [
+                                    'hotel_id' => $hotelId,
+                                    'original_file' => $invFileUrl,
+                                    'ocr_status' => 'pending',
+                                    'status' => 'draft',
+                                    'payment_method' => 'especes',
+                                    'total_ttc' => $cashSpent,
+                                    'notes' => 'Dépense clôture du ' . $closureDate . ($notes ? ' — ' . $notes : ''),
+                                    'closure_id' => $closureId,
+                                    'created_by' => $user['id'],
+                                    'created_at' => date('Y-m-d H:i:s'),
+                                    'updated_at' => date('Y-m-d H:i:s')
+                                ]);
+
+                                // Ajouter le document
+                                db()->insert('invoice_documents', [
+                                    'invoice_id' => $invoiceId,
+                                    'file_url' => $invFileUrl,
+                                    'file_name' => basename($expenseReceipt),
+                                    'file_type' => $ext,
+                                    'document_type' => 'invoice',
+                                    'uploaded_by' => $user['id'],
+                                    'uploaded_at' => date('Y-m-d H:i:s')
+                                ]);
+
+                                // Lancer l'OCR
+                                db()->execute("UPDATE supplier_invoices SET ocr_status = 'processing' WHERE id = ?", [$invoiceId]);
+                                $aiConfig = db()->queryOne("SELECT * FROM hotel_contracts_config WHERE hotel_id = ? AND ai_enabled = 1", [$hotelId]);
+                                $apiKey = $aiConfig['anthropic_api_key'] ?? null;
+
+                                $ocrResult = OcrClient::processInvoice($invFilePath, $apiKey);
+
+                                if ($ocrResult['success'] && $ocrResult['data']) {
+                                    $ocrData = $ocrResult['data'];
+                                    $updates = [
+                                        'ocr_status' => 'completed',
+                                        'ocr_raw_data' => json_encode($ocrResult),
+                                        'ocr_confidence' => $ocrResult['confidence'],
+                                        'ocr_processed_at' => date('Y-m-d H:i:s'),
+                                        'updated_at' => date('Y-m-d H:i:s')
+                                    ];
+
+                                    if (isset($ocrData['invoice'])) {
+                                        $inv = $ocrData['invoice'];
+                                        if (!empty($inv['invoice_number'])) $updates['invoice_number'] = $inv['invoice_number'];
+                                        if (!empty($inv['invoice_date'])) $updates['invoice_date'] = $inv['invoice_date'];
+                                        if (!empty($inv['due_date'])) $updates['due_date'] = $inv['due_date'];
+                                        if (isset($inv['total_ht'])) $updates['total_ht'] = (float)$inv['total_ht'];
+                                        if (isset($inv['total_tva'])) $updates['total_tva'] = (float)$inv['total_tva'];
+                                        if (isset($inv['total_ttc'])) $updates['total_ttc'] = (float)$inv['total_ttc'];
+                                    }
+
+                                    // Auto-match fournisseur
+                                    if (isset($ocrData['supplier'])) {
+                                        $ocrSupplier = $ocrData['supplier'];
+                                        $matchedSupplier = null;
+                                        if (!empty($ocrSupplier['siret'])) {
+                                            $matchedSupplier = db()->queryOne(
+                                                "SELECT s.id FROM suppliers s JOIN hotel_suppliers hs ON s.id = hs.supplier_id WHERE s.siret = ? AND hs.hotel_id = ? AND hs.is_active = 1",
+                                                [$ocrSupplier['siret'], $hotelId]
+                                            );
+                                        }
+                                        if (!$matchedSupplier && !empty($ocrSupplier['name'])) {
+                                            $matchedSupplier = db()->queryOne(
+                                                "SELECT s.id FROM suppliers s JOIN hotel_suppliers hs ON s.id = hs.supplier_id WHERE s.name LIKE ? AND hs.hotel_id = ? AND hs.is_active = 1",
+                                                ['%' . $ocrSupplier['name'] . '%', $hotelId]
+                                            );
+                                        }
+                                        if ($matchedSupplier) $updates['supplier_id'] = $matchedSupplier['id'];
+                                    }
+
+                                    $setClauses = [];
+                                    $setParams = [];
+                                    foreach ($updates as $col => $val) {
+                                        $setClauses[] = "$col = ?";
+                                        $setParams[] = $val;
+                                    }
+                                    $setParams[] = $invoiceId;
+                                    db()->execute("UPDATE supplier_invoices SET " . implode(', ', $setClauses) . " WHERE id = ?", $setParams);
+
+                                    // Créer les lignes
+                                    if (!empty($ocrData['line_items'])) {
+                                        $pos = 0;
+                                        foreach ($ocrData['line_items'] as $line) {
+                                            $unitPrice = (float)($line['unit_price_ht'] ?? 0);
+                                            $qty = (float)($line['quantity'] ?? 1);
+                                            $tvaRate = (float)($line['tva_rate'] ?? 20);
+                                            $lineHt = (float)($line['total_ht'] ?? $unitPrice * $qty);
+                                            $lineTva = $lineHt * $tvaRate / 100;
+                                            $lineTtc = $lineHt + $lineTva;
+                                            db()->insert('supplier_invoice_lines', [
+                                                'invoice_id' => $invoiceId,
+                                                'description' => $line['description'] ?? '',
+                                                'quantity' => $qty,
+                                                'unit_price_ht' => $unitPrice,
+                                                'tva_rate' => $tvaRate,
+                                                'tva_amount' => round($lineTva, 2),
+                                                'total_ht' => round($lineHt, 2),
+                                                'total_ttc' => round($lineTtc, 2),
+                                                'position' => $pos++
+                                            ]);
+                                        }
+                                    }
+                                } else {
+                                    $ocrStatus = $apiKey ? 'failed' : 'skipped';
+                                    db()->execute(
+                                        "UPDATE supplier_invoices SET ocr_status = ?, ocr_raw_data = ?, ocr_processed_at = ?, updated_at = ? WHERE id = ?",
+                                        [$ocrStatus, json_encode($ocrResult), date('Y-m-d H:i:s'), date('Y-m-d H:i:s'), $invoiceId]
+                                    );
+                                }
+                            }
+                        } catch (Exception $e) {
+                            // Ne pas bloquer la clôture si la création de facture échoue
+                            error_log('Erreur création facture depuis clôture: ' . $e->getMessage());
+                        }
+                    }
+                }
+
+                json_out(['success' => true, 'id' => $closureId, 'invoice_id' => $invoiceId]);
             }
             
             // Mettre à jour clôture existante - POST /closures/daily/{id}
