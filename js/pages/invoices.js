@@ -25,6 +25,7 @@ let invFilterDateFrom = '';
 let invFilterDateTo = '';
 let invAdvancedFiltersOpen = false;
 let invSuppliersList = []; // Cache des fournisseurs pour le filtre
+let invLastOcrResult = null; // Dernières données OCR reçues après upload
 
 // === HELPERS ===
 
@@ -61,6 +62,99 @@ function invFormatCurrency(amount) {
 
 function invIsPayable(s) {
     return ['approved', 'pending_review', 'pending_approval', 'pending_payment', 'payment_initiated'].includes(s);
+}
+
+function invOcrBadge(type) {
+    if (type === 'ok') return '<span style="font-size:0.7rem;color:var(--success-500, #22c55e);margin-left:4px" title="Détecté par OCR"><i class="fas fa-robot"></i></span>';
+    if (type === 'detected') return '<span style="font-size:0.7rem;color:var(--warning-500, #f59e0b);margin-left:4px" title="Détecté par OCR (à vérifier)"><i class="fas fa-robot"></i></span>';
+    return '';
+}
+
+function invConfidenceBadge(score) {
+    if (!score && score !== 0) return '';
+    const s = parseInt(score);
+    const color = s >= 85 ? 'var(--success-500, #22c55e)' : s >= 60 ? 'var(--warning-500, #f59e0b)' : 'var(--danger-500, #ef4444)';
+    const label = s >= 85 ? 'Fiable' : s >= 60 ? 'Moyen' : 'Faible';
+    return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--radius-full);font-size:var(--font-size-xs);font-weight:var(--font-semibold);color:${color};background:${color}15;border:1px solid ${color}30">${s}% ${label}</span>`;
+}
+
+function invRenderOcrBanner(inv, ocrSupplier, ocrConfidence, ocrInvoice, supplierSuggestions, isEditable) {
+    const overall = ocrConfidence ? (ocrConfidence.overall || 0) : (inv.ocr_confidence || 0);
+    const confidenceColor = overall >= 85 ? 'var(--success-500, #22c55e)' : overall >= 60 ? 'var(--warning-500, #f59e0b)' : 'var(--danger-500, #ef4444)';
+
+    let supplierHtml = '';
+    if (ocrSupplier && ocrSupplier.name) {
+        const matched = inv.supplier_id && inv.supplier_name;
+        if (matched) {
+            supplierHtml = `
+                <div style="display:flex;align-items:center;gap:var(--space-2)">
+                    <i class="fas fa-check-circle" style="color:var(--success-500, #22c55e)"></i>
+                    <span><strong>Fournisseur reconnu :</strong> ${esc(inv.supplier_name)}</span>
+                    ${ocrSupplier.siret ? `<span style="color:var(--text-tertiary);font-size:var(--font-size-xs)">SIRET: ${esc(ocrSupplier.siret)}</span>` : ''}
+                </div>`;
+        } else {
+            // Fournisseur détecté mais pas matché
+            supplierHtml = `
+                <div style="display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap">
+                    <i class="fas fa-search" style="color:var(--warning-500, #f59e0b)"></i>
+                    <span><strong>Fournisseur détecté :</strong> ${esc(ocrSupplier.name)}</span>
+                    ${ocrSupplier.siret ? `<span style="color:var(--text-tertiary);font-size:var(--font-size-xs)">SIRET: ${esc(ocrSupplier.siret)}</span>` : ''}
+                    ${ocrSupplier.tva_number ? `<span style="color:var(--text-tertiary);font-size:var(--font-size-xs)">TVA: ${esc(ocrSupplier.tva_number)}</span>` : ''}
+                </div>`;
+            if (supplierSuggestions.length > 0 && isEditable) {
+                supplierHtml += `
+                    <div style="margin-top:var(--space-2);display:flex;gap:var(--space-2);flex-wrap:wrap">
+                        <span style="font-size:var(--font-size-sm);color:var(--text-secondary)">Suggestions :</span>
+                        ${supplierSuggestions.map(s => `
+                            <button type="button" class="btn btn-sm btn-outline" onclick="invSelectSupplier(${s.id}, '${escAttr(s.name)}')" style="font-size:var(--font-size-xs)">
+                                <i class="fas fa-building"></i> ${esc(s.name)} ${s.siret ? `(${esc(s.siret)})` : ''}
+                            </button>
+                        `).join('')}
+                    </div>`;
+            }
+            if (isEditable && hasPermission('suppliers.manage')) {
+                supplierHtml += `
+                    <div style="margin-top:var(--space-2)">
+                        <button type="button" class="btn btn-sm btn-primary" onclick="invQuickCreateSupplier('${escAttr(ocrSupplier.name)}')">
+                            <i class="fas fa-plus-circle"></i> Créer « ${esc(ocrSupplier.name)} »
+                        </button>
+                    </div>`;
+            }
+        }
+    }
+
+    // Résumé des montants détectés
+    let amountsHtml = '';
+    if (ocrInvoice) {
+        const ht = ocrInvoice.total_ht;
+        const tva = ocrInvoice.total_tva;
+        const ttc = ocrInvoice.total_ttc;
+        if (ht !== null && ht !== undefined || ttc !== null && ttc !== undefined) {
+            amountsHtml = `
+                <div style="display:flex;gap:var(--space-4);flex-wrap:wrap;margin-top:var(--space-2)">
+                    ${ht !== null && ht !== undefined ? `<div style="text-align:center"><span style="font-size:var(--font-size-xs);color:var(--text-tertiary);display:block">Montant HT</span><strong style="font-size:var(--font-size-base)">${invFormatCurrency(ht)}</strong></div>` : ''}
+                    ${tva !== null && tva !== undefined ? `<div style="text-align:center"><span style="font-size:var(--font-size-xs);color:var(--text-tertiary);display:block">TVA</span><strong style="font-size:var(--font-size-base)">${invFormatCurrency(tva)}</strong></div>` : ''}
+                    ${ttc !== null && ttc !== undefined ? `<div style="text-align:center"><span style="font-size:var(--font-size-xs);color:var(--text-tertiary);display:block">Montant TTC</span><strong style="font-size:var(--font-size-base);color:var(--brand-secondary)">${invFormatCurrency(ttc)}</strong></div>` : ''}
+                    ${ocrConfidence && ocrConfidence.amounts ? `<div style="text-align:center"><span style="font-size:var(--font-size-xs);color:var(--text-tertiary);display:block">Confiance montants</span>${invConfidenceBadge(ocrConfidence.amounts)}</div>` : ''}
+                </div>`;
+        }
+    }
+
+    return `
+        <div style="margin-bottom:var(--space-4);padding:var(--space-3) var(--space-4);background:linear-gradient(135deg, var(--primary-50, #eff6ff), var(--info-50, #f0f9ff));border:1px solid var(--primary-200, #bfdbfe);border-radius:var(--radius-lg)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-2)">
+                <div style="display:flex;align-items:center;gap:var(--space-2)">
+                    <i class="fas fa-robot" style="color:var(--brand-secondary);font-size:1.2rem"></i>
+                    <strong style="color:var(--text-primary)">Lecture automatique (OCR)</strong>
+                </div>
+                <div style="display:flex;align-items:center;gap:var(--space-2)">
+                    ${invConfidenceBadge(overall)}
+                </div>
+            </div>
+            ${supplierHtml}
+            ${amountsHtml}
+        </div>
+    `;
 }
 
 // === CHARGEMENT PRINCIPAL ===
@@ -885,7 +979,9 @@ async function invHandleFiles(files) {
     // Afficher le loading dans la dropzone
     const dz = document.getElementById('inv-dropzone');
     if (dz) {
-        dz.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:2rem;color:var(--brand-secondary)"></i><h3 style="margin-top:var(--space-2)">Upload en cours...</h3>';
+        dz.innerHTML = `<i class="fas fa-robot fa-spin" style="font-size:2rem;color:var(--brand-secondary)"></i>
+            <h3 style="margin-top:var(--space-2)">Analyse en cours...</h3>
+            <p style="color:var(--text-secondary);font-size:var(--font-size-sm)">OCR + extraction des données (fournisseur, montants, ventilation)</p>`;
         dz.style.pointerEvents = 'none';
     }
 
@@ -897,6 +993,8 @@ async function invHandleFiles(files) {
         const res = await API.upload('invoices', formData);
 
         if (res.success && res.id) {
+            // Stocker les données OCR pour les afficher dans la page de vérification
+            invLastOcrResult = res.ocr || null;
             toast('Facture déposée — complétez la vérification', 'success');
             invOpenVerify(res.id);
         } else {
@@ -983,14 +1081,22 @@ async function invRenderVerify(container, invoiceId) {
 function invRenderVerifyForm(inv, lines, isEditable) {
     const statusValue = invIsPayable(inv.status) ? 'approved' : inv.status;
 
+    // Données OCR disponibles (du dernier upload ou du GET invoice)
+    const ocrSupplier = inv.ocr_supplier || (invLastOcrResult && invLastOcrResult.ocr_supplier) || null;
+    const ocrConfidence = inv.ocr_confidence || (invLastOcrResult && invLastOcrResult.data && invLastOcrResult.data.confidence) || null;
+    const ocrInvoice = inv.ocr_invoice || (invLastOcrResult && invLastOcrResult.data && invLastOcrResult.data.invoice) || null;
+    const supplierSuggestions = (invLastOcrResult && invLastOcrResult.supplier_suggestions) || [];
+
     return `
+        ${inv.ocr_status === 'completed' && (ocrSupplier || ocrConfidence) ? invRenderOcrBanner(inv, ocrSupplier, ocrConfidence, ocrInvoice, supplierSuggestions, isEditable) : ''}
+
         <!-- Informations générales -->
         <div class="card" style="margin-bottom:var(--space-4)">
             <div class="card-header"><h3><i class="fas fa-info-circle"></i> Informations générales</h3></div>
             <div class="card-body" style="padding:var(--space-4)">
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">Fournisseur</label>
+                        <label class="form-label">Fournisseur ${inv.supplier_id ? invOcrBadge('ok') : (ocrSupplier && ocrSupplier.name ? invOcrBadge('detected') : '')}</label>
                         <div style="position:relative">
                             <input type="text" id="inv-supplier-search" class="form-control"
                                    value="${esc(inv.supplier_name || '')}"
@@ -1003,17 +1109,17 @@ function invRenderVerifyForm(inv, lines, isEditable) {
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">N° Facture</label>
+                        <label class="form-label">N° Facture ${inv.invoice_number ? invOcrBadge('ok') : ''}</label>
                         <input type="text" id="inv-number" class="form-control" value="${esc(inv.invoice_number || '')}" ${!isEditable ? 'readonly' : ''}>
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">Date de facture</label>
+                        <label class="form-label">Date de facture ${inv.invoice_date ? invOcrBadge('ok') : ''}</label>
                         <input type="date" id="inv-date" class="form-control" value="${inv.invoice_date || ''}" ${!isEditable ? 'readonly' : ''}>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Date d'échéance</label>
+                        <label class="form-label">Date d'échéance ${inv.due_date ? invOcrBadge('ok') : ''}</label>
                         <input type="date" id="inv-due-date" class="form-control" value="${inv.due_date || ''}" ${!isEditable ? 'readonly' : ''}>
                     </div>
                 </div>
@@ -1161,10 +1267,14 @@ function invBuildLineRow(idx, line, editable) {
     const rate = parseFloat(line.tva_rate || 20);
     const tva = parseFloat(line.tva_amount || (ht * rate / 100));
     const ttc = ht + tva;
+    const desc = line.description || '';
 
     if (!editable) {
         return `<tr>
-            <td>${esc(line.category_name || '-')}</td>
+            <td>
+                ${esc(line.category_name || '-')}
+                ${desc ? `<div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:2px">${esc(desc)}</div>` : ''}
+            </td>
             <td style="text-align:right">${invFormatCurrency(ht)}</td>
             <td>${rate}%</td>
             <td style="text-align:right">${invFormatCurrency(tva)}</td>
@@ -1174,11 +1284,13 @@ function invBuildLineRow(idx, line, editable) {
 
     return `<tr class="inv-line-row" data-idx="${idx}">
         <td>
-            <select class="form-control form-control-sm" name="line-cat-${idx}" onchange="invOnCategoryChange(this, ${idx})">
+            <select class="form-control form-control-sm" name="line-cat-${idx}" onchange="invOnCategoryChange(this, ${idx})" ${line.category_id ? 'style="border-color:var(--success-300, #86efac)"' : ''}>
                 <option value="">— Sélectionner —</option>
                 ${invCategories.map(c => `<option value="${c.id}" ${line.category_id == c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
                 ${hasPermission('categories.manage') ? '<option value="__create__">+ Créer une catégorie</option>' : ''}
             </select>
+            ${desc ? `<div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:2px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(desc)}"><i class="fas fa-robot" style="font-size:0.6rem"></i> ${esc(desc)}</div>` : ''}
+            <input type="hidden" name="line-desc-${idx}" value="${escAttr(desc)}">
         </td>
         <td><input type="number" class="form-control form-control-sm" name="line-ht-${idx}" value="${ht || ''}" step="0.01" min="0" style="text-align:right" oninput="invRecalcTotals()" placeholder="0.00"></td>
         <td>
@@ -1496,6 +1608,7 @@ async function invSaveInvoice(targetStatus) {
         const catSelect = row.querySelector(`[name="line-cat-${idx}"]`);
         const htInput = row.querySelector(`[name="line-ht-${idx}"]`);
         const tvaSelect = row.querySelector(`[name="line-tva-${idx}"]`);
+        const descInput = row.querySelector(`[name="line-desc-${idx}"]`);
 
         const ht = parseFloat(htInput?.value) || 0;
         const rate = parseFloat(tvaSelect?.value) || 0;
@@ -1509,6 +1622,7 @@ async function invSaveInvoice(targetStatus) {
 
         lines.push({
             category_id: catSelect?.value || null,
+            description: descInput?.value || '',
             amount_ht: ht,
             tva_rate: rate,
             tva_amount: tva,
@@ -1592,6 +1706,7 @@ async function invDeleteInvoice(id, status) {
 function invBackToList() {
     invCurrentView = 'list';
     invCurrentInvoice = null;
+    invLastOcrResult = null;
     invRenderMain(_invContainer);
 }
 
