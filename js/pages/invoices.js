@@ -542,9 +542,10 @@ function invBuildLineRow(idx, line, editable) {
 
     return `<tr class="inv-line-row" data-idx="${idx}">
         <td>
-            <select class="form-control form-control-sm" name="line-cat-${idx}" onchange="invRecalcTotals()">
+            <select class="form-control form-control-sm" name="line-cat-${idx}" onchange="invOnCategoryChange(this, ${idx})">
                 <option value="">— Sélectionner —</option>
                 ${invCategories.map(c => `<option value="${c.id}" ${line.category_id == c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
+                ${hasPermission('categories.manage') ? '<option value="__create__">+ Créer une catégorie</option>' : ''}
             </select>
         </td>
         <td><input type="number" class="form-control form-control-sm" name="line-ht-${idx}" value="${ht || ''}" step="0.01" min="0" style="text-align:right" oninput="invRecalcTotals()" placeholder="0.00"></td>
@@ -575,6 +576,74 @@ function invRemoveLine(btn) {
     const row = btn.closest('tr');
     if (row) row.remove();
     invRecalcTotals();
+}
+
+function invOnCategoryChange(select, idx) {
+    if (select.value === '__create__') {
+        select.value = ''; // Reset la sélection
+        invQuickCreateCategory(idx);
+    } else {
+        invRecalcTotals();
+    }
+}
+
+function invQuickCreateCategory(lineIdx) {
+    openModal('Nouvelle catégorie', `
+        <form onsubmit="invSaveQuickCategory(event, ${lineIdx})">
+            <div class="form-row">
+                <div class="form-group" style="flex:2"><label class="form-label required">Nom de la catégorie</label>
+                    <input type="text" id="qcat-name" class="form-control" required placeholder="Ex: Alimentation, Entretien..."></div>
+                <div class="form-group" style="flex:1"><label class="form-label">Couleur</label>
+                    <input type="color" id="qcat-color" class="form-control" value="#6366f1" style="height:38px;padding:4px"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Créer et sélectionner</button>
+            </div>
+        </form>
+    `, 'modal-md');
+}
+
+async function invSaveQuickCategory(event, lineIdx) {
+    event.preventDefault();
+    const name = document.getElementById('qcat-name').value.trim();
+    const color = document.getElementById('qcat-color').value;
+    if (!name) { toast('Le nom est requis', 'warning'); return; }
+
+    try {
+        const res = await API.post('contracts/categories', {
+            name: name,
+            color: color,
+            hotel_id: invCurrentHotel
+        });
+        toast('Catégorie créée', 'success');
+        closeModal();
+
+        // Ajouter la catégorie au cache local
+        const newCat = { id: res.id, name: name, color: color };
+        invCategories.push(newCat);
+
+        // Mettre à jour tous les selects de catégorie dans le tableau
+        document.querySelectorAll('.inv-line-row').forEach(row => {
+            const sel = row.querySelector('select[name^="line-cat-"]');
+            if (!sel) return;
+            const createOpt = sel.querySelector('option[value="__create__"]');
+            const newOpt = document.createElement('option');
+            newOpt.value = res.id;
+            newOpt.textContent = name;
+            if (createOpt) {
+                sel.insertBefore(newOpt, createOpt);
+            } else {
+                sel.appendChild(newOpt);
+            }
+        });
+
+        // Sélectionner dans la ligne qui a déclenché la création
+        const targetSelect = document.querySelector(`select[name="line-cat-${lineIdx}"]`);
+        if (targetSelect) targetSelect.value = res.id;
+    } catch (err) {
+        toast(err.message || 'Erreur lors de la création', 'error');
+    }
 }
 
 function invRecalcTotals() {
@@ -781,7 +850,9 @@ async function invSaveInvoice(targetStatus) {
         if (lines.length === 0) { toast('Ajoutez au moins une ligne de ventilation', 'warning'); return; }
     }
 
-    const data = {
+    // Si le formulaire n'est pas éditable (ex: passage à payée), envoyer seulement le statut
+    const isFormEditable = rows.length > 0;
+    const data = isFormEditable ? {
         supplier_id: supplierId || null,
         invoice_number: invoiceNumber || null,
         invoice_date: invoiceDate || null,
@@ -793,7 +864,7 @@ async function invSaveInvoice(targetStatus) {
         notes: notes,
         status: targetStatus,
         lines: lines
-    };
+    } : { status: targetStatus };
 
     try {
         await API.put(`invoices/${invCurrentInvoice}`, data);
