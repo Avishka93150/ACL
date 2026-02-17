@@ -13122,6 +13122,76 @@ try {
                 ]);
             }
 
+            // --- GET /invoices/extract/zip ---
+            if ($method === 'GET' && $id === 'extract' && $action === 'zip') {
+                if (!hasPermission($userRole, 'invoices.export')) json_error('Accès refusé', 403);
+
+                $where = ["si.hotel_id IN ($hotelList)"];
+                $params = [];
+                if (!empty($_GET['invoice_date_from'])) { $where[] = "si.invoice_date >= ?"; $params[] = $_GET['invoice_date_from']; }
+                if (!empty($_GET['invoice_date_to'])) { $where[] = "si.invoice_date <= ?"; $params[] = $_GET['invoice_date_to']; }
+                if (!empty($_GET['created_from'])) { $where[] = "si.created_at >= ?"; $params[] = $_GET['created_from'] . ' 00:00:00'; }
+                if (!empty($_GET['created_to'])) { $where[] = "si.created_at <= ?"; $params[] = $_GET['created_to'] . ' 23:59:59'; }
+                if (!empty($_GET['paid_from'])) { $where[] = "si.paid_at >= ?"; $params[] = $_GET['paid_from'] . ' 00:00:00'; }
+                if (!empty($_GET['paid_to'])) { $where[] = "si.paid_at <= ?"; $params[] = $_GET['paid_to'] . ' 23:59:59'; }
+                if (!empty($_GET['due_date_from'])) { $where[] = "si.due_date >= ?"; $params[] = $_GET['due_date_from']; }
+                if (!empty($_GET['due_date_to'])) { $where[] = "si.due_date <= ?"; $params[] = $_GET['due_date_to']; }
+                if (!empty($_GET['status'])) { $where[] = "si.status = ?"; $params[] = $_GET['status']; }
+                if (!empty($_GET['supplier_id'])) { $where[] = "si.supplier_id = ?"; $params[] = (int)$_GET['supplier_id']; }
+                if (!empty($_GET['hotel_id']) && in_array((int)$_GET['hotel_id'], $userHotelIds)) {
+                    $where[] = "si.hotel_id = ?"; $params[] = (int)$_GET['hotel_id'];
+                }
+
+                $whereClause = 'WHERE ' . implode(' AND ', $where);
+                $invoices = db()->query(
+                    "SELECT si.id, si.invoice_number, si.invoice_date, si.original_file,
+                            s.name as supplier_name
+                     FROM supplier_invoices si
+                     LEFT JOIN suppliers s ON si.supplier_id = s.id
+                     $whereClause
+                     ORDER BY si.invoice_date DESC",
+                    $params
+                );
+
+                if (empty($invoices)) json_error('Aucune facture trouvée pour cette période', 404);
+
+                $zipFile = tempnam(sys_get_temp_dir(), 'acl_invoices_') . '.zip';
+                $zip = new ZipArchive();
+                if ($zip->open($zipFile, ZipArchive::CREATE) !== true) {
+                    json_error('Impossible de créer le fichier ZIP');
+                }
+
+                $count = 0;
+                foreach ($invoices as $inv) {
+                    if (empty($inv['original_file'])) continue;
+                    $filePath = __DIR__ . '/../' . $inv['original_file'];
+                    if (!file_exists($filePath)) continue;
+
+                    $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+                    $supplier = preg_replace('/[^a-zA-Z0-9_-]/', '_', $inv['supplier_name'] ?? 'inconnu');
+                    $num = preg_replace('/[^a-zA-Z0-9_-]/', '_', $inv['invoice_number'] ?? $inv['id']);
+                    $date = $inv['invoice_date'] ?? 'sans-date';
+                    $archiveName = "{$date}_{$supplier}_{$num}.{$ext}";
+
+                    $zip->addFile($filePath, $archiveName);
+                    $count++;
+                }
+
+                $zip->close();
+
+                if ($count === 0) {
+                    unlink($zipFile);
+                    json_error('Aucun fichier de facture trouvé', 404);
+                }
+
+                header('Content-Type: application/zip');
+                header('Content-Disposition: attachment; filename="factures_' . date('Y-m-d') . '_' . $count . 'fichiers.zip"');
+                header('Content-Length: ' . filesize($zipFile));
+                readfile($zipFile);
+                unlink($zipFile);
+                exit;
+            }
+
             // --- GET /invoices/export ---
             if ($method === 'GET' && $id === 'export') {
                 if (!hasPermission($userRole, 'invoices.export')) json_error('Accès refusé', 403);
