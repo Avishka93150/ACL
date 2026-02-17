@@ -87,6 +87,16 @@ const PERMISSION_LABELS = {
     'contracts.delete': 'Supprimer un contrat',
     'contracts.analyze': 'Analyser via IA',
     'contracts.export': 'Exporter les contrats',
+    'suppliers.manage': 'Gérer les fournisseurs',
+    'invoices.view': 'Voir les factures',
+    'invoices.create': 'Déposer une facture',
+    'invoices.edit': 'Modifier une facture',
+    'invoices.review': 'Vérifier les factures',
+    'invoices.approve': 'Approuver les factures',
+    'invoices.pay': 'Payer les factures',
+    'invoices.delete': 'Supprimer une facture',
+    'invoices.export': 'Exporter les factures',
+    'invoices.configure': 'Configurer le workflow factures',
     'permissions.manage': 'Gérer les permissions'
 };
 
@@ -106,6 +116,7 @@ const PERMISSION_CATEGORIES = {
     'Livret d\'accueil': ['welcome.view', 'welcome.manage'],
     'Self Check-in': ['selfcheckin.view', 'selfcheckin.manage'],
     'Contrats Fournisseurs': ['contracts.view', 'contracts.create', 'contracts.manage', 'contracts.delete', 'contracts.analyze', 'contracts.export'],
+    'Factures Fournisseurs': ['suppliers.manage', 'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.review', 'invoices.approve', 'invoices.pay', 'invoices.delete', 'invoices.export', 'invoices.configure'],
     'Dashboard & Rapports': ['dashboard.view', 'dashboard.global', 'reports.access', 'reports.export'],
     'Administration': ['permissions.manage']
 };
@@ -156,6 +167,8 @@ const DEFAULT_PERMISSIONS = {
         'welcome.view': true, 'welcome.manage': true,
         'selfcheckin.view': true, 'selfcheckin.manage': true,
         'contracts.view': true, 'contracts.create': true, 'contracts.manage': true, 'contracts.delete': true, 'contracts.analyze': true, 'contracts.export': true,
+        'suppliers.manage': true,
+        'invoices.view': true, 'invoices.create': true, 'invoices.edit': true, 'invoices.review': true, 'invoices.approve': true, 'invoices.pay': true, 'invoices.delete': true, 'invoices.export': true, 'invoices.configure': true,
         'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': true,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -174,6 +187,8 @@ const DEFAULT_PERMISSIONS = {
         'welcome.view': true, 'welcome.manage': true,
         'selfcheckin.view': true, 'selfcheckin.manage': true,
         'contracts.view': true, 'contracts.create': true, 'contracts.manage': true, 'contracts.delete': false, 'contracts.analyze': true, 'contracts.export': true,
+        'suppliers.manage': true,
+        'invoices.view': true, 'invoices.create': true, 'invoices.edit': true, 'invoices.review': true, 'invoices.approve': true, 'invoices.pay': true, 'invoices.delete': false, 'invoices.export': true, 'invoices.configure': true,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': true,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -192,6 +207,8 @@ const DEFAULT_PERMISSIONS = {
         'welcome.view': false, 'welcome.manage': false,
         'selfcheckin.view': false, 'selfcheckin.manage': false,
         'contracts.view': true, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': true,
+        'suppliers.manage': false,
+        'invoices.view': true, 'invoices.create': true, 'invoices.edit': true, 'invoices.review': true, 'invoices.approve': true, 'invoices.pay': true, 'invoices.delete': false, 'invoices.export': true, 'invoices.configure': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -210,6 +227,8 @@ const DEFAULT_PERMISSIONS = {
         'welcome.view': false, 'welcome.manage': false,
         'selfcheckin.view': false, 'selfcheckin.manage': false,
         'contracts.view': false, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': false,
+        'suppliers.manage': false,
+        'invoices.view': false, 'invoices.create': false, 'invoices.edit': false, 'invoices.review': false, 'invoices.approve': false, 'invoices.pay': false, 'invoices.delete': false, 'invoices.export': false, 'invoices.configure': false,
         'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -228,6 +247,8 @@ const DEFAULT_PERMISSIONS = {
         'welcome.view': true, 'welcome.manage': false,
         'selfcheckin.view': true, 'selfcheckin.manage': false,
         'contracts.view': false, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': false,
+        'suppliers.manage': false,
+        'invoices.view': false, 'invoices.create': false, 'invoices.edit': false, 'invoices.review': false, 'invoices.approve': false, 'invoices.pay': false, 'invoices.delete': false, 'invoices.export': false, 'invoices.configure': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
         'permissions.manage': false
@@ -246,6 +267,8 @@ const DEFAULT_PERMISSIONS = {
         'welcome.view': false, 'welcome.manage': false,
         'selfcheckin.view': false, 'selfcheckin.manage': false,
         'contracts.view': false, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': false,
+        'suppliers.manage': false,
+        'invoices.view': false, 'invoices.create': false, 'invoices.edit': false, 'invoices.review': false, 'invoices.approve': false, 'invoices.pay': false, 'invoices.delete': false, 'invoices.export': false, 'invoices.configure': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
         'permissions.manage': false
