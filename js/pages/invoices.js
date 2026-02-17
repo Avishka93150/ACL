@@ -624,8 +624,8 @@ function invGenerateSepaXml() {
 }
 
 function invDoGenerateSepaXml() {
-    const debtorIban = (document.getElementById('sepa-debtor-iban')?.value || '').replace(/\s/g, '');
-    const debtorBic = (document.getElementById('sepa-debtor-bic')?.value || '').replace(/\s/g, '');
+    const debtorIban = (document.getElementById('sepa-debtor-iban')?.value || '').replace(/\s/g, '').toUpperCase();
+    const debtorBic = (document.getElementById('sepa-debtor-bic')?.value || '').replace(/\s/g, '').toUpperCase();
 
     if (!debtorIban || debtorIban.length < 15) {
         toast('Veuillez renseigner un IBAN émetteur valide', 'warning');
@@ -639,7 +639,8 @@ function invDoGenerateSepaXml() {
     const hotelName = hotel ? hotel.name : 'ACL GESTION';
 
     const now = new Date();
-    const msgId = 'ACL-' + now.toISOString().replace(/[-:T]/g, '').substring(0, 14) + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+    // MsgId : max 35 chars, alphanumérique + tirets uniquement
+    const msgId = ('ACL' + now.toISOString().replace(/[-:T.Z]/g, '').substring(0, 14) + Math.random().toString(36).substring(2, 6)).substring(0, 35).toUpperCase();
     const creationDate = now.toISOString().split('.')[0];
     const executionDate = now.toISOString().split('T')[0];
 
@@ -647,9 +648,9 @@ function invDoGenerateSepaXml() {
     let totalAmount = 0;
     selected.forEach(inv => { totalAmount += parseFloat(inv.total_ttc || 0); });
 
-    // Construire le XML SEPA pain.001.003.03
+    // Construire le XML SEPA pain.001.001.03 (norme ISO 20022 - banques françaises)
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-    xml += '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.003.03" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\n';
+    xml += '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.03" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\n';
     xml += '  <CstmrCdtTrfInitn>\n';
 
     // Group Header
@@ -659,15 +660,16 @@ function invDoGenerateSepaXml() {
     xml += `      <NbOfTxs>${selected.length}</NbOfTxs>\n`;
     xml += `      <CtrlSum>${totalAmount.toFixed(2)}</CtrlSum>\n`;
     xml += '      <InitgPty>\n';
-    xml += `        <Nm>${invEscXml(hotelName.substring(0, 70))}</Nm>\n`;
+    xml += `        <Nm>${invEscXml(invSepaClean(hotelName).substring(0, 70))}</Nm>\n`;
     xml += '      </InitgPty>\n';
     xml += '    </GrpHdr>\n';
 
     // Payment Information
-    const pmtInfId = 'PMT-' + msgId;
+    const pmtInfId = ('PMT' + msgId).substring(0, 35);
     xml += '    <PmtInf>\n';
     xml += `      <PmtInfId>${invEscXml(pmtInfId)}</PmtInfId>\n`;
     xml += '      <PmtMtd>TRF</PmtMtd>\n';
+    xml += '      <BtchBookg>true</BtchBookg>\n';
     xml += `      <NbOfTxs>${selected.length}</NbOfTxs>\n`;
     xml += `      <CtrlSum>${totalAmount.toFixed(2)}</CtrlSum>\n`;
     xml += '      <PmtTpInf>\n';
@@ -675,37 +677,44 @@ function invDoGenerateSepaXml() {
     xml += '      </PmtTpInf>\n';
     xml += `      <ReqdExctnDt>${executionDate}</ReqdExctnDt>\n`;
     xml += '      <Dbtr>\n';
-    xml += `        <Nm>${invEscXml(hotelName.substring(0, 70))}</Nm>\n`;
+    xml += `        <Nm>${invEscXml(invSepaClean(hotelName).substring(0, 70))}</Nm>\n`;
     xml += '      </Dbtr>\n';
     xml += '      <DbtrAcct>\n';
     xml += `        <Id><IBAN>${invEscXml(debtorIban)}</IBAN></Id>\n`;
     xml += '      </DbtrAcct>\n';
     xml += '      <DbtrAgt>\n';
-    xml += `        <FinInstnId>${debtorBic ? `<BIC>${invEscXml(debtorBic)}</BIC>` : '<Othr><Id>NOTPROVIDED</Id></Othr>'}</FinInstnId>\n`;
+    if (debtorBic) {
+        xml += `        <FinInstnId><BIC>${invEscXml(debtorBic)}</BIC></FinInstnId>\n`;
+    } else {
+        xml += '        <FinInstnId><Othr><Id>NOTPROVIDED</Id></Othr></FinInstnId>\n';
+    }
     xml += '      </DbtrAgt>\n';
     xml += '      <ChrgBr>SLEV</ChrgBr>\n';
 
     // Credit Transfer Transactions
     selected.forEach((inv, idx) => {
         const amount = parseFloat(inv.total_ttc || 0).toFixed(2);
-        const endToEndId = 'INV-' + inv.id + '-' + now.getTime().toString(36);
-        const supplierName = (inv.supplier_name || 'Fournisseur').substring(0, 70);
-        const iban = (inv.supplier_iban || '').replace(/\s/g, '');
-        const bic = (inv.supplier_bic || '').replace(/\s/g, '');
-        const reference = inv.invoice_number || ('Facture-' + inv.id);
+        // EndToEndId : max 35 chars, alphanumérique
+        const endToEndId = ('INV' + inv.id + 'T' + now.getTime().toString(36)).substring(0, 35).toUpperCase();
+        const supplierName = invSepaClean(inv.supplier_name || 'Fournisseur').substring(0, 70);
+        const iban = (inv.supplier_iban || '').replace(/\s/g, '').toUpperCase();
+        const bic = (inv.supplier_bic || '').replace(/\s/g, '').toUpperCase();
+        const reference = invSepaClean(inv.invoice_number || ('Facture-' + inv.id)).substring(0, 140);
 
         xml += '      <CdtTrfTxInf>\n';
         xml += '        <PmtId>\n';
-        xml += `          <EndToEndId>${invEscXml(endToEndId.substring(0, 35))}</EndToEndId>\n`;
+        xml += `          <EndToEndId>${invEscXml(endToEndId)}</EndToEndId>\n`;
         xml += '        </PmtId>\n';
         xml += '        <Amt>\n';
         xml += `          <InstdAmt Ccy="EUR">${amount}</InstdAmt>\n`;
         xml += '        </Amt>\n';
+        xml += '        <CdtrAgt>\n';
         if (bic) {
-            xml += '        <CdtrAgt>\n';
             xml += `          <FinInstnId><BIC>${invEscXml(bic)}</BIC></FinInstnId>\n`;
-            xml += '        </CdtrAgt>\n';
+        } else {
+            xml += '          <FinInstnId><Othr><Id>NOTPROVIDED</Id></Othr></FinInstnId>\n';
         }
+        xml += '        </CdtrAgt>\n';
         xml += '        <Cdtr>\n';
         xml += `          <Nm>${invEscXml(supplierName)}</Nm>\n`;
         xml += '        </Cdtr>\n';
@@ -713,7 +722,7 @@ function invDoGenerateSepaXml() {
         xml += `          <Id><IBAN>${invEscXml(iban)}</IBAN></Id>\n`;
         xml += '        </CdtrAcct>\n';
         xml += '        <RmtInf>\n';
-        xml += `          <Ustrd>${invEscXml(reference.substring(0, 140))}</Ustrd>\n`;
+        xml += `          <Ustrd>${invEscXml(reference)}</Ustrd>\n`;
         xml += '        </RmtInf>\n';
         xml += '      </CdtTrfTxInf>\n';
     });
@@ -722,8 +731,9 @@ function invDoGenerateSepaXml() {
     xml += '  </CstmrCdtTrfInitn>\n';
     xml += '</Document>';
 
-    // Télécharger le fichier XML
-    const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+    // Télécharger le fichier XML avec BOM UTF-8
+    const bom = '\uFEFF';
+    const blob = new Blob([bom + xml], { type: 'application/xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -741,6 +751,15 @@ function invDoGenerateSepaXml() {
 
 function invEscXml(str) {
     return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+// Nettoyer les caractères non autorisés en SEPA (Latin basic uniquement)
+function invSepaClean(str) {
+    return String(str || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9 \/\-?:().,'+]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 function invProposeBatchMarkPaid(invoices, xmlRef) {
