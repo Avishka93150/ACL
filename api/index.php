@@ -12325,18 +12325,22 @@ try {
                 if (!$hotelId || !in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
                 if (strlen($q) < 2) json_out(['suppliers' => []]);
 
-                $suppliers = db()->query(
-                    "SELECT s.id, s.name, s.siret, s.tva_number, s.contact_email, s.contact_phone,
-                            s.iban, s.bic, s.payment_method, s.payment_delay_days, s.category_id,
-                            s.address_street, s.address_zip, s.address_city, s.address_country
-                     FROM suppliers s
-                     JOIN hotel_suppliers hs ON s.id = hs.supplier_id
-                     WHERE hs.hotel_id = ? AND hs.is_active = 1 AND s.is_active = 1
-                       AND (s.name LIKE ? OR s.siret LIKE ?)
-                     ORDER BY s.name LIMIT 20",
-                    [$hotelId, "%$q%", "%$q%"]
-                );
-                json_out(['suppliers' => $suppliers]);
+                try {
+                    $suppliers = db()->query(
+                        "SELECT s.id, s.name, s.siret, s.tva_number, s.contact_email, s.contact_phone,
+                                s.iban, s.bic, s.payment_method, s.payment_delay_days, s.category_id,
+                                s.address_street, s.address_zip, s.address_city, s.address_country
+                         FROM suppliers s
+                         JOIN hotel_suppliers hs ON s.id = hs.supplier_id
+                         WHERE hs.hotel_id = ? AND hs.is_active = 1 AND s.is_active = 1
+                           AND (s.name LIKE ? OR s.siret LIKE ?)
+                         ORDER BY s.name LIMIT 20",
+                        [$hotelId, "%$q%", "%$q%"]
+                    );
+                    json_out(['suppliers' => $suppliers]);
+                } catch (Exception $e) {
+                    json_out(['suppliers' => []]);
+                }
             }
 
             // --- GET /suppliers ---
@@ -12380,8 +12384,12 @@ try {
                           $whereClause
                           ORDER BY s.name";
 
-                $result = paginate($query, $params);
-                json_out(['suppliers' => $result['data'], 'pagination' => $result['pagination']]);
+                try {
+                    $result = paginate($query, $params);
+                    json_out(['suppliers' => $result['data'], 'pagination' => $result['pagination']]);
+                } catch (Exception $e) {
+                    json_out(['suppliers' => [], 'pagination' => ['page' => 1, 'per_page' => 25, 'total' => 0, 'total_pages' => 0, 'has_next' => false, 'has_prev' => false]]);
+                }
             }
 
             // --- GET /suppliers/{id} ---
@@ -12604,56 +12612,64 @@ try {
                 $hotelId = (int)($_GET['hotel_id'] ?? 0);
                 $hotelFilter = $hotelId && in_array($hotelId, $userHotelIds) ? "AND hotel_id = $hotelId" : "AND hotel_id IN ($hotelList)";
 
-                $stats = [
-                    'draft' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'draft' $hotelFilter"),
-                    'pending_review' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'pending_review' $hotelFilter"),
-                    'pending_approval' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'pending_approval' $hotelFilter"),
-                    'approved' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'approved' $hotelFilter"),
-                    'pending_payment' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'pending_payment' $hotelFilter"),
-                    'payment_initiated' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'payment_initiated' $hotelFilter"),
-                    'paid' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'paid' $hotelFilter"),
-                    'rejected' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'rejected' $hotelFilter"),
-                    'overdue' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE due_date < CURDATE() AND status NOT IN ('paid','cancelled','rejected') $hotelFilter"),
-                    'total_due' => (float)(db()->queryOne("SELECT COALESCE(SUM(total_ttc), 0) as total FROM supplier_invoices WHERE status IN ('approved','pending_payment') $hotelFilter")['total'] ?? 0),
-                    'total_paid_month' => (float)(db()->queryOne("SELECT COALESCE(SUM(total_ttc), 0) as total FROM supplier_invoices WHERE status = 'paid' AND MONTH(paid_at) = MONTH(CURDATE()) AND YEAR(paid_at) = YEAR(CURDATE()) $hotelFilter")['total'] ?? 0)
-                ];
+                $stats = ['draft' => 0, 'pending_review' => 0, 'pending_approval' => 0, 'approved' => 0,
+                           'pending_payment' => 0, 'payment_initiated' => 0, 'paid' => 0, 'rejected' => 0,
+                           'overdue' => 0, 'total_due' => 0, 'total_paid_month' => 0];
+                try {
+                    $stats = [
+                        'draft' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'draft' $hotelFilter"),
+                        'pending_review' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'pending_review' $hotelFilter"),
+                        'pending_approval' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'pending_approval' $hotelFilter"),
+                        'approved' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'approved' $hotelFilter"),
+                        'pending_payment' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'pending_payment' $hotelFilter"),
+                        'payment_initiated' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'payment_initiated' $hotelFilter"),
+                        'paid' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'paid' $hotelFilter"),
+                        'rejected' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE status = 'rejected' $hotelFilter"),
+                        'overdue' => db()->count("SELECT COUNT(*) FROM supplier_invoices WHERE due_date < CURDATE() AND status NOT IN ('paid','cancelled','rejected') $hotelFilter"),
+                        'total_due' => (float)(db()->queryOne("SELECT COALESCE(SUM(total_ttc), 0) as total FROM supplier_invoices WHERE status IN ('approved','pending_payment') $hotelFilter")['total'] ?? 0),
+                        'total_paid_month' => (float)(db()->queryOne("SELECT COALESCE(SUM(total_ttc), 0) as total FROM supplier_invoices WHERE status = 'paid' AND MONTH(paid_at) = MONTH(CURDATE()) AND YEAR(paid_at) = YEAR(CURDATE()) $hotelFilter")['total'] ?? 0)
+                    ];
+                } catch (Exception $e) {}
                 json_out(['stats' => $stats]);
             }
 
             // --- GET /invoices/reporting ---
-            if ($method === 'GET' && $id === 'reporting') {
+            if ($method === 'GET' && $id === 'reporting' && !$action) {
                 if (!hasPermission($userRole, 'invoices.view')) json_error('Accès refusé', 403);
                 $hotelId = (int)($_GET['hotel_id'] ?? 0);
                 $year = (int)($_GET['year'] ?? date('Y'));
                 $hotelFilter = $hotelId && in_array($hotelId, $userHotelIds) ? "AND si.hotel_id = $hotelId" : "AND si.hotel_id IN ($hotelList)";
 
-                $data = db()->query(
-                    "SELECT cc.id as category_id, cc.name as category_name, cc.color,
-                            MONTH(si.invoice_date) as month,
-                            SUM(si.total_ttc) as total
-                     FROM supplier_invoices si
-                     LEFT JOIN suppliers s ON si.supplier_id = s.id
-                     LEFT JOIN contract_categories cc ON s.category_id = cc.id
-                     WHERE YEAR(si.invoice_date) = ? AND si.status IN ('approved','pending_payment','payment_initiated','paid')
-                       $hotelFilter
-                     GROUP BY cc.id, cc.name, cc.color, MONTH(si.invoice_date)
-                     ORDER BY cc.name, month",
-                    [$year]
-                );
+                $data = [];
+                $prevYear = [];
+                try {
+                    $data = db()->query(
+                        "SELECT cc.id as category_id, cc.name as category_name, cc.color,
+                                MONTH(si.invoice_date) as month,
+                                SUM(si.total_ttc) as total
+                         FROM supplier_invoices si
+                         LEFT JOIN suppliers s ON si.supplier_id = s.id
+                         LEFT JOIN contract_categories cc ON s.category_id = cc.id
+                         WHERE YEAR(si.invoice_date) = ? AND si.status IN ('approved','pending_payment','payment_initiated','paid')
+                           $hotelFilter
+                         GROUP BY cc.id, cc.name, cc.color, MONTH(si.invoice_date)
+                         ORDER BY cc.name, month",
+                        [$year]
+                    );
 
-                // Données année précédente pour comparaison
-                $prevYear = db()->query(
-                    "SELECT cc.id as category_id,
-                            MONTH(si.invoice_date) as month,
-                            SUM(si.total_ttc) as total
-                     FROM supplier_invoices si
-                     LEFT JOIN suppliers s ON si.supplier_id = s.id
-                     LEFT JOIN contract_categories cc ON s.category_id = cc.id
-                     WHERE YEAR(si.invoice_date) = ? AND si.status IN ('approved','pending_payment','payment_initiated','paid')
-                       $hotelFilter
-                     GROUP BY cc.id, MONTH(si.invoice_date)",
-                    [$year - 1]
-                );
+                    $prevYear = db()->query(
+                        "SELECT cc.id as category_id,
+                                MONTH(si.invoice_date) as month,
+                                SUM(si.total_ttc) as total
+                         FROM supplier_invoices si
+                         LEFT JOIN suppliers s ON si.supplier_id = s.id
+                         LEFT JOIN contract_categories cc ON s.category_id = cc.id
+                         WHERE YEAR(si.invoice_date) = ? AND si.status IN ('approved','pending_payment','payment_initiated','paid')
+                           $hotelFilter
+                         GROUP BY cc.id, MONTH(si.invoice_date)",
+                        [$year - 1]
+                    );
+                } catch (Exception $e) {}
 
                 json_out(['reporting' => $data, 'previous_year' => $prevYear, 'year' => $year]);
             }
@@ -12901,12 +12917,15 @@ try {
                 $hotelId = (int)($_GET['hotel_id'] ?? 0);
                 if (!$hotelId || !in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
 
-                $rules = db()->query(
-                    "SELECT iar.*, cc.name as category_name FROM invoice_approval_rules iar
-                     LEFT JOIN contract_categories cc ON iar.supplier_category_id = cc.id
-                     WHERE iar.hotel_id = ? ORDER BY iar.sort_order, iar.min_amount",
-                    [$hotelId]
-                );
+                $rules = [];
+                try {
+                    $rules = db()->query(
+                        "SELECT iar.*, cc.name as category_name FROM invoice_approval_rules iar
+                         LEFT JOIN contract_categories cc ON iar.supplier_category_id = cc.id
+                         WHERE iar.hotel_id = ? ORDER BY iar.sort_order, iar.min_amount",
+                        [$hotelId]
+                    );
+                } catch (Exception $e) {}
                 json_out(['rules' => $rules]);
             }
 
@@ -13029,13 +13048,16 @@ try {
                 $hotelId = (int)($_GET['hotel_id'] ?? 0);
                 if (!$hotelId || !in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
 
-                $config = db()->queryOne(
-                    "SELECT id, hotel_id, app_id, IF(app_secret IS NOT NULL AND app_secret != '', 1, 0) as has_secret,
-                            private_key_path, environment, IF(webhook_secret IS NOT NULL AND webhook_secret != '', 1, 0) as has_webhook_secret,
-                            is_active, created_at, updated_at
-                     FROM fintecture_config WHERE hotel_id = ?",
-                    [$hotelId]
-                );
+                $config = null;
+                try {
+                    $config = db()->queryOne(
+                        "SELECT id, hotel_id, app_id, IF(app_secret IS NOT NULL AND app_secret != '', 1, 0) as has_secret,
+                                private_key_path, environment, IF(webhook_secret IS NOT NULL AND webhook_secret != '', 1, 0) as has_webhook_secret,
+                                is_active, created_at, updated_at
+                         FROM fintecture_config WHERE hotel_id = ?",
+                        [$hotelId]
+                    );
+                } catch (Exception $e) {}
                 json_out(['config' => $config ?: ['hotel_id' => $hotelId, 'is_active' => 0, 'environment' => 'sandbox']]);
             }
 
@@ -13087,8 +13109,10 @@ try {
             if ($method === 'GET' && $id === 'ocr-status') {
                 if (!hasPermission($userRole, 'invoices.configure')) json_error('Accès refusé', 403);
                 $prereqs = OcrClient::checkPrerequisites();
-                // Récupérer la config IA depuis hotel_contracts_config (sera migré vers ai_config)
-                $aiConfigs = db()->query("SELECT hotel_id, ai_enabled FROM hotel_contracts_config WHERE hotel_id IN ($hotelList)");
+                $aiConfigs = [];
+                try {
+                    $aiConfigs = db()->query("SELECT hotel_id, ai_enabled FROM hotel_contracts_config WHERE hotel_id IN ($hotelList)");
+                } catch (Exception $e) {}
                 json_out(['prerequisites' => $prereqs, 'ai_configs' => $aiConfigs]);
             }
 
@@ -13096,36 +13120,40 @@ try {
             if ($method === 'GET' && !$id) {
                 if (!hasPermission($userRole, 'invoices.view')) json_error('Accès refusé', 403);
 
-                $where = ["si.hotel_id IN ($hotelList)"];
-                $params = [];
+                try {
+                    $where = ["si.hotel_id IN ($hotelList)"];
+                    $params = [];
 
-                if (!empty($_GET['hotel_id']) && in_array((int)$_GET['hotel_id'], $userHotelIds)) {
-                    $where = ["si.hotel_id = ?"];
-                    $params = [(int)$_GET['hotel_id']];
+                    if (!empty($_GET['hotel_id']) && in_array((int)$_GET['hotel_id'], $userHotelIds)) {
+                        $where = ["si.hotel_id = ?"];
+                        $params = [(int)$_GET['hotel_id']];
+                    }
+                    if (!empty($_GET['status'])) { $where[] = "si.status = ?"; $params[] = $_GET['status']; }
+                    if (!empty($_GET['supplier_id'])) { $where[] = "si.supplier_id = ?"; $params[] = (int)$_GET['supplier_id']; }
+                    if (!empty($_GET['period_from'])) { $where[] = "si.invoice_date >= ?"; $params[] = $_GET['period_from']; }
+                    if (!empty($_GET['period_to'])) { $where[] = "si.invoice_date <= ?"; $params[] = $_GET['period_to']; }
+                    if (!empty($_GET['search'])) {
+                        $where[] = "(si.invoice_number LIKE ? OR s.name LIKE ?)";
+                        $search = '%' . trim($_GET['search']) . '%';
+                        $params[] = $search;
+                        $params[] = $search;
+                    }
+
+                    $whereClause = 'WHERE ' . implode(' AND ', $where);
+                    $query = "SELECT si.*, s.name as supplier_name, h.name as hotel_name,
+                                     cc.name as category_name, cc.color as category_color
+                              FROM supplier_invoices si
+                              LEFT JOIN suppliers s ON si.supplier_id = s.id
+                              LEFT JOIN hotels h ON si.hotel_id = h.id
+                              LEFT JOIN contract_categories cc ON s.category_id = cc.id
+                              $whereClause
+                              ORDER BY si.created_at DESC";
+
+                    $result = paginate($query, $params);
+                    json_out(['invoices' => $result['data'], 'pagination' => $result['pagination']]);
+                } catch (Exception $e) {
+                    json_out(['invoices' => [], 'pagination' => ['page' => 1, 'per_page' => 25, 'total' => 0, 'total_pages' => 0, 'has_next' => false, 'has_prev' => false]]);
                 }
-                if (!empty($_GET['status'])) { $where[] = "si.status = ?"; $params[] = $_GET['status']; }
-                if (!empty($_GET['supplier_id'])) { $where[] = "si.supplier_id = ?"; $params[] = (int)$_GET['supplier_id']; }
-                if (!empty($_GET['period_from'])) { $where[] = "si.invoice_date >= ?"; $params[] = $_GET['period_from']; }
-                if (!empty($_GET['period_to'])) { $where[] = "si.invoice_date <= ?"; $params[] = $_GET['period_to']; }
-                if (!empty($_GET['search'])) {
-                    $where[] = "(si.invoice_number LIKE ? OR s.name LIKE ?)";
-                    $search = '%' . trim($_GET['search']) . '%';
-                    $params[] = $search;
-                    $params[] = $search;
-                }
-
-                $whereClause = 'WHERE ' . implode(' AND ', $where);
-                $query = "SELECT si.*, s.name as supplier_name, h.name as hotel_name,
-                                 cc.name as category_name, cc.color as category_color
-                          FROM supplier_invoices si
-                          LEFT JOIN suppliers s ON si.supplier_id = s.id
-                          LEFT JOIN hotels h ON si.hotel_id = h.id
-                          LEFT JOIN contract_categories cc ON s.category_id = cc.id
-                          $whereClause
-                          ORDER BY si.created_at DESC";
-
-                $result = paginate($query, $params);
-                json_out(['invoices' => $result['data'], 'pagination' => $result['pagination']]);
             }
 
             // --- GET /invoices/{id} (détail) ---
