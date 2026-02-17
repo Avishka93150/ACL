@@ -2977,9 +2977,9 @@ try {
                 if (!in_array($user['role'], ['admin'])) json_error('Réservé aux administrateurs', 403);
                 $config = null;
                 try {
-                    $config = db()->queryOne("SELECT id, hotel_id, ai_enabled, IF(anthropic_api_key IS NOT NULL AND anthropic_api_key != '', 1, 0) as has_api_key, created_at, updated_at FROM hotel_contracts_config WHERE hotel_id = ?", [$id]);
+                    $config = db()->queryOne("SELECT id, hotel_id, ai_enabled, IF(anthropic_api_key IS NOT NULL AND anthropic_api_key != '', 1, 0) as has_api_key, ai_model_ocr, ai_model_contracts, created_at, updated_at FROM hotel_contracts_config WHERE hotel_id = ?", [$id]);
                 } catch (Exception $e) {}
-                json_out(['success' => true, 'config' => $config ?: ['hotel_id' => (int)$id, 'ai_enabled' => 0, 'has_api_key' => 0]]);
+                json_out(['success' => true, 'config' => $config ?: ['hotel_id' => (int)$id, 'ai_enabled' => 0, 'has_api_key' => 0, 'ai_model_ocr' => 'claude-sonnet-4-5-20250929', 'ai_model_contracts' => 'claude-sonnet-4-5-20250929']]);
             }
 
             // PUT /hotels/{id}/contracts-config - Sauvegarder configuration IA contrats
@@ -2995,6 +2995,13 @@ try {
 
                 $aiEnabled = !empty($data['ai_enabled']) ? 1 : 0;
                 $apiKey = isset($data['anthropic_api_key']) ? $data['anthropic_api_key'] : null;
+                $modelOcr = isset($data['ai_model_ocr']) && !empty($data['ai_model_ocr']) ? $data['ai_model_ocr'] : null;
+                $modelContracts = isset($data['ai_model_contracts']) && !empty($data['ai_model_contracts']) ? $data['ai_model_contracts'] : null;
+
+                // Valider les modèles autorisés
+                $allowedModels = ['claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001', 'claude-opus-4-6'];
+                if ($modelOcr && !in_array($modelOcr, $allowedModels)) json_error('Modèle OCR non autorisé');
+                if ($modelContracts && !in_array($modelContracts, $allowedModels)) json_error('Modèle contrats non autorisé');
 
                 if ($existing) {
                     $sets = ['ai_enabled = ?', 'updated_at = NOW()'];
@@ -3004,12 +3011,20 @@ try {
                         $sets[] = 'anthropic_api_key = ?';
                         $params[] = $apiKey;
                     }
+                    if ($modelOcr) {
+                        $sets[] = 'ai_model_ocr = ?';
+                        $params[] = $modelOcr;
+                    }
+                    if ($modelContracts) {
+                        $sets[] = 'ai_model_contracts = ?';
+                        $params[] = $modelContracts;
+                    }
                     $params[] = $id;
                     db()->execute("UPDATE hotel_contracts_config SET " . implode(', ', $sets) . " WHERE hotel_id = ?", $params);
                 } else {
                     db()->insert(
-                        "INSERT INTO hotel_contracts_config (hotel_id, ai_enabled, anthropic_api_key, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())",
-                        [$id, $aiEnabled, $apiKey]
+                        "INSERT INTO hotel_contracts_config (hotel_id, ai_enabled, anthropic_api_key, ai_model_ocr, ai_model_contracts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())",
+                        [$id, $aiEnabled, $apiKey, $modelOcr ?? 'claude-sonnet-4-5-20250929', $modelContracts ?? 'claude-sonnet-4-5-20250929']
                     );
                 }
                 json_out(['success' => true]);
@@ -8161,8 +8176,9 @@ try {
                                 db()->execute("UPDATE supplier_invoices SET ocr_status = 'processing' WHERE id = ?", [$invoiceId]);
                                 $aiConfig = db()->queryOne("SELECT * FROM hotel_contracts_config WHERE hotel_id = ? AND ai_enabled = 1", [$hotelId]);
                                 $apiKey = $aiConfig['anthropic_api_key'] ?? null;
+                                $ocrModel = $aiConfig['ai_model_ocr'] ?? 'claude-sonnet-4-5-20250929';
 
-                                $ocrResult = OcrClient::processInvoice($invFilePath, $apiKey);
+                                $ocrResult = OcrClient::processInvoice($invFilePath, $apiKey, $ocrModel);
 
                                 if ($ocrResult['success'] && $ocrResult['data']) {
                                     $ocrData = $ocrResult['data'];
@@ -12349,7 +12365,8 @@ try {
                 $prompt .= "5. **Recommandations** : Actions recommandées (renégociation, résiliation, renouvellement, etc.)\n\n";
                 $prompt .= "Contrat à analyser :\n$contractContext";
 
-                // Appel API Anthropic Claude
+                // Appel API Anthropic Claude avec le modèle configuré
+                $contractsModel = $config['ai_model_contracts'] ?? 'claude-sonnet-4-5-20250929';
                 $ch = curl_init('https://api.anthropic.com/v1/messages');
                 curl_setopt_array($ch, [
                     CURLOPT_RETURNTRANSFER => true,
@@ -12361,7 +12378,7 @@ try {
                         'anthropic-version: 2023-06-01'
                     ],
                     CURLOPT_POSTFIELDS => json_encode([
-                        'model' => 'claude-sonnet-4-5-20250929',
+                        'model' => $contractsModel,
                         'max_tokens' => 2048,
                         'messages' => [
                             ['role' => 'user', 'content' => $prompt]
@@ -13614,11 +13631,12 @@ try {
                 if (!$skipOcr) {
                     db()->execute("UPDATE supplier_invoices SET ocr_status = 'processing' WHERE id = ?", [$invoiceId]);
 
-                    // Récupérer la clé API IA
+                    // Récupérer la clé API IA et le modèle configuré
                     $aiConfig = db()->queryOne("SELECT * FROM hotel_contracts_config WHERE hotel_id = ? AND ai_enabled = 1", [$hotelId]);
                     $apiKey = $aiConfig['anthropic_api_key'] ?? null;
+                    $ocrModel = $aiConfig['ai_model_ocr'] ?? 'claude-sonnet-4-5-20250929';
 
-                    $ocrResult = OcrClient::processInvoice($filePath, $apiKey);
+                    $ocrResult = OcrClient::processInvoice($filePath, $apiKey, $ocrModel);
 
                     if ($ocrResult['success'] && $ocrResult['data']) {
                         $ocrData = $ocrResult['data'];
