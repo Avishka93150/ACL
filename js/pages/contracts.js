@@ -672,6 +672,10 @@ function ctEditContract(id) {
 
 async function ctSaveContract(e, id) {
     e.preventDefault();
+
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (id ? t('contracts.saving') : t('contracts.creating')); }
+
     const data = {
         hotel_id: ctCurrentHotel,
         supplier_name: document.getElementById('ct-supplier').value,
@@ -705,18 +709,26 @@ async function ctSaveContract(e, id) {
 
         // Upload du PDF signe si un fichier a ete selectionne
         if (pdfFile && contractId) {
-            const formData = new FormData();
-            formData.append('file', pdfFile);
-            formData.append('type', 'contract');
-            formData.append('label', pdfFile.name);
-            await API.upload(`contracts/${contractId}/documents`, formData);
-            toast(t('contracts.doc_uploaded'), 'success');
+            try {
+                if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Upload du document...';
+                const formData = new FormData();
+                formData.append('file', pdfFile);
+                formData.append('type', 'contract');
+                formData.append('label', pdfFile.name);
+                await API.upload(`contracts/${contractId}/documents`, formData);
+                toast(t('contracts.doc_uploaded'), 'success');
+            } catch (uploadErr) {
+                toast(t('contracts.error') + ' (document) : ' + uploadErr.message, 'error');
+            }
         }
 
         closeModal();
         ctLoadStats();
         ctSwitchTab(ctActiveTab);
-    } catch (err) { toast(t('contracts.error') + ': ' + err.message, 'error'); }
+    } catch (err) {
+        toast(t('contracts.error') + ': ' + err.message, 'error');
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fas fa-save"></i> ' + (id ? t('contracts.edit') : t('contracts.create')); }
+    }
 }
 
 // ============ VUE DÉTAILLÉE D'UN CONTRAT ============
@@ -868,18 +880,37 @@ async function ctUploadDocument(e, contractId) {
     e.preventDefault();
     const fileInput = document.getElementById('ct-doc-file');
     const docType = document.getElementById('ct-doc-type').value;
-    if (!fileInput.files[0]) return;
+    if (!fileInput.files[0]) { toast('Veuillez sélectionner un fichier', 'warning'); return; }
+
+    const file = fileInput.files[0];
+
+    // Validation côté client
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['pdf', 'jpg', 'jpeg', 'png'].includes(ext)) {
+        toast('Format non autorisé. Formats acceptés : PDF, JPG, PNG', 'error');
+        return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+        toast('Fichier trop volumineux (max 10 Mo)', 'error');
+        return;
+    }
+
+    const uploadBtn = e.target.querySelector('button[type="submit"]');
+    if (uploadBtn) { uploadBtn.disabled = true; uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
 
     const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
+    formData.append('file', file);
     formData.append('type', docType);
-    formData.append('label', fileInput.files[0].name);
+    formData.append('label', file.name);
 
     try {
         await API.upload(`contracts/${contractId}/documents`, formData);
         toast(t('contracts.doc_uploaded'), 'success');
         ctViewContract(contractId);
-    } catch (e) { toast(t('contracts.error') + ': ' + e.message, 'error'); }
+    } catch (err) {
+        toast(t('contracts.error') + ': ' + err.message, 'error');
+        if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.innerHTML = '<i class="fas fa-upload"></i>'; }
+    }
 }
 
 async function ctDeleteDocument(contractId, docId) {

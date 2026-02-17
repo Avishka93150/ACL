@@ -158,7 +158,7 @@ class OcrClient {
         }
 
         $prompt = <<<'PROMPT'
-Tu es un expert en extraction de donnees de factures fournisseurs. Analyse le texte OCR suivant et extrais les informations structurees en JSON.
+Tu es un expert en extraction de donnees de factures fournisseurs francaises. Analyse le texte OCR suivant et extrais les informations structurees en JSON.
 
 IMPORTANT : Retourne UNIQUEMENT un objet JSON valide, sans texte avant ni apres.
 
@@ -167,10 +167,13 @@ Structure attendue :
   "supplier": {
     "name": "Raison sociale du fournisseur",
     "siret": "N SIRET (14 chiffres) ou null",
-    "tva_number": "N TVA intracommunautaire ou null",
+    "siren": "N SIREN (9 chiffres) ou null",
+    "tva_number": "N TVA intracommunautaire (ex: FR12345678901) ou null",
     "address": "Adresse complete ou null",
     "contact_email": "Email ou null",
-    "contact_phone": "Telephone ou null"
+    "contact_phone": "Telephone ou null",
+    "iban": "IBAN (FR76...) ou null",
+    "bic": "Code BIC/SWIFT ou null"
   },
   "invoice": {
     "invoice_number": "Numero de facture",
@@ -188,7 +191,8 @@ Structure attendue :
       "quantity": 1,
       "unit_price_ht": 0.00,
       "tva_rate": 20.00,
-      "total_ht": 0.00
+      "total_ht": 0.00,
+      "suggested_category": "Categorie suggeree parmi: Alimentation, Boissons, Entretien, Nettoyage, Fournitures, Electricite, Eau, Gaz, Telecom, Assurance, Maintenance, Blanchisserie, Amenities, Decoration, Equipement, Informatique, Marketing, Juridique, Comptabilite, Divers"
     }
   ],
   "confidence": {
@@ -202,12 +206,16 @@ Structure attendue :
 }
 
 Notes :
-- Les montants doivent etre des nombres decimaux (pas de symboles)
+- Les montants doivent etre des nombres decimaux (pas de symboles monetaires)
 - Les dates en format ISO YYYY-MM-DD
 - Si une information est illisible ou absente, mettre null
 - Le score de confiance (0-100) reflete la fiabilite de chaque champ extrait
-- Pour les taux TVA, utiliser 20.00, 10.00, 5.50 ou 2.10
+- Pour les taux TVA francais, utiliser 20.00, 10.00, 5.50 ou 2.10
 - Si plusieurs taux TVA sont presents, creer une ligne par taux
+- Pour le fournisseur, extraire le SIRET/SIREN et le N TVA s'ils sont visibles
+- Pour l'IBAN/BIC, les extraire s'ils apparaissent dans la zone de paiement (RIB, coordonnees bancaires)
+- Pour suggested_category, choisir la categorie la plus pertinente en analysant la description de la ligne et le type de fournisseur
+- Si total_ht et total_ttc sont presents, verifier que total_ttc = total_ht + total_tva
 
 Texte OCR a analyser :
 PROMPT;

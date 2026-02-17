@@ -544,6 +544,8 @@ async function hotelBankDelete(hotelId, accountId, label) {
 
 // ---- ONGLET RESERVATION ----
 function renderTabBooking(content, h) {
+    const bookingUrl = h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : '';
+
     content.innerHTML = `
         <div class="card">
             <div class="card-header">
@@ -578,9 +580,9 @@ function renderTabBooking(content, h) {
                     <div class="form-group" id="booking-url-group" style="${h.booking_slug ? '' : 'display:none'}">
                         <label><i class="fas fa-link"></i> Lien self check-in client</label>
                         <div style="display:flex;gap:8px;align-items:center">
-                            <input type="text" readonly value="${h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : ''}" style="flex:1;padding:8px 12px;border:1px solid #93C5FD;border-radius:6px;font-size:13px;background:#F0F9FF;color:#1E40AF" id="booking-url-field">
+                            <input type="text" readonly value="${bookingUrl}" style="flex:1;padding:8px 12px;border:1px solid #93C5FD;border-radius:6px;font-size:13px;background:#F0F9FF;color:#1E40AF" id="booking-url-field">
                             <button type="button" class="btn btn-sm btn-outline" onclick="copyBookingUrl()" title="Copier"><i class="fas fa-copy"></i></button>
-                            <a href="${h.booking_slug ? window.location.origin + '/booking.html?hotel=' + encodeURIComponent(h.booking_slug) : '#'}" target="_blank" class="btn btn-sm btn-primary" id="booking-url-open" title="Ouvrir"><i class="fas fa-external-link-alt"></i></a>
+                            <a href="${bookingUrl || '#'}" target="_blank" class="btn btn-sm btn-primary" id="booking-url-open" title="Ouvrir"><i class="fas fa-external-link-alt"></i></a>
                         </div>
                         <small class="form-help">Partagez ce lien avec vos clients ou affichez-le sur une borne</small>
                     </div>
@@ -591,7 +593,46 @@ function renderTabBooking(content, h) {
                 </form>
             </div>
         </div>
+
+        ${h.booking_slug ? `
+        <div class="card" style="margin-top:20px">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-qrcode"></i> QR Code - Réservation</h3>
+                <div style="display:flex;gap:8px">
+                    <button class="btn btn-sm btn-outline" onclick="downloadBookingQR('${escAttr(h.booking_slug)}', '${escAttr(h.name)}')" title="Télécharger le QR code"><i class="fas fa-download"></i> Télécharger</button>
+                    <button class="btn btn-sm btn-outline" onclick="printBookingQR('${escAttr(h.booking_slug)}', '${escAttr(h.name)}')" title="Imprimer le QR code"><i class="fas fa-print"></i> Imprimer</button>
+                </div>
+            </div>
+            <div class="card-body" style="padding:24px;text-align:center">
+                <div style="display:inline-block;padding:24px;background:#fff;border-radius:12px;border:2px solid var(--gray-200)">
+                    <canvas id="booking-qr-canvas"></canvas>
+                    <div style="margin-top:12px;font-size:14px;font-weight:600;color:var(--gray-700)">${esc(h.name)}</div>
+                    <div style="margin-top:4px;font-size:12px;color:var(--gray-400)">Scannez pour réserver</div>
+                </div>
+                <div style="margin-top:16px;font-size:12px;color:var(--gray-400)">
+                    <i class="fas fa-info-circle"></i> Ce QR code redirige vers la page de réservation de l'hôtel
+                </div>
+            </div>
+        </div>
+        ` : ''}
     `;
+
+    // Générer le QR code si un slug existe
+    if (h.booking_slug && typeof QRious !== 'undefined') {
+        setTimeout(() => {
+            const canvas = document.getElementById('booking-qr-canvas');
+            if (canvas) {
+                new QRious({
+                    element: canvas,
+                    value: bookingUrl,
+                    size: 220,
+                    level: 'M',
+                    foreground: '#1E3A5F',
+                    background: '#FFFFFF'
+                });
+            }
+        }, 50);
+    }
 }
 
 // ---- ONGLET SELF CHECK-IN ----
@@ -1986,6 +2027,47 @@ function copyBookingUrl() {
         navigator.clipboard.writeText(field.value);
         toast('URL copiée dans le presse-papier', 'success');
     }
+}
+
+function downloadBookingQR(slug, hotelName) {
+    const canvas = document.getElementById('booking-qr-canvas');
+    if (!canvas) return;
+    const link = document.createElement('a');
+    link.download = 'qr-reservation-' + slug + '.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    toast('QR code téléchargé', 'success');
+}
+
+function printBookingQR(slug, hotelName) {
+    const canvas = document.getElementById('booking-qr-canvas');
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL('image/png');
+    const bookingUrl = window.location.origin + '/booking.html?hotel=' + encodeURIComponent(slug);
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<title>QR Code - ${hotelName}</title>
+<style>
+    body { font-family: 'Inter', Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #fff; }
+    .qr-card { text-align: center; padding: 40px; border: 2px solid #e5e7eb; border-radius: 16px; max-width: 400px; }
+    .qr-card img { display: block; margin: 0 auto 20px; }
+    .hotel-name { font-size: 22px; font-weight: 700; color: #1E3A5F; margin-bottom: 8px; }
+    .scan-text { font-size: 16px; color: #6b7280; margin-bottom: 16px; }
+    .url-text { font-size: 11px; color: #9ca3af; word-break: break-all; }
+    @media print { body { background: #fff; } .qr-card { border: none; } }
+</style>
+</head><body>
+<div class="qr-card">
+    <img src="${dataUrl}" width="280" height="280" alt="QR Code">
+    <div class="hotel-name">${hotelName}</div>
+    <div class="scan-text">Scannez pour réserver</div>
+    <div class="url-text">${bookingUrl}</div>
+</div>
+<script>window.onload = function() { window.print(); }</script>
+</body></html>`);
+    printWindow.document.close();
 }
 
 function onSlugInput() {

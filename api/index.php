@@ -12219,8 +12219,23 @@ try {
                 if (!$contract) json_error('Contrat non trouvé', 404);
                 if (!in_array($contract['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
 
-                if (!isset($_FILES['file'])) json_error('Aucun fichier envoyé');
+                if (!isset($_FILES['file'])) json_error('Aucun fichier envoyé. Vérifiez que le champ file est bien présent dans le formulaire.');
                 $file = $_FILES['file'];
+
+                // Vérifier les erreurs PHP d'upload
+                if ($file['error'] !== UPLOAD_ERR_OK) {
+                    $uploadErrors = [
+                        UPLOAD_ERR_INI_SIZE => 'Le fichier dépasse la taille maximale autorisée par le serveur (upload_max_filesize=' . ini_get('upload_max_filesize') . ')',
+                        UPLOAD_ERR_FORM_SIZE => 'Le fichier dépasse la taille maximale du formulaire',
+                        UPLOAD_ERR_PARTIAL => 'Le fichier n\'a été que partiellement uploadé',
+                        UPLOAD_ERR_NO_FILE => 'Aucun fichier n\'a été uploadé',
+                        UPLOAD_ERR_NO_TMP_DIR => 'Erreur serveur : répertoire temporaire manquant',
+                        UPLOAD_ERR_CANT_WRITE => 'Erreur serveur : impossible d\'écrire le fichier sur le disque',
+                        UPLOAD_ERR_EXTENSION => 'Upload bloqué par une extension PHP'
+                    ];
+                    json_error($uploadErrors[$file['error']] ?? 'Erreur d\'upload inconnue (code ' . $file['error'] . ')');
+                }
+
                 $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
                 if (!in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'])) json_error('Format non autorisé (PDF, JPG, PNG uniquement)');
                 if ($file['size'] > 10 * 1024 * 1024) json_error('Fichier trop volumineux (max 10 Mo)');
@@ -12228,7 +12243,7 @@ try {
                 $filename = uniqid() . '.' . $ext;
                 $uploadDir = __DIR__ . '/../uploads/contracts/';
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0775, true);
-                if (!move_uploaded_file($file['tmp_name'], $uploadDir . $filename)) json_error('Erreur lors de l\'upload');
+                if (!move_uploaded_file($file['tmp_name'], $uploadDir . $filename)) json_error('Erreur lors de l\'upload. Vérifiez les permissions du répertoire uploads/contracts/');
 
                 $docType = $_POST['type'] ?? 'other';
                 $label = $_POST['label'] ?? $file['name'];
@@ -13535,6 +13550,16 @@ try {
                 $payments = db()->query("SELECT * FROM invoice_payments WHERE invoice_id = ? ORDER BY initiated_at DESC", [(int)$id]);
                 $invoice['payments'] = $payments;
 
+                // Décoder les données OCR brutes pour le frontend (fournisseur détecté, confiance)
+                if (!empty($invoice['ocr_raw_data'])) {
+                    $ocrRaw = json_decode($invoice['ocr_raw_data'], true);
+                    if ($ocrRaw && isset($ocrRaw['data'])) {
+                        $invoice['ocr_supplier'] = $ocrRaw['data']['supplier'] ?? null;
+                        $invoice['ocr_confidence'] = $ocrRaw['data']['confidence'] ?? null;
+                        $invoice['ocr_invoice'] = $ocrRaw['data']['invoice'] ?? null;
+                    }
+                }
+
                 json_out(['invoice' => $invoice]);
             }
 
@@ -13621,22 +13646,54 @@ try {
                             if (!empty($inv['po_number'])) $updates['po_number'] = $inv['po_number'];
                         }
 
-                        // Auto-match fournisseur par SIRET/nom
+                        // Auto-match fournisseur par SIRET/nom + chercher des suggestions
+                        $supplierSuggestions = [];
                         if (!$supplierId && isset($ocrData['supplier'])) {
                             $ocrSupplier = $ocrData['supplier'];
                             $matchedSupplier = null;
 
+                            // 1. Match exact par SIRET
                             if (!empty($ocrSupplier['siret'])) {
                                 $matchedSupplier = db()->queryOne(
-                                    "SELECT s.id FROM suppliers s JOIN hotel_suppliers hs ON s.id = hs.supplier_id WHERE s.siret = ? AND hs.hotel_id = ? AND hs.is_active = 1",
+                                    "SELECT s.id, s.name, s.siret FROM suppliers s JOIN hotel_suppliers hs ON s.id = hs.supplier_id WHERE s.siret = ? AND hs.hotel_id = ? AND hs.is_active = 1",
                                     [$ocrSupplier['siret'], $hotelId]
                                 );
+                                if ($matchedSupplier) {
+                                    $supplierSuggestions[] = ['id' => $matchedSupplier['id'], 'name' => $matchedSupplier['name'], 'siret' => $matchedSupplier['siret'], 'match_type' => 'siret', 'confidence' => 99];
+                                }
                             }
-                            if (!$matchedSupplier && !empty($ocrSupplier['name'])) {
+
+                            // 2. Match exact par N° TVA
+                            if (!$matchedSupplier && !empty($ocrSupplier['tva_number'])) {
                                 $matchedSupplier = db()->queryOne(
-                                    "SELECT s.id FROM suppliers s JOIN hotel_suppliers hs ON s.id = hs.supplier_id WHERE s.name LIKE ? AND hs.hotel_id = ? AND hs.is_active = 1",
+                                    "SELECT s.id, s.name, s.siret FROM suppliers s JOIN hotel_suppliers hs ON s.id = hs.supplier_id WHERE s.tva_number = ? AND hs.hotel_id = ? AND hs.is_active = 1",
+                                    [$ocrSupplier['tva_number'], $hotelId]
+                                );
+                                if ($matchedSupplier) {
+                                    $supplierSuggestions[] = ['id' => $matchedSupplier['id'], 'name' => $matchedSupplier['name'], 'siret' => $matchedSupplier['siret'] ?? null, 'match_type' => 'tva', 'confidence' => 95];
+                                }
+                            }
+
+                            // 3. Match par nom (fuzzy) - chercher plusieurs candidats
+                            if (!empty($ocrSupplier['name'])) {
+                                $nameCandidates = db()->query(
+                                    "SELECT s.id, s.name, s.siret FROM suppliers s JOIN hotel_suppliers hs ON s.id = hs.supplier_id WHERE s.name LIKE ? AND hs.hotel_id = ? AND hs.is_active = 1 LIMIT 5",
                                     ['%' . $ocrSupplier['name'] . '%', $hotelId]
                                 );
+                                foreach ($nameCandidates as $cand) {
+                                    // Éviter les doublons
+                                    $alreadyFound = false;
+                                    foreach ($supplierSuggestions as $existing) {
+                                        if ($existing['id'] == $cand['id']) { $alreadyFound = true; break; }
+                                    }
+                                    if (!$alreadyFound) {
+                                        $supplierSuggestions[] = ['id' => $cand['id'], 'name' => $cand['name'], 'siret' => $cand['siret'] ?? null, 'match_type' => 'name', 'confidence' => 75];
+                                    }
+                                }
+                                // Si pas de match SIRET/TVA, essayer le premier match par nom
+                                if (!$matchedSupplier && !empty($nameCandidates)) {
+                                    $matchedSupplier = $nameCandidates[0];
+                                }
                             }
 
                             if ($matchedSupplier) {
@@ -13654,7 +13711,13 @@ try {
                         $setParams[] = $invoiceId;
                         db()->execute("UPDATE supplier_invoices SET " . implode(', ', $setClauses) . " WHERE id = ?", $setParams);
 
-                        // Créer les lignes de facture
+                        // Charger les catégories de l'hôtel pour auto-matching
+                        $hotelCategories = db()->query(
+                            "SELECT id, name FROM contract_categories WHERE hotel_id = ? ORDER BY name",
+                            [$hotelId]
+                        );
+
+                        // Créer les lignes de facture avec matching de catégories
                         if (!empty($ocrData['line_items'])) {
                             $pos = 0;
                             foreach ($ocrData['line_items'] as $line) {
@@ -13665,8 +13728,30 @@ try {
                                 $lineTva = $lineHt * $tvaRate / 100;
                                 $lineTtc = $lineHt + $lineTva;
 
+                                // Auto-match catégorie par nom suggéré par l'IA
+                                $categoryId = null;
+                                if (!empty($line['suggested_category']) && !empty($hotelCategories)) {
+                                    $suggestedCat = strtolower(trim($line['suggested_category']));
+                                    foreach ($hotelCategories as $cat) {
+                                        if (strtolower($cat['name']) === $suggestedCat) {
+                                            $categoryId = $cat['id'];
+                                            break;
+                                        }
+                                    }
+                                    // Recherche partielle si pas de match exact
+                                    if (!$categoryId) {
+                                        foreach ($hotelCategories as $cat) {
+                                            if (stripos($cat['name'], $suggestedCat) !== false || stripos($suggestedCat, strtolower($cat['name'])) !== false) {
+                                                $categoryId = $cat['id'];
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+
                                 db()->insert('supplier_invoice_lines', [
                                     'invoice_id' => $invoiceId,
+                                    'category_id' => $categoryId,
                                     'description' => $line['description'] ?? '',
                                     'quantity' => $qty,
                                     'unit_price_ht' => $unitPrice,
@@ -13691,8 +13776,27 @@ try {
                 rgpdLog($userId, 'create', 'supplier_invoice', $invoiceId, json_encode(['hotel_id' => $hotelId]));
 
                 // Recharger la facture pour renvoyer les données complètes
-                $createdInvoice = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [$invoiceId]);
-                $lines = db()->query("SELECT * FROM supplier_invoice_lines WHERE invoice_id = ? ORDER BY position", [$invoiceId]);
+                $createdInvoice = db()->queryOne(
+                    "SELECT si.*, s.name as supplier_name, s.siret as supplier_siret
+                     FROM supplier_invoices si
+                     LEFT JOIN suppliers s ON si.supplier_id = s.id
+                     WHERE si.id = ?",
+                    [$invoiceId]
+                );
+                $lines = db()->query(
+                    "SELECT sil.*, cc.name as category_name
+                     FROM supplier_invoice_lines sil
+                     LEFT JOIN contract_categories cc ON sil.category_id = cc.id
+                     WHERE sil.invoice_id = ? ORDER BY sil.position",
+                    [$invoiceId]
+                );
+
+                // Préparer les données OCR enrichies pour le frontend
+                $ocrEnriched = $ocrResult;
+                if ($ocrResult && $ocrResult['success'] && $ocrResult['data']) {
+                    $ocrEnriched['supplier_suggestions'] = $supplierSuggestions ?? [];
+                    $ocrEnriched['ocr_supplier'] = $ocrResult['data']['supplier'] ?? null;
+                }
 
                 json_out([
                     'success' => true,
@@ -13700,7 +13804,7 @@ try {
                     'file_url' => 'uploads/invoices/' . $filename,
                     'invoice' => $createdInvoice,
                     'lines' => $lines,
-                    'ocr' => $ocrResult
+                    'ocr' => $ocrEnriched
                 ], 201);
             }
 
