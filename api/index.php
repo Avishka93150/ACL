@@ -12219,8 +12219,23 @@ try {
                 if (!$contract) json_error('Contrat non trouvé', 404);
                 if (!in_array($contract['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
 
-                if (!isset($_FILES['file'])) json_error('Aucun fichier envoyé');
+                if (!isset($_FILES['file'])) json_error('Aucun fichier envoyé. Vérifiez que le champ file est bien présent dans le formulaire.');
                 $file = $_FILES['file'];
+
+                // Vérifier les erreurs PHP d'upload
+                if ($file['error'] !== UPLOAD_ERR_OK) {
+                    $uploadErrors = [
+                        UPLOAD_ERR_INI_SIZE => 'Le fichier dépasse la taille maximale autorisée par le serveur (upload_max_filesize=' . ini_get('upload_max_filesize') . ')',
+                        UPLOAD_ERR_FORM_SIZE => 'Le fichier dépasse la taille maximale du formulaire',
+                        UPLOAD_ERR_PARTIAL => 'Le fichier n\'a été que partiellement uploadé',
+                        UPLOAD_ERR_NO_FILE => 'Aucun fichier n\'a été uploadé',
+                        UPLOAD_ERR_NO_TMP_DIR => 'Erreur serveur : répertoire temporaire manquant',
+                        UPLOAD_ERR_CANT_WRITE => 'Erreur serveur : impossible d\'écrire le fichier sur le disque',
+                        UPLOAD_ERR_EXTENSION => 'Upload bloqué par une extension PHP'
+                    ];
+                    json_error($uploadErrors[$file['error']] ?? 'Erreur d\'upload inconnue (code ' . $file['error'] . ')');
+                }
+
                 $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
                 if (!in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'])) json_error('Format non autorisé (PDF, JPG, PNG uniquement)');
                 if ($file['size'] > 10 * 1024 * 1024) json_error('Fichier trop volumineux (max 10 Mo)');
@@ -12228,7 +12243,7 @@ try {
                 $filename = uniqid() . '.' . $ext;
                 $uploadDir = __DIR__ . '/../uploads/contracts/';
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0775, true);
-                if (!move_uploaded_file($file['tmp_name'], $uploadDir . $filename)) json_error('Erreur lors de l\'upload');
+                if (!move_uploaded_file($file['tmp_name'], $uploadDir . $filename)) json_error('Erreur lors de l\'upload. Vérifiez les permissions du répertoire uploads/contracts/');
 
                 $docType = $_POST['type'] ?? 'other';
                 $label = $_POST['label'] ?? $file['name'];
