@@ -13149,6 +13149,9 @@ try {
                         }
                     }
                     if (!empty($_GET['supplier_id'])) { $where[] = "si.supplier_id = ?"; $params[] = (int)$_GET['supplier_id']; }
+                    if (!empty($_GET['category_id'])) { $where[] = "s.category_id = ?"; $params[] = (int)$_GET['category_id']; }
+                    if (isset($_GET['amount_min']) && $_GET['amount_min'] !== '') { $where[] = "si.total_ttc >= ?"; $params[] = (float)$_GET['amount_min']; }
+                    if (isset($_GET['amount_max']) && $_GET['amount_max'] !== '') { $where[] = "si.total_ttc <= ?"; $params[] = (float)$_GET['amount_max']; }
                     if (!empty($_GET['period_from'])) { $where[] = "si.invoice_date >= ?"; $params[] = $_GET['period_from']; }
                     if (!empty($_GET['period_to'])) { $where[] = "si.invoice_date <= ?"; $params[] = $_GET['period_to']; }
                     if (!empty($_GET['search'])) {

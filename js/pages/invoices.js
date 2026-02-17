@@ -17,6 +17,14 @@ let _invContainer = null;
 let invFintectureConfig = null; // Config Fintecture de l'hôtel courant
 let invSelectedIds = []; // IDs des factures sélectionnées pour paiement batch
 let invListInvoicesCache = []; // Cache des factures affichées (pour SEPA XML)
+let invFilterSupplier = '';
+let invFilterCategory = '';
+let invFilterAmountMin = '';
+let invFilterAmountMax = '';
+let invFilterDateFrom = '';
+let invFilterDateTo = '';
+let invAdvancedFiltersOpen = false;
+let invSuppliersList = []; // Cache des fournisseurs pour le filtre
 
 // === HELPERS ===
 
@@ -139,6 +147,13 @@ function invRenderMain(container) {
 
 async function invChangeHotel(hotelId) {
     invCurrentHotel = parseInt(hotelId);
+    invSuppliersList = [];
+    invFilterSupplier = '';
+    invFilterCategory = '';
+    invFilterAmountMin = '';
+    invFilterAmountMax = '';
+    invFilterDateFrom = '';
+    invFilterDateTo = '';
     try {
         const [catResult, fintResult] = await Promise.allSettled([
             API.get(`contracts/categories?hotel_id=${invCurrentHotel}`),
@@ -180,6 +195,13 @@ async function invRenderFactures(content) {
             .table-row-selected td { background: inherit !important; }
             .inv-batch-cb { width:16px; height:16px; cursor:pointer; }
             #inv-select-all { width:16px; height:16px; cursor:pointer; }
+            @media (max-width: 768px) {
+                #inv-filter-buttons { grid-template-columns: repeat(2, 1fr) !important; }
+            }
+            @media (max-width: 480px) {
+                #inv-filter-buttons { grid-template-columns: 1fr !important; }
+            }
+            #inv-adv-filter-btn.active { background: var(--brand-secondary); color: white; }
         `;
         document.head.appendChild(style);
     }
@@ -202,52 +224,91 @@ async function invRenderFactures(content) {
         </div>
 
         <!-- Boutons filtres avec stats -->
-        <div id="inv-filter-buttons" style="display:flex;gap:var(--space-3);margin-bottom:var(--space-4);flex-wrap:wrap">
-            <div style="flex:1;min-width:150px;cursor:pointer" onclick="invSetFilter('')">
-                <div class="card" id="inv-filter-all" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--gray-400);transition:all 0.2s">
+        <div id="inv-filter-buttons" style="display:grid;grid-template-columns:repeat(5,1fr);gap:var(--space-3);margin-bottom:var(--space-4)">
+            <div style="cursor:pointer" onclick="invSetFilter('')">
+                <div class="card" id="inv-filter-all" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--gray-400);transition:all 0.2s;height:100%">
                     <div style="font-size:var(--font-size-xs);color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px">Toutes</div>
                     <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--text-primary)" id="inv-stat-all-count">-</div>
                     <div style="font-size:var(--font-size-xs);color:var(--text-tertiary)" id="inv-stat-all-total"></div>
                 </div>
             </div>
-            <div style="flex:1;min-width:150px;cursor:pointer" onclick="invSetFilter('draft')">
-                <div class="card" id="inv-filter-draft" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--gray-500);transition:all 0.2s">
+            <div style="cursor:pointer" onclick="invSetFilter('draft')">
+                <div class="card" id="inv-filter-draft" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--gray-500);transition:all 0.2s;height:100%">
                     <div style="font-size:var(--font-size-xs);color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px"><i class="fas fa-pencil-alt"></i> Brouillons</div>
                     <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--text-primary)" id="inv-stat-draft-count">-</div>
                     <div style="font-size:var(--font-size-xs);color:var(--text-tertiary)" id="inv-stat-draft-total"></div>
                 </div>
             </div>
-            <div style="flex:1;min-width:150px;cursor:pointer" onclick="invSetFilter('overdue')">
-                <div class="card" id="inv-filter-overdue" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--danger-500, #ef4444);transition:all 0.2s">
-                    <div style="font-size:var(--font-size-xs);color:var(--danger-500, #ef4444);text-transform:uppercase;letter-spacing:0.5px"><i class="fas fa-exclamation-triangle"></i> En retard</div>
+            <div style="cursor:pointer" onclick="invSetFilter('overdue')">
+                <div class="card" id="inv-filter-overdue" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--danger-500, #ef4444);transition:all 0.2s;height:100%">
+                    <div style="font-size:var(--font-size-xs);color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px"><i class="fas fa-exclamation-triangle"></i> En retard</div>
                     <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--danger-500, #ef4444)" id="inv-stat-overdue-count">-</div>
                     <div style="font-size:var(--font-size-xs);color:var(--text-tertiary)" id="inv-stat-overdue-total"></div>
                 </div>
             </div>
-            <div style="flex:1;min-width:150px;cursor:pointer" onclick="invSetFilter('approved')">
-                <div class="card" id="inv-filter-approved" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--warning-500, #f59e0b);transition:all 0.2s">
-                    <div style="font-size:var(--font-size-xs);color:var(--warning-500, #f59e0b);text-transform:uppercase;letter-spacing:0.5px"><i class="fas fa-clock"></i> À payer</div>
+            <div style="cursor:pointer" onclick="invSetFilter('approved')">
+                <div class="card" id="inv-filter-approved" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--warning-500, #f59e0b);transition:all 0.2s;height:100%">
+                    <div style="font-size:var(--font-size-xs);color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px"><i class="fas fa-clock"></i> À payer</div>
                     <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--text-primary)" id="inv-stat-approved-count">-</div>
                     <div style="font-size:var(--font-size-xs);color:var(--text-tertiary)" id="inv-stat-approved-total"></div>
                 </div>
             </div>
-            <div style="flex:1;min-width:150px;cursor:pointer" onclick="invSetFilter('paid')">
-                <div class="card" id="inv-filter-paid" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--success-500, #22c55e);transition:all 0.2s">
-                    <div style="font-size:var(--font-size-xs);color:var(--success-500, #22c55e);text-transform:uppercase;letter-spacing:0.5px"><i class="fas fa-check-circle"></i> Payées</div>
+            <div style="cursor:pointer" onclick="invSetFilter('paid')">
+                <div class="card" id="inv-filter-paid" style="padding:var(--space-3) var(--space-4);border-left:4px solid var(--success-500, #22c55e);transition:all 0.2s;height:100%">
+                    <div style="font-size:var(--font-size-xs);color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px"><i class="fas fa-check-circle"></i> Payées</div>
                     <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--text-primary)" id="inv-stat-paid-count">-</div>
                     <div style="font-size:var(--font-size-xs);color:var(--text-tertiary)" id="inv-stat-paid-total"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Barre de recherche -->
+        <!-- Barre de recherche + filtres avancés -->
         <div class="card" style="margin-bottom:var(--space-4)">
             <div style="padding:var(--space-3) var(--space-4);display:flex;gap:var(--space-3);align-items:center">
                 <div style="flex:1">
                     <input type="text" class="form-control" placeholder="Rechercher par fournisseur ou n° facture..."
                            value="${esc(invListSearch)}" oninput="invListSearch=this.value;clearTimeout(invSearchTimer);invSearchTimer=setTimeout(()=>{invListPage=1;invLoadList()},400)">
                 </div>
+                <button class="btn btn-sm btn-outline" onclick="invToggleAdvancedFilters()" id="inv-adv-filter-btn" title="Filtres avancés">
+                    <i class="fas fa-sliders-h"></i> Filtres
+                </button>
                 <span id="inv-count" style="color:var(--text-secondary);font-size:var(--font-size-sm)"></span>
+            </div>
+            <div id="inv-advanced-filters" style="display:none;padding:0 var(--space-4) var(--space-4);border-top:1px solid var(--gray-200)">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:var(--space-3);padding-top:var(--space-3)">
+                    <div class="form-group" style="margin:0">
+                        <label class="form-label" style="font-size:var(--font-size-xs)">Fournisseur</label>
+                        <select id="inv-filter-supplier" class="form-control" onchange="invApplyAdvancedFilters()">
+                            <option value="">Tous</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0">
+                        <label class="form-label" style="font-size:var(--font-size-xs)">Catégorie</label>
+                        <select id="inv-filter-category" class="form-control" onchange="invApplyAdvancedFilters()">
+                            <option value="">Toutes</option>
+                            ${invCategories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0">
+                        <label class="form-label" style="font-size:var(--font-size-xs)">Montant min (€)</label>
+                        <input type="number" id="inv-filter-amount-min" class="form-control" placeholder="0" min="0" step="0.01" onchange="invApplyAdvancedFilters()">
+                    </div>
+                    <div class="form-group" style="margin:0">
+                        <label class="form-label" style="font-size:var(--font-size-xs)">Montant max (€)</label>
+                        <input type="number" id="inv-filter-amount-max" class="form-control" placeholder="∞" min="0" step="0.01" onchange="invApplyAdvancedFilters()">
+                    </div>
+                    <div class="form-group" style="margin:0">
+                        <label class="form-label" style="font-size:var(--font-size-xs)">Date du</label>
+                        <input type="date" id="inv-filter-date-from" class="form-control" onchange="invApplyAdvancedFilters()">
+                    </div>
+                    <div class="form-group" style="margin:0">
+                        <label class="form-label" style="font-size:var(--font-size-xs)">Date au</label>
+                        <input type="date" id="inv-filter-date-to" class="form-control" onchange="invApplyAdvancedFilters()">
+                    </div>
+                </div>
+                <div style="display:flex;justify-content:flex-end;margin-top:var(--space-3)">
+                    <button class="btn btn-sm btn-outline" onclick="invResetAdvancedFilters()"><i class="fas fa-times"></i> Réinitialiser</button>
+                </div>
             </div>
         </div>
 
@@ -298,6 +359,53 @@ function invHighlightActiveFilter() {
     });
 }
 
+async function invToggleAdvancedFilters() {
+    const panel = document.getElementById('inv-advanced-filters');
+    const btn = document.getElementById('inv-adv-filter-btn');
+    if (!panel) return;
+    invAdvancedFiltersOpen = !invAdvancedFiltersOpen;
+    panel.style.display = invAdvancedFiltersOpen ? 'block' : 'none';
+    if (btn) btn.classList.toggle('active', invAdvancedFiltersOpen);
+
+    // Charger les fournisseurs la première fois
+    if (invAdvancedFiltersOpen && invSuppliersList.length === 0) {
+        try {
+            const res = await API.get(`suppliers?hotel_id=${invCurrentHotel}&per_page=500`);
+            invSuppliersList = res.suppliers || [];
+            const sel = document.getElementById('inv-filter-supplier');
+            if (sel) {
+                sel.innerHTML = '<option value="">Tous</option>' +
+                    invSuppliersList.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+                if (invFilterSupplier) sel.value = invFilterSupplier;
+            }
+        } catch (e) {}
+    }
+}
+
+function invApplyAdvancedFilters() {
+    invFilterSupplier = document.getElementById('inv-filter-supplier')?.value || '';
+    invFilterCategory = document.getElementById('inv-filter-category')?.value || '';
+    invFilterAmountMin = document.getElementById('inv-filter-amount-min')?.value || '';
+    invFilterAmountMax = document.getElementById('inv-filter-amount-max')?.value || '';
+    invFilterDateFrom = document.getElementById('inv-filter-date-from')?.value || '';
+    invFilterDateTo = document.getElementById('inv-filter-date-to')?.value || '';
+    invListPage = 1;
+    invLoadList();
+}
+
+function invResetAdvancedFilters() {
+    invFilterSupplier = '';
+    invFilterCategory = '';
+    invFilterAmountMin = '';
+    invFilterAmountMax = '';
+    invFilterDateFrom = '';
+    invFilterDateTo = '';
+    const ids = ['inv-filter-supplier', 'inv-filter-category', 'inv-filter-amount-min', 'inv-filter-amount-max', 'inv-filter-date-from', 'inv-filter-date-to'];
+    ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    invListPage = 1;
+    invLoadList();
+}
+
 async function invLoadStats() {
     try {
         const res = await API.get(`invoices/stats?hotel_id=${invCurrentHotel}`);
@@ -330,6 +438,12 @@ async function invLoadList() {
         let url = `invoices?hotel_id=${invCurrentHotel}&page=${invListPage}&per_page=20`;
         if (invListStatus) url += `&status=${invListStatus}`;
         if (invListSearch) url += `&search=${encodeURIComponent(invListSearch)}`;
+        if (invFilterSupplier) url += `&supplier_id=${invFilterSupplier}`;
+        if (invFilterCategory) url += `&category_id=${invFilterCategory}`;
+        if (invFilterAmountMin) url += `&amount_min=${invFilterAmountMin}`;
+        if (invFilterAmountMax) url += `&amount_max=${invFilterAmountMax}`;
+        if (invFilterDateFrom) url += `&period_from=${invFilterDateFrom}`;
+        if (invFilterDateTo) url += `&period_to=${invFilterDateTo}`;
 
         const res = await API.get(url);
         const invoices = res.invoices || [];
