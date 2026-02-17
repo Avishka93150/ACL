@@ -257,6 +257,7 @@ INSERT INTO role_permissions (role, permission, allowed, updated_at) VALUES
 ('groupe_manager', 'invoices.delete', 1, NOW()),
 -- invoices.configure
 ('admin', 'invoices.configure', 1, NOW()),
+('groupe_manager', 'invoices.configure', 1, NOW()),
 -- invoices.export
 ('admin', 'invoices.export', 1, NOW()),
 ('groupe_manager', 'invoices.export', 1, NOW()),
