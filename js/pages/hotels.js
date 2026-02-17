@@ -236,7 +236,7 @@ async function showEditHotelPage(id, tab) {
                 </button>
                 ${API.user.role === 'admin' ? `
                 <button class="hotel-tab ${_editHotelTab === 'contracts' ? 'active' : ''}" onclick="switchHotelTab('contracts')">
-                    <i class="fas fa-file-contract"></i> Contrats IA
+                    <i class="fas fa-robot"></i> Intelligence Artificielle
                 </button>` : ''}
             </div>
 
@@ -2172,39 +2172,82 @@ function injectHotelTabStyles() {
 // ---- ONGLET CONTRATS IA (config par hôtel, admin only) ----
 async function renderTabContracts(content, h) {
     content.innerHTML = '<div class="loading-spinner"></div>';
-    let config = { ai_enabled: 0, has_api_key: 0 };
+    let config = { ai_enabled: 0, has_api_key: 0, ai_model_ocr: 'claude-sonnet-4-5-20250929', ai_model_contracts: 'claude-sonnet-4-5-20250929' };
     try {
         const res = await API.getHotelContractsConfig(h.id);
         if (res.config) config = res.config;
     } catch (e) {}
 
+    const modelOcr = config.ai_model_ocr || 'claude-sonnet-4-5-20250929';
+    const modelContracts = config.ai_model_contracts || 'claude-sonnet-4-5-20250929';
+
+    function modelOptions(selected) {
+        const models = [
+            { id: 'claude-haiku-4-5-20251001', name: 'Claude 4.5 Haiku', desc: 'Rapide et économique' },
+            { id: 'claude-sonnet-4-5-20250929', name: 'Claude 4.5 Sonnet', desc: 'Équilibré (recommandé)' },
+            { id: 'claude-opus-4-6', name: 'Claude 4.6 Opus', desc: 'Plus performant, plus lent' }
+        ];
+        return models.map(m =>
+            `<option value="${m.id}" ${selected === m.id ? 'selected' : ''}>${m.name} — ${m.desc}</option>`
+        ).join('');
+    }
+
     content.innerHTML = `
-        <div class="card" style="max-width:700px">
+        <div class="card" style="max-width:750px">
             <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-robot"></i> Configuration Analyse IA - Contrats</h3>
+                <h3 class="card-title"><i class="fas fa-robot"></i> Configuration Intelligence Artificielle</h3>
             </div>
             <div style="padding:24px">
-                <p style="margin-bottom:20px;color:var(--gray-500)">
-                    Activez l'analyse IA des contrats fournisseurs pour cet hôtel.
-                    L'IA (Anthropic Claude) analysera les contrats et générera des notes d'alerte,
-                    des recommandations et des points d'attention.
+                <p style="margin-bottom:20px;color:var(--text-secondary)">
+                    Configurez l'IA (Anthropic Claude) pour cet hôtel. L'IA est utilisée pour l'OCR des factures fournisseurs
+                    et l'analyse des contrats.
                 </p>
 
+                <!-- Activation -->
                 <div class="form-group">
                     <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
                         <input type="checkbox" id="ct-cfg-ai-enabled" ${config.ai_enabled == 1 ? 'checked' : ''}>
-                        <strong>Activer l'analyse IA pour cet hôtel</strong>
+                        <strong>Activer l'IA pour cet hôtel</strong>
                     </label>
                 </div>
 
-                <div class="form-group" id="ct-cfg-api-section" style="${config.ai_enabled == 1 ? '' : 'display:none'}">
-                    <label>Clé API Anthropic</label>
-                    <input type="password" class="form-control" id="ct-cfg-api-key"
-                           placeholder="${config.has_api_key ? '••••••••••••••••••••• (clé configurée)' : 'sk-ant-api03-...'}"
-                           value="">
-                    <small style="color:var(--gray-400);margin-top:4px;display:block">
-                        ${config.has_api_key ? 'Une clé est déjà configurée. Laissez vide pour la conserver, ou saisissez une nouvelle clé.' : 'Obtenez votre clé sur console.anthropic.com'}
-                    </small>
+                <div id="ct-cfg-ai-details" style="${config.ai_enabled == 1 ? '' : 'display:none'}">
+                    <!-- Clé API -->
+                    <div class="form-group">
+                        <label class="form-label">Clé API Anthropic</label>
+                        <input type="password" class="form-control" id="ct-cfg-api-key"
+                               placeholder="${config.has_api_key ? '••••••••••••••••••••• (clé configurée)' : 'sk-ant-api03-...'}"
+                               value="">
+                        <small style="color:var(--text-tertiary);margin-top:4px;display:block">
+                            ${config.has_api_key ? 'Une clé est déjà configurée. Laissez vide pour la conserver, ou saisissez une nouvelle clé.' : 'Obtenez votre clé sur console.anthropic.com'}
+                        </small>
+                    </div>
+
+                    <!-- Choix des modèles par module -->
+                    <div style="margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px solid var(--gray-200)">
+                        <h4 style="margin-bottom:var(--space-3);font-size:var(--font-size-sm);color:var(--text-secondary)"><i class="fas fa-cogs"></i> Modèles IA par module</h4>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label"><i class="fas fa-file-invoice"></i> OCR Factures fournisseurs</label>
+                                <select id="ct-cfg-model-ocr" class="form-control">
+                                    ${modelOptions(modelOcr)}
+                                </select>
+                                <small style="color:var(--text-tertiary);margin-top:4px;display:block">
+                                    Extraction automatique des données des factures (montants, fournisseur, lignes)
+                                </small>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label"><i class="fas fa-file-contract"></i> Analyse Contrats</label>
+                                <select id="ct-cfg-model-contracts" class="form-control">
+                                    ${modelOptions(modelContracts)}
+                                </select>
+                                <small style="color:var(--text-tertiary);margin-top:4px;display:block">
+                                    Analyse des clauses, risques et recommandations sur les contrats
+                                </small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div style="margin-top:24px">
@@ -2217,20 +2260,24 @@ async function renderTabContracts(content, h) {
     `;
 
     document.getElementById('ct-cfg-ai-enabled').addEventListener('change', function() {
-        document.getElementById('ct-cfg-api-section').style.display = this.checked ? '' : 'none';
+        document.getElementById('ct-cfg-ai-details').style.display = this.checked ? '' : 'none';
     });
 }
 
 async function saveHotelContractsConfig(hotelId) {
     const aiEnabled = document.getElementById('ct-cfg-ai-enabled').checked;
     const apiKey = document.getElementById('ct-cfg-api-key').value;
+    const modelOcr = document.getElementById('ct-cfg-model-ocr')?.value;
+    const modelContracts = document.getElementById('ct-cfg-model-contracts')?.value;
 
     const data = { ai_enabled: aiEnabled ? 1 : 0 };
     if (apiKey) data.anthropic_api_key = apiKey;
+    if (modelOcr) data.ai_model_ocr = modelOcr;
+    if (modelContracts) data.ai_model_contracts = modelContracts;
 
     try {
         await API.saveHotelContractsConfig(hotelId, data);
-        toast('Configuration sauvegardée', 'success');
+        toast('Configuration IA sauvegardée', 'success');
     } catch (e) {
         toast('Erreur: ' + e.message, 'error');
     }
