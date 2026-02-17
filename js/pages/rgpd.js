@@ -633,7 +633,7 @@ function showLegalNotice() {
 }
 
 function showCGV() {
-    openModal('Conditions Générales de Vente', \`
+    openModal('Conditions Générales de Vente', `
         <div class="legal-content">
             <h4>1. Objet</h4>
             <p>Les présentes Conditions Générales de Vente (CGV) régissent les relations contractuelles entre ACL GESTION SAS (ci-après "le Prestataire") et toute personne morale souscrivant au service ACL GESTION (ci-après "le Client"). Toute souscription implique l'acceptation sans réserve des présentes CGV.</p>
@@ -710,17 +710,17 @@ function showCGV() {
             <h4>14. Droit applicable et compétence</h4>
             <p>Les présentes CGV sont soumises au droit français. Tout différend sera soumis, après tentative de résolution amiable, à la compétence exclusive des tribunaux de Bobigny.</p>
 
-            <p class="text-muted mt-20"><em>Dernière mise à jour : \${new Date().toLocaleDateString('fr-FR')}</em></p>
+            <p class="text-muted mt-20"><em>Dernière mise à jour : ${new Date().toLocaleDateString('fr-FR')}</em></p>
         </div>
 
         <div class="modal-footer">
             <button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button>
         </div>
-    \`, 'modal-lg');
+    `, 'modal-lg');
 }
 
 function showCGU() {
-    openModal("Conditions Générales d'Utilisation", \`
+    openModal("Conditions Générales d'Utilisation", `
         <div class="legal-content">
             <h4>1. Objet</h4>
             <p>Les présentes Conditions Générales d'Utilisation (CGU) définissent les règles d'utilisation de la plateforme ACL GESTION éditée par ACL GESTION SAS. L'accès et l'utilisation de la plateforme impliquent l'acceptation pleine et entière des présentes CGU.</p>
@@ -817,13 +817,13 @@ function showCGU() {
             22 Avenue de Châlons, 93150 Le Blanc-Mesnil<br>
             Email : contact@acl-gestion.com</p>
 
-            <p class="text-muted mt-20"><em>Dernière mise à jour : \${new Date().toLocaleDateString('fr-FR')}</em></p>
+            <p class="text-muted mt-20"><em>Dernière mise à jour : ${new Date().toLocaleDateString('fr-FR')}</em></p>
         </div>
 
         <div class="modal-footer">
             <button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button>
         </div>
-    \`, 'modal-lg');
+    `, 'modal-lg');
 }
 
 // ==================== CONSENTEMENT INITIAL ====================
