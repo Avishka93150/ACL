@@ -703,12 +703,14 @@ function renderTasksSection(tasks) {
                 <div class="tasks-mini-list">
                     ${items.slice(0, 5).map(task => {
                         const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'done';
+                        const clickAction = task.board_id ? `dashboardOpenTask(${task.board_id}, ${task.id})` : `navigateTo('tasks')`;
                         return `
-                            <div class="task-mini-item ${isOverdue ? 'overdue' : ''}" onclick="navigateTo('tasks')">
+                            <div class="task-mini-item ${isOverdue ? 'overdue' : ''}" onclick="${clickAction}">
                                 <span class="task-priority priority-${task.priority}"></span>
                                 <div class="task-content">
                                     <div class="task-title">${esc(task.title)}</div>
                                     <div class="task-meta">
+                                        ${task.board_name ? `<span class="text-muted"><i class="fas fa-columns"></i> ${esc(task.board_name)}</span>` : ''}
                                         ${task.due_date ? `<span class="${isOverdue ? 'text-danger' : ''}"><i class="fas fa-clock"></i> ${formatDate(task.due_date)}</span>` : ''}
                                     </div>
                                 </div>
@@ -722,6 +724,23 @@ function renderTasksSection(tasks) {
             ` : `<p class="text-muted text-center py-20">${t('common.none')}</p>`}
         </div>
     `;
+}
+
+// Ouvrir une tache depuis le dashboard : charge le board Kanban puis ouvre le detail
+async function dashboardOpenTask(boardId, taskId) {
+    // Mettre a jour la navigation
+    currentPage = 'tasks';
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.page === 'tasks');
+    });
+    window.location.hash = 'tasks';
+
+    try {
+        await openBoard(boardId);
+        openTaskDetail(taskId);
+    } catch (e) {
+        toast(e.message || 'Erreur', 'error');
+    }
 }
 
 function renderHotelsSection(hotels) {
