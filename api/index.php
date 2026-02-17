@@ -13147,7 +13147,8 @@ try {
                     }
 
                     $whereClause = 'WHERE ' . implode(' AND ', $where);
-                    $query = "SELECT si.*, s.name as supplier_name, h.name as hotel_name,
+                    $query = "SELECT si.*, s.name as supplier_name, s.iban as supplier_iban, s.bic as supplier_bic,
+                                     h.name as hotel_name,
                                      cc.name as category_name, cc.color as category_color
                               FROM supplier_invoices si
                               LEFT JOIN suppliers s ON si.supplier_id = s.id
@@ -13825,6 +13826,51 @@ try {
 
                 rgpdLog($userId, 'mark_paid', 'supplier_invoice', (int)$id, json_encode(['reference' => $paymentRef]));
                 json_out(['success' => true]);
+            }
+
+            // --- POST /invoices/batch-mark-paid (marquer plusieurs factures comme payées) ---
+            if ($method === 'POST' && $id === 'batch-mark-paid' && !$action) {
+                if (!hasPermission($userRole, 'invoices.pay')) json_error('Accès refusé', 403);
+
+                $data = get_input();
+                $invoiceIds = $data['invoice_ids'] ?? [];
+                $paymentReference = $data['payment_reference'] ?? 'Virement SEPA';
+
+                if (empty($invoiceIds) || !is_array($invoiceIds)) json_error('Aucune facture sélectionnée');
+
+                $updated = 0;
+                $errors = [];
+                foreach ($invoiceIds as $invId) {
+                    $invId = (int)$invId;
+                    $inv = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [$invId]);
+                    if (!$inv) { $errors[] = "Facture #$invId introuvable"; continue; }
+                    if (!in_array($inv['hotel_id'], $userHotelIds)) { $errors[] = "Facture #$invId : accès non autorisé"; continue; }
+                    if ($inv['status'] === 'paid') { continue; } // Déjà payée
+
+                    db()->execute(
+                        "UPDATE supplier_invoices SET status = 'paid', payment_method = 'virement',
+                         payment_reference = ?, paid_at = ?, paid_by = ?, updated_at = ? WHERE id = ?",
+                        [$paymentReference, date('Y-m-d H:i:s'), $userId, date('Y-m-d H:i:s'), $invId]
+                    );
+
+                    db()->insert('invoice_payments', [
+                        'invoice_id' => $invId,
+                        'amount' => (float)$inv['total_ttc'],
+                        'payment_method' => 'manual',
+                        'payment_reference' => $paymentReference,
+                        'status' => 'completed',
+                        'initiated_by' => $userId,
+                        'initiated_at' => date('Y-m-d H:i:s'),
+                        'completed_at' => date('Y-m-d H:i:s')
+                    ]);
+
+                    db()->insert("INSERT INTO invoice_approvals (invoice_id, user_id, action, comment, created_at) VALUES (?, ?, 'confirm_payment', ?, NOW())",
+                        [$invId, $userId, 'Virement SEPA — ' . $paymentReference]);
+
+                    $updated++;
+                }
+
+                json_out(['success' => true, 'updated' => $updated, 'errors' => $errors]);
             }
 
             // --- POST /invoices/{id}/documents ---
