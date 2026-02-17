@@ -390,7 +390,156 @@ function renderTabGeneral(content, h) {
                 </form>
             </div>
         </div>
+
+        <!-- Comptes bancaires -->
+        <div class="card" style="margin-top:var(--space-4)">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-university"></i> Comptes bancaires (RIB)</h3>
+                <button class="btn btn-sm btn-primary" onclick="hotelBankAdd(${h.id})"><i class="fas fa-plus"></i> Ajouter un compte</button>
+            </div>
+            <div class="card-body" style="padding:var(--space-4)">
+                <div id="hotel-bank-list"><div style="text-align:center;padding:var(--space-4)"><i class="fas fa-spinner fa-spin"></i></div></div>
+            </div>
+        </div>
     `;
+
+    hotelBankLoad(h.id);
+}
+
+// ---- COMPTES BANCAIRES ----
+
+async function hotelBankLoad(hotelId) {
+    const container = document.getElementById('hotel-bank-list');
+    if (!container) return;
+    try {
+        const res = await API.get(`hotels/${hotelId}/bank-accounts`);
+        const accounts = res.accounts || [];
+        if (accounts.length === 0) {
+            container.innerHTML = '<div class="empty-state" style="padding:var(--space-4)"><p>Aucun compte bancaire configuré</p><p style="color:var(--text-tertiary);font-size:var(--font-size-sm)">Ajoutez un RIB pour simplifier la génération des fichiers SEPA</p></div>';
+            return;
+        }
+        container.innerHTML = `
+            <div class="table-responsive">
+                <table class="table">
+                    <thead><tr><th>Nom</th><th>IBAN</th><th>BIC</th><th>Défaut</th><th style="width:100px">Actions</th></tr></thead>
+                    <tbody>
+                        ${accounts.map(a => `
+                            <tr>
+                                <td><strong>${esc(a.label)}</strong></td>
+                                <td style="font-family:monospace;font-size:var(--font-size-sm)">${esc(hotelBankFormatIban(a.iban))}</td>
+                                <td>${esc(a.bic || '-')}</td>
+                                <td>${a.is_default == 1 ? '<span class="badge badge-success"><i class="fas fa-check"></i> Par défaut</span>' : ''}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline" onclick="hotelBankEdit(${hotelId}, ${a.id})" title="Modifier"><i class="fas fa-edit"></i></button>
+                                    <button class="btn btn-sm btn-outline text-danger" onclick="hotelBankDelete(${hotelId}, ${a.id}, '${escAttr(a.label)}')" title="Supprimer"><i class="fas fa-trash"></i></button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (e) {
+        container.innerHTML = '<div class="text-danger">Erreur de chargement</div>';
+    }
+}
+
+function hotelBankFormatIban(iban) {
+    return (iban || '').replace(/(.{4})/g, '$1 ').trim();
+}
+
+function hotelBankAdd(hotelId) {
+    openModal('Ajouter un compte bancaire', `
+        <form onsubmit="hotelBankSave(event, ${hotelId})">
+            <div class="form-group">
+                <label class="form-label required">Nom du compte</label>
+                <input type="text" id="bank-label" class="form-control" placeholder="Ex : Compte principal, Compte fournisseurs" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label required">IBAN</label>
+                <input type="text" id="bank-iban" class="form-control" placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">BIC</label>
+                <input type="text" id="bank-bic" class="form-control" placeholder="BNPAFRPPXXX">
+            </div>
+            <div class="form-group">
+                <label><input type="checkbox" id="bank-default"> Compte par défaut</label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
+            </div>
+        </form>
+    `, 'modal-md');
+}
+
+async function hotelBankSave(e, hotelId, accountId) {
+    e.preventDefault();
+    const data = {
+        label: document.getElementById('bank-label').value.trim(),
+        iban: document.getElementById('bank-iban').value.trim(),
+        bic: document.getElementById('bank-bic').value.trim(),
+        is_default: document.getElementById('bank-default').checked ? 1 : 0
+    };
+    if (!data.label || !data.iban) { toast('Nom et IBAN requis', 'warning'); return; }
+    try {
+        if (accountId) {
+            await API.put(`hotels/${hotelId}/bank-accounts/${accountId}`, data);
+        } else {
+            await API.post(`hotels/${hotelId}/bank-accounts`, data);
+        }
+        closeModal();
+        toast('Compte bancaire enregistré', 'success');
+        hotelBankLoad(hotelId);
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function hotelBankEdit(hotelId, accountId) {
+    try {
+        const res = await API.get(`hotels/${hotelId}/bank-accounts`);
+        const account = (res.accounts || []).find(a => a.id == accountId);
+        if (!account) { toast('Compte introuvable', 'error'); return; }
+
+        openModal('Modifier le compte bancaire', `
+            <form onsubmit="hotelBankSave(event, ${hotelId}, ${accountId})">
+                <div class="form-group">
+                    <label class="form-label required">Nom du compte</label>
+                    <input type="text" id="bank-label" class="form-control" value="${escAttr(account.label)}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label required">IBAN</label>
+                    <input type="text" id="bank-iban" class="form-control" value="${escAttr(account.iban)}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">BIC</label>
+                    <input type="text" id="bank-bic" class="form-control" value="${escAttr(account.bic || '')}">
+                </div>
+                <div class="form-group">
+                    <label><input type="checkbox" id="bank-default" ${account.is_default == 1 ? 'checked' : ''}> Compte par défaut</label>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
+                </div>
+            </form>
+        `, 'modal-md');
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function hotelBankDelete(hotelId, accountId, label) {
+    if (!confirm(`Supprimer le compte « ${label} » ?`)) return;
+    try {
+        await API.delete(`hotels/${hotelId}/bank-accounts/${accountId}`);
+        toast('Compte supprimé', 'success');
+        hotelBankLoad(hotelId);
+    } catch (err) {
+        toast(err.message, 'error');
+    }
 }
 
 // ---- ONGLET RESERVATION ----

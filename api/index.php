@@ -3017,8 +3017,95 @@ try {
                 json_out(['success' => true]);
             }
 
+            // --- GET /hotels/{id}/bank-accounts ---
+            if ($method === 'GET' && $id && is_numeric($id) && $action === 'bank-accounts') {
+                require_auth();
+                $accounts = db()->query(
+                    "SELECT * FROM hotel_bank_accounts WHERE hotel_id = ? ORDER BY is_default DESC, label ASC",
+                    [(int)$id]
+                );
+                json_out(['accounts' => $accounts]);
+            }
+
+            // --- POST /hotels/{id}/bank-accounts ---
+            if ($method === 'POST' && $id && is_numeric($id) && $action === 'bank-accounts') {
+                $user = require_role('admin', 'groupe_manager', 'hotel_manager');
+                $data = get_input();
+                $hotelId = (int)$id;
+
+                if (empty($data['label']) || empty($data['iban'])) json_error('Nom et IBAN requis');
+
+                $iban = strtoupper(preg_replace('/\s+/', '', $data['iban']));
+                $bic = !empty($data['bic']) ? strtoupper(preg_replace('/\s+/', '', $data['bic'])) : null;
+                $isDefault = !empty($data['is_default']) ? 1 : 0;
+
+                // Si c'est le premier compte ou marqué par défaut, gérer l'unicité
+                $count = db()->count("SELECT COUNT(*) FROM hotel_bank_accounts WHERE hotel_id = ?", [$hotelId]);
+                if ($count === 0) $isDefault = 1;
+                if ($isDefault) {
+                    db()->execute("UPDATE hotel_bank_accounts SET is_default = 0 WHERE hotel_id = ?", [$hotelId]);
+                }
+
+                $newId = db()->insert('hotel_bank_accounts', [
+                    'hotel_id' => $hotelId,
+                    'label' => trim($data['label']),
+                    'iban' => $iban,
+                    'bic' => $bic,
+                    'is_default' => $isDefault,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]);
+
+                json_out(['success' => true, 'id' => $newId], 201);
+            }
+
+            // --- PUT /hotels/{id}/bank-accounts/{accountId} ---
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'bank-accounts' && $subaction && is_numeric($subaction)) {
+                $user = require_role('admin', 'groupe_manager', 'hotel_manager');
+                $data = get_input();
+                $hotelId = (int)$id;
+                $accountId = (int)$subaction;
+
+                if (empty($data['label']) || empty($data['iban'])) json_error('Nom et IBAN requis');
+
+                $iban = strtoupper(preg_replace('/\s+/', '', $data['iban']));
+                $bic = !empty($data['bic']) ? strtoupper(preg_replace('/\s+/', '', $data['bic'])) : null;
+                $isDefault = !empty($data['is_default']) ? 1 : 0;
+
+                if ($isDefault) {
+                    db()->execute("UPDATE hotel_bank_accounts SET is_default = 0 WHERE hotel_id = ?", [$hotelId]);
+                }
+
+                db()->execute(
+                    "UPDATE hotel_bank_accounts SET label = ?, iban = ?, bic = ?, is_default = ?, updated_at = NOW() WHERE id = ? AND hotel_id = ?",
+                    [trim($data['label']), $iban, $bic, $isDefault, $accountId, $hotelId]
+                );
+
+                json_out(['success' => true]);
+            }
+
+            // --- DELETE /hotels/{id}/bank-accounts/{accountId} ---
+            if ($method === 'DELETE' && $id && is_numeric($id) && $action === 'bank-accounts' && $subaction && is_numeric($subaction)) {
+                $user = require_role('admin', 'groupe_manager', 'hotel_manager');
+                $hotelId = (int)$id;
+                $accountId = (int)$subaction;
+
+                db()->execute("DELETE FROM hotel_bank_accounts WHERE id = ? AND hotel_id = ?", [$accountId, $hotelId]);
+
+                // Si on a supprimé le défaut, remettre le premier comme défaut
+                $remaining = db()->queryOne("SELECT id FROM hotel_bank_accounts WHERE hotel_id = ? AND is_default = 1", [$hotelId]);
+                if (!$remaining) {
+                    $first = db()->queryOne("SELECT id FROM hotel_bank_accounts WHERE hotel_id = ? ORDER BY id LIMIT 1", [$hotelId]);
+                    if ($first) {
+                        db()->execute("UPDATE hotel_bank_accounts SET is_default = 1 WHERE id = ?", [$first['id']]);
+                    }
+                }
+
+                json_out(['success' => true]);
+            }
+
             break;
-        
+
         // --- ROOMS ---
         case 'rooms':
             // Récupérer une chambre

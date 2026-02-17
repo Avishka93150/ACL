@@ -582,7 +582,7 @@ function invUpdateBatchBar() {
     document.getElementById('inv-batch-total').textContent = '— ' + invFormatCurrency(total);
 }
 
-function invGenerateSepaXml() {
+async function invGenerateSepaXml() {
     // Collecter les données des factures sélectionnées
     const selected = invSelectedIds.map(id => invListInvoicesCache.find(i => i.id === id)).filter(Boolean);
 
@@ -599,28 +599,71 @@ function invGenerateSepaXml() {
         return;
     }
 
-    // Demander l'IBAN émetteur
+    // Charger les comptes bancaires de l'hôtel
     const hotel = invHotels.find(h => h.id === invCurrentHotel);
     const hotelName = hotel ? hotel.name : 'ACL GESTION';
     const totalAmount = selected.reduce((sum, inv) => sum + parseFloat(inv.total_ttc || 0), 0);
 
+    let bankAccounts = [];
+    try {
+        const res = await API.get(`hotels/${invCurrentHotel}/bank-accounts`);
+        bankAccounts = res.accounts || [];
+    } catch (e) {}
+
+    const hasAccounts = bankAccounts.length > 0;
+    const defaultAccount = bankAccounts.find(a => a.is_default == 1) || bankAccounts[0];
+
     openModal('Générer le fichier SEPA XML', `
         <div style="margin-bottom:var(--space-4)">
             <p><strong>${selected.length} facture(s)</strong> sélectionnée(s) pour un total de <strong>${invFormatCurrency(totalAmount)}</strong></p>
-            <div class="form-group">
-                <label class="form-label required">IBAN de l'émetteur (votre compte bancaire)</label>
-                <input type="text" id="sepa-debtor-iban" class="form-control" placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX" required>
+
+            ${hasAccounts ? `
+                <div class="form-group">
+                    <label class="form-label required">Compte bancaire émetteur</label>
+                    <select id="sepa-bank-account" class="form-control" onchange="invSepaAccountChange()">
+                        ${bankAccounts.map(a => `<option value="${a.id}" data-iban="${escAttr(a.iban)}" data-bic="${escAttr(a.bic || '')}" ${a.id === (defaultAccount ? defaultAccount.id : 0) ? 'selected' : ''}>${esc(a.label)} — ${esc((a.iban || '').replace(/(.{4})/g, '$1 ').trim())}</option>`).join('')}
+                        <option value="__manual__">Saisir manuellement...</option>
+                    </select>
+                </div>
+                <div id="sepa-manual-fields" style="display:none">
+            ` : '<div id="sepa-manual-fields">'}
+                <div class="form-group">
+                    <label class="form-label ${hasAccounts ? '' : 'required'}">IBAN de l'émetteur</label>
+                    <input type="text" id="sepa-debtor-iban" class="form-control" placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX"
+                           value="${hasAccounts && defaultAccount ? escAttr(defaultAccount.iban) : ''}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">BIC de l'émetteur</label>
+                    <input type="text" id="sepa-debtor-bic" class="form-control" placeholder="BNPAFRPPXXX"
+                           value="${hasAccounts && defaultAccount ? escAttr(defaultAccount.bic || '') : ''}">
+                </div>
             </div>
-            <div class="form-group">
-                <label class="form-label">BIC de l'émetteur</label>
-                <input type="text" id="sepa-debtor-bic" class="form-control" placeholder="BNPAFRPPXXX">
-            </div>
+
+            ${!hasAccounts ? '<p style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:var(--space-2)"><i class="fas fa-info-circle"></i> Vous pouvez configurer vos comptes bancaires dans Hôtels > Général pour ne plus saisir l\'IBAN à chaque fois.</p>' : ''}
         </div>
         <div class="modal-footer">
             <button class="btn btn-outline" onclick="closeModal()">Annuler</button>
             <button class="btn btn-primary" onclick="invDoGenerateSepaXml()"><i class="fas fa-file-code"></i> Générer et télécharger</button>
         </div>
     `, 'modal-md');
+}
+
+function invSepaAccountChange() {
+    const sel = document.getElementById('sepa-bank-account');
+    const manualFields = document.getElementById('sepa-manual-fields');
+    if (!sel || !manualFields) return;
+
+    if (sel.value === '__manual__') {
+        manualFields.style.display = 'block';
+        document.getElementById('sepa-debtor-iban').value = '';
+        document.getElementById('sepa-debtor-bic').value = '';
+        document.getElementById('sepa-debtor-iban').focus();
+    } else {
+        manualFields.style.display = 'none';
+        const opt = sel.selectedOptions[0];
+        document.getElementById('sepa-debtor-iban').value = opt.dataset.iban || '';
+        document.getElementById('sepa-debtor-bic').value = opt.dataset.bic || '';
+    }
 }
 
 function invDoGenerateSepaXml() {
