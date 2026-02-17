@@ -136,6 +136,7 @@ function invRenderMain(container) {
             <div class="closure-tab ${invActiveTab === 'factures' ? 'active' : ''}" onclick="invSwitchTab('factures')"><i class="fas fa-file-invoice-dollar"></i> <span>Factures</span></div>
             <div class="closure-tab ${invActiveTab === 'fournisseurs' ? 'active' : ''}" onclick="invSwitchTab('fournisseurs')"><i class="fas fa-building"></i> <span>Fournisseurs</span></div>
             <div class="closure-tab ${invActiveTab === 'reporting' ? 'active' : ''}" onclick="invSwitchTab('reporting')"><i class="fas fa-chart-bar"></i> <span>Reporting</span></div>
+            ${hasPermission('invoices.export') ? `<div class="closure-tab ${invActiveTab === 'export' ? 'active' : ''}" onclick="invSwitchTab('export')"><i class="fas fa-download"></i> <span>Export</span></div>` : ''}
             ${hasPermission('invoices.configure') ? `<div class="closure-tab ${invActiveTab === 'config' ? 'active' : ''}" onclick="invSwitchTab('config')"><i class="fas fa-cog"></i> <span>Configuration</span></div>` : ''}
         </div>
 
@@ -175,6 +176,7 @@ function invSwitchTab(tab) {
         case 'factures': invRenderFactures(content); break;
         case 'fournisseurs': invRenderFournisseurs(content); break;
         case 'reporting': invRenderReporting(content); break;
+        case 'export': invRenderExport(content); break;
         case 'config': invRenderConfig(content); break;
     }
 }
@@ -1846,6 +1848,143 @@ async function invRenderReporting(content) {
     } catch (err) {
         content.innerHTML = '<div class="alert alert-danger">Erreur de chargement du reporting</div>';
     }
+}
+
+// ============================================================
+// ONGLET EXPORT
+// ============================================================
+
+function invRenderExport(content) {
+    const today = new Date().toISOString().split('T')[0];
+    const monthStart = today.substring(0, 7) + '-01';
+
+    content.innerHTML = `
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-download"></i> Export de factures</h3>
+            </div>
+            <div class="card-body" style="padding:var(--space-4)">
+                <div class="form-group">
+                    <label class="form-label">Filtrer par</label>
+                    <select id="inv-export-date-type" class="form-control" style="max-width:300px">
+                        <option value="invoice_date">Date de facture</option>
+                        <option value="paid">Date de paiement</option>
+                        <option value="created">Date d'import</option>
+                    </select>
+                </div>
+                <div class="form-row" style="display:flex;gap:var(--space-3);flex-wrap:wrap">
+                    <div class="form-group" style="margin:0">
+                        <label class="form-label">Du</label>
+                        <input type="date" id="inv-export-from" class="form-control" value="${monthStart}">
+                    </div>
+                    <div class="form-group" style="margin:0">
+                        <label class="form-label">Au</label>
+                        <input type="date" id="inv-export-to" class="form-control" value="${today}">
+                    </div>
+                    <div class="form-group" style="margin:0">
+                        <label class="form-label">Statut</label>
+                        <select id="inv-export-status" class="form-control">
+                            <option value="">Tous</option>
+                            <option value="draft">Brouillon</option>
+                            <option value="approved">À payer</option>
+                            <option value="paid">Payée</option>
+                            <option value="rejected">Rejetée</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="margin-top:var(--space-4)">
+                    <button class="btn btn-outline" onclick="invExportPreview()"><i class="fas fa-search"></i> Aperçu</button>
+                </div>
+
+                <div id="inv-export-preview" style="margin-top:var(--space-4)"></div>
+            </div>
+        </div>
+    `;
+}
+
+function invExportBuildParams() {
+    const dateType = document.getElementById('inv-export-date-type')?.value || 'invoice_date';
+    const from = document.getElementById('inv-export-from')?.value || '';
+    const to = document.getElementById('inv-export-to')?.value || '';
+    const status = document.getElementById('inv-export-status')?.value || '';
+
+    let params = `hotel_id=${invCurrentHotel}`;
+    if (from) {
+        if (dateType === 'invoice_date') params += `&invoice_date_from=${from}`;
+        else if (dateType === 'paid') params += `&paid_from=${from}`;
+        else if (dateType === 'created') params += `&created_from=${from}`;
+    }
+    if (to) {
+        if (dateType === 'invoice_date') params += `&invoice_date_to=${to}`;
+        else if (dateType === 'paid') params += `&paid_to=${to}`;
+        else if (dateType === 'created') params += `&created_to=${to}`;
+    }
+    if (status) params += `&status=${status}`;
+    return params;
+}
+
+async function invExportPreview() {
+    const preview = document.getElementById('inv-export-preview');
+    if (!preview) return;
+    preview.innerHTML = '<div style="text-align:center;padding:var(--space-4)"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>';
+
+    try {
+        const params = invExportBuildParams();
+        const res = await API.get(`invoices/extract?${params}&per_page=500`);
+        const invoices = res.invoices || [];
+
+        if (invoices.length === 0) {
+            preview.innerHTML = '<div class="empty-state" style="padding:var(--space-4)"><h3>Aucune facture trouvée</h3><p>Modifiez les critères de recherche</p></div>';
+            return;
+        }
+
+        let totalTtc = 0;
+        invoices.forEach(inv => { totalTtc += parseFloat(inv.total_ttc || 0); });
+
+        preview.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-3);flex-wrap:wrap;gap:var(--space-2)">
+                <div>
+                    <strong>${invoices.length} facture(s)</strong> — Total TTC : <strong>${invFormatCurrency(totalTtc)}</strong>
+                </div>
+                <div style="display:flex;gap:var(--space-2)">
+                    <button class="btn btn-sm btn-outline" onclick="invExportCsv()"><i class="fas fa-file-csv"></i> Export CSV</button>
+                    <button class="btn btn-sm btn-primary" onclick="invExportZip()"><i class="fas fa-file-archive"></i> Export ZIP (fichiers)</button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead><tr><th>Fournisseur</th><th>N° Facture</th><th>Date</th><th style="text-align:right">TTC</th><th>Statut</th><th>Fichier</th></tr></thead>
+                    <tbody>
+                        ${invoices.map(inv => `
+                            <tr>
+                                <td>${esc(inv.supplier_name || '-')}</td>
+                                <td>${esc(inv.invoice_number || '-')}</td>
+                                <td>${inv.invoice_date ? formatDate(inv.invoice_date) : '-'}</td>
+                                <td style="text-align:right">${invFormatCurrency(inv.total_ttc)}</td>
+                                <td>${invStatusBadge(inv.status)}</td>
+                                <td>${inv.original_file ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-times text-danger"></i>'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (err) {
+        preview.innerHTML = '<div class="alert alert-danger">Erreur lors du chargement</div>';
+        console.error(err);
+    }
+}
+
+function invExportCsv() {
+    const params = invExportBuildParams();
+    window.open(CONFIG.API_URL + '/invoices/extract/csv?' + params + '&token=' + API.token, '_blank');
+}
+
+function invExportZip() {
+    const params = invExportBuildParams();
+    window.open(CONFIG.API_URL + '/invoices/extract/zip?' + params + '&token=' + API.token, '_blank');
+    toast('Génération du fichier ZIP en cours...', 'info');
 }
 
 // ============================================================
