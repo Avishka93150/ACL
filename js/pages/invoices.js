@@ -1738,7 +1738,7 @@ async function invRenderReporting(content) {
                         ${hasPermission('invoices.export') ? `<button class="btn btn-sm btn-outline" onclick="window.open(CONFIG.API_URL+'/invoices/reporting/export?hotel_id=${invCurrentHotel}&year=${invReportYear}&token='+API.token,'_blank')"><i class="fas fa-download"></i> CSV</button>` : ''}
                     </div>
                 </div>
-                ${catKeys.length === 0 ? '<div class="empty-state" style="padding:var(--space-6)"><h3>Aucune donnée pour ${invReportYear}</h3></div>' : `
+                ${catKeys.length === 0 ? `<div class="empty-state" style="padding:var(--space-6)"><h3>Aucune donnée pour ${invReportYear}</h3></div>` : `
                     <div class="table-responsive">
                         <table class="table">
                             <thead>
