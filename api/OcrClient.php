@@ -322,26 +322,42 @@ PROMPT;
         $ghostscript = false;
         $pdftotext = false;
         $tesseractVersion = null;
+        $languages = [];
 
-        exec('tesseract --version 2>&1', $tOutput, $tReturn);
+        // Verifier que exec() est disponible (peut etre desactive dans php.ini)
+        if (!function_exists('exec') || in_array('exec', array_map('trim', explode(',', ini_get('disable_functions'))))) {
+            return [
+                'tesseract' => false,
+                'tesseract_version' => null,
+                'tesseract_languages' => [],
+                'ghostscript' => false,
+                'pdftotext' => false,
+                'exec_disabled' => true
+            ];
+        }
+
+        $tOutput = [];
+        @exec('tesseract --version 2>&1', $tOutput, $tReturn);
         if ($tReturn === 0) {
             $tesseract = true;
             $tesseractVersion = $tOutput[0] ?? 'unknown';
         }
 
-        exec('gs --version 2>&1', $gOutput, $gReturn);
+        $gOutput = [];
+        @exec('gs --version 2>&1', $gOutput, $gReturn);
         if ($gReturn === 0) {
             $ghostscript = true;
         }
 
-        exec('pdftotext -v 2>&1', $pOutput, $pReturn);
+        $pOutput = [];
+        @exec('pdftotext -v 2>&1', $pOutput, $pReturn);
         if ($pReturn === 0 || $pReturn === 99) {
             $pdftotext = true;
         }
 
         // Verifier langues Tesseract
-        $languages = [];
-        exec('tesseract --list-langs 2>&1', $lOutput, $lReturn);
+        $lOutput = [];
+        @exec('tesseract --list-langs 2>&1', $lOutput, $lReturn);
         if ($lReturn === 0) {
             foreach ($lOutput as $line) {
                 $line = trim($line);

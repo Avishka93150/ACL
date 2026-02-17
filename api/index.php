@@ -13108,11 +13108,16 @@ try {
             // --- GET /invoices/ocr-status ---
             if ($method === 'GET' && $id === 'ocr-status') {
                 if (!hasPermission($userRole, 'invoices.configure')) json_error('Accès refusé', 403);
-                $prereqs = OcrClient::checkPrerequisites();
+                $prereqs = ['tesseract' => false, 'tesseract_version' => null, 'tesseract_languages' => [], 'ghostscript' => false, 'pdftotext' => false];
+                try {
+                    $prereqs = OcrClient::checkPrerequisites();
+                } catch (\Throwable $e) {
+                    $prereqs['error'] = $e->getMessage();
+                }
                 $aiConfigs = [];
                 try {
                     $aiConfigs = db()->query("SELECT hotel_id, ai_enabled FROM hotel_contracts_config WHERE hotel_id IN ($hotelList)");
-                } catch (Exception $e) {}
+                } catch (\Throwable $e) {}
                 json_out(['prerequisites' => $prereqs, 'ai_configs' => $aiConfigs]);
             }
 

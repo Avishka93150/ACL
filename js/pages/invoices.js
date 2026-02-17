@@ -139,12 +139,12 @@ function invSwitchTab(tab) {
 async function invRenderDashboard(content) {
     showLoading(content);
     try {
-        const [statsRes, listRes] = await Promise.all([
+        const [statsResult, listResult] = await Promise.allSettled([
             API.get(`invoices/stats?hotel_id=${invCurrentHotel}`),
             API.get(`invoices?hotel_id=${invCurrentHotel}&per_page=10`)
         ]);
-        const stats = statsRes.stats || {};
-        const invoices = listRes.invoices || [];
+        const stats = statsResult.status === 'fulfilled' ? (statsResult.value.stats || {}) : {};
+        const invoices = listResult.status === 'fulfilled' ? (listResult.value.invoices || []) : [];
 
         content.innerHTML = `
             <div class="stats-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--space-4);margin-bottom:var(--space-6)">
@@ -1289,15 +1289,15 @@ function invExtractPDF() {
 async function invRenderConfig(content) {
     showLoading(content);
     try {
-        const [rulesRes, fintectureRes, ocrRes] = await Promise.all([
+        const [rulesResult, fintectureResult, ocrResult] = await Promise.allSettled([
             API.get(`invoices/approval-rules?hotel_id=${invCurrentHotel}`),
             API.get(`invoices/fintecture-config?hotel_id=${invCurrentHotel}`),
             API.get('invoices/ocr-status')
         ]);
 
-        const rules = rulesRes.rules || [];
-        const fConfig = fintectureRes.config || {};
-        const prereqs = ocrRes.prerequisites || {};
+        const rules = rulesResult.status === 'fulfilled' ? (rulesResult.value.rules || []) : [];
+        const fConfig = fintectureResult.status === 'fulfilled' ? (fintectureResult.value.config || {}) : {};
+        const prereqs = ocrResult.status === 'fulfilled' ? (ocrResult.value.prerequisites || {}) : {};
 
         content.innerHTML = `
             <!-- Workflow de validation -->
