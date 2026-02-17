@@ -494,65 +494,84 @@ function showPrivacyPolicy() {
     openModal(t('rgpd.privacy_policy'), `
         <div class="legal-content">
             <h4>1. Introduction</h4>
-            <p>La présente politique de confidentialité décrit comment ACL GESTION collecte, utilise et protège vos données personnelles conformément au Règlement Général sur la Protection des Données (RGPD).</p>
-            
+            <p>La presente politique de confidentialite decrit comment ACL GESTION SAS collecte, utilise et protege vos donnees personnelles conformement au Reglement General sur la Protection des Donnees (RGPD - Reglement UE 2016/679) et a la loi Informatique et Libertes du 6 janvier 1978 modifiee.</p>
+
             <h4>2. Responsable du traitement</h4>
-            <p>Le responsable du traitement des données est ACL GESTION.<br>
-            Contact : <span id="dpo-email">dpo@acl-gestion.fr</span></p>
-            
-            <h4>3. Données collectées</h4>
-            <p>Nous collectons les données suivantes :</p>
+            <p>
+                <strong>ACL GESTION SAS</strong><br>
+                22 Avenue de Chalons, 93150 Le Blanc-Mesnil<br>
+                SIRET : 845 388 222 00018 — RCS Bobigny<br>
+                Contact protection des donnees : <strong>contact@acl-gestion.com</strong>
+            </p>
+
+            <h4>3. Donnees collectees</h4>
+            <p>Nous collectons les donnees suivantes :</p>
             <ul>
-                <li><strong>Données d'identification :</strong> nom, prénom, email, téléphone</li>
-                <li><strong>Données professionnelles :</strong> fonction, hôtel d'affectation</li>
-                <li><strong>Données de connexion :</strong> adresse IP, logs d'accès, horodatage</li>
-                <li><strong>Données d'utilisation :</strong> actions effectuées dans l'application</li>
+                <li><strong>Donnees d'identification :</strong> nom, prenom, email professionnel, telephone</li>
+                <li><strong>Donnees professionnelles :</strong> fonction, role, hotel(s) d'affectation</li>
+                <li><strong>Donnees de connexion :</strong> adresse IP, logs d'acces, horodatage, navigateur</li>
+                <li><strong>Donnees d'utilisation :</strong> actions effectuees dans l'application (journal d'audit)</li>
+                <li><strong>Donnees financieres :</strong> donnees de clotures, factures (dans le cadre de la gestion hoteliere)</li>
             </ul>
-            
-            <h4>4. Finalités du traitement</h4>
-            <p>Vos données sont traitées pour :</p>
+
+            <h4>4. Finalites du traitement</h4>
+            <p>Vos donnees sont traitees pour :</p>
             <ul>
-                <li>Gestion de votre compte utilisateur</li>
-                <li>Fourniture des services de l'application</li>
-                <li>Sécurité et prévention des fraudes</li>
-                <li>Respect des obligations légales</li>
+                <li>Gestion de votre compte utilisateur et authentification</li>
+                <li>Fourniture des services de la plateforme ACL GESTION</li>
+                <li>Securite, prevention des fraudes et tracabilite des operations</li>
+                <li>Amelioration continue de nos services</li>
+                <li>Respect des obligations legales et reglementaires</li>
             </ul>
-            
-            <h4>5. Base légale</h4>
-            <p>Le traitement de vos données est fondé sur :</p>
+
+            <h4>5. Base legale</h4>
+            <p>Le traitement de vos donnees est fonde sur :</p>
             <ul>
-                <li>L'exécution du contrat de travail</li>
-                <li>Votre consentement pour certains traitements</li>
-                <li>L'intérêt légitime de l'employeur</li>
-                <li>Les obligations légales</li>
+                <li><strong>L'execution du contrat :</strong> fourniture du service SaaS souscrit</li>
+                <li><strong>L'interet legitime :</strong> securite, amelioration du service, statistiques d'usage</li>
+                <li><strong>Le consentement :</strong> pour les communications commerciales et certains cookies</li>
+                <li><strong>L'obligation legale :</strong> conservation des donnees comptables et fiscales</li>
             </ul>
-            
-            <h4>6. Durée de conservation</h4>
-            <p>Vos données sont conservées pendant la durée de votre contrat et jusqu'à 3 ans après la fin de celui-ci, sauf obligation légale de conservation plus longue.</p>
-            
-            <h4>7. Vos droits</h4>
-            <p>Conformément au RGPD, vous disposez des droits suivants :</p>
+
+            <h4>6. Destinataires des donnees</h4>
+            <p>Vos donnees sont accessibles uniquement aux personnes habilitees au sein de votre organisation (selon les roles et permissions configures) et au personnel technique d'ACL GESTION pour la maintenance du service. Aucune donnee n'est vendue ou transmise a des tiers a des fins commerciales.</p>
+
+            <h4>7. Transferts hors UE</h4>
+            <p>Vos donnees sont hebergees en France (OVH SAS, Roubaix). Aucun transfert de donnees hors de l'Union Europeenne n'est effectue.</p>
+
+            <h4>8. Duree de conservation</h4>
             <ul>
-                <li><strong>Droit d'accès :</strong> obtenir une copie de vos données</li>
-                <li><strong>Droit de rectification :</strong> corriger vos données inexactes</li>
-                <li><strong>Droit à l'effacement :</strong> demander la suppression de vos données</li>
-                <li><strong>Droit à la portabilité :</strong> recevoir vos données dans un format structuré</li>
-                <li><strong>Droit d'opposition :</strong> vous opposer à certains traitements</li>
-                <li><strong>Droit à la limitation :</strong> limiter le traitement de vos données</li>
+                <li><strong>Donnees de compte :</strong> duree du contrat + 3 ans apres resiliation</li>
+                <li><strong>Donnees de connexion :</strong> 12 mois (obligation legale)</li>
+                <li><strong>Donnees comptables :</strong> 10 ans (obligation legale)</li>
+                <li><strong>Journaux d'audit :</strong> 5 ans</li>
+                <li><strong>Donnees de prospection :</strong> 3 ans apres le dernier contact</li>
             </ul>
-            
-            <h4>8. Sécurité</h4>
-            <p>Nous mettons en œuvre des mesures techniques et organisationnelles appropriées pour protéger vos données contre tout accès non autorisé, modification, divulgation ou destruction.</p>
-            
-            <h4>9. Contact</h4>
-            <p>Pour exercer vos droits ou pour toute question relative à vos données personnelles, contactez notre Délégué à la Protection des Données (DPO) à l'adresse : <span id="dpo-email-2">dpo@acl-gestion.fr</span></p>
-            
-            <h4>10. Réclamation</h4>
-            <p>Vous avez le droit d'introduire une réclamation auprès de la CNIL (Commission Nationale de l'Informatique et des Libertés) : <a href="https://www.cnil.fr" target="_blank">www.cnil.fr</a></p>
-            
-            <p class="text-muted mt-20"><em>Dernière mise à jour : ${new Date().toLocaleDateString('fr-FR')}</em></p>
+
+            <h4>9. Vos droits</h4>
+            <p>Conformement au RGPD, vous disposez des droits suivants :</p>
+            <ul>
+                <li><strong>Droit d'acces :</strong> obtenir une copie de vos donnees personnelles</li>
+                <li><strong>Droit de rectification :</strong> corriger vos donnees inexactes ou incompletes</li>
+                <li><strong>Droit a l'effacement :</strong> demander la suppression de vos donnees</li>
+                <li><strong>Droit a la portabilite :</strong> recevoir vos donnees dans un format structure et lisible</li>
+                <li><strong>Droit d'opposition :</strong> vous opposer a certains traitements</li>
+                <li><strong>Droit a la limitation :</strong> limiter le traitement de vos donnees</li>
+            </ul>
+            <p>Pour exercer vos droits, contactez : <strong>contact@acl-gestion.com</strong></p>
+
+            <h4>10. Securite</h4>
+            <p>Nous mettons en oeuvre des mesures techniques et organisationnelles appropriees : chiffrement SSL/TLS, authentification JWT, controle d'acces par roles (RBAC), journalisation des acces, sauvegardes quotidiennes, hebergement securise en France.</p>
+
+            <h4>11. Cookies</h4>
+            <p>L'application utilise exclusivement des cookies techniques necessaires a son fonctionnement (authentification, preferences d'affichage). Aucun cookie publicitaire ou de tracking n'est utilise.</p>
+
+            <h4>12. Reclamation</h4>
+            <p>Vous avez le droit d'introduire une reclamation aupres de la CNIL (Commission Nationale de l'Informatique et des Libertes) : <a href="https://www.cnil.fr" target="_blank">www.cnil.fr</a></p>
+
+            <p class="text-muted mt-20"><em>Derniere mise a jour : ${new Date().toLocaleDateString('fr-FR')}</em></p>
         </div>
-        
+
         <div class="modal-footer">
             <button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button>
         </div>
@@ -562,40 +581,249 @@ function showPrivacyPolicy() {
 function showLegalNotice() {
     openModal(t('rgpd.legal_notice'), `
         <div class="legal-content">
-            <h4>1. Éditeur du site</h4>
+            <h4>1. Editeur du site</h4>
             <p>
-                <strong>ACL GESTION</strong><br>
-                Société de gestion hôtelière<br>
-                <span id="company-address">Adresse à compléter</span><br>
-                Email : <span id="company-email">contact@acl-gestion.fr</span><br>
-                Téléphone : <span id="company-phone">À compléter</span>
+                <strong>ACL GESTION SAS</strong><br>
+                Societe par Actions Simplifiee au capital de 1 000 euros<br>
+                Siege social : 22 Avenue de Chalons, 93150 Le Blanc-Mesnil, France<br>
+                SIRET : 845 388 222 00018<br>
+                RCS : Bobigny<br>
+                N° TVA intracommunautaire : FR59 845 388 222<br>
+                Code NAF : 7022Z (Conseil pour les affaires et autres conseils de gestion)<br>
+                Email : contact@acl-gestion.com<br>
+                Site web : acl-gestion.com
             </p>
-            
-            <h4>2. Hébergement</h4>
+
+            <h4>2. Directeur de la publication</h4>
+            <p>Le directeur de la publication est le representant legal d'ACL GESTION SAS.</p>
+
+            <h4>3. Hebergement</h4>
             <p>
-                L'application est hébergée par :<br>
-                <span id="host-info">Informations hébergeur à compléter</span>
+                L'application est hebergee par :<br>
+                <strong>OVH SAS</strong><br>
+                2, rue Kellermann — 59100 Roubaix, France<br>
+                RCS Lille Metropole 424 761 419 00045<br>
+                Telephone : +33 9 72 10 10 07<br>
+                Site web : www.ovhcloud.com
             </p>
-            
-            <h4>3. Propriété intellectuelle</h4>
-            <p>L'ensemble du contenu de cette application (textes, images, logos, logiciels) est la propriété exclusive d'ACL GESTION et est protégé par les lois sur la propriété intellectuelle.</p>
-            
-            <h4>4. Protection des données personnelles</h4>
-            <p>Conformément au RGPD, vous disposez de droits sur vos données personnelles. Consultez notre <a href="#" onclick="showPrivacyPolicy(); return false;">Politique de confidentialité</a> pour plus d'informations.</p>
-            
-            <h4>5. Cookies</h4>
-            <p>Cette application utilise des cookies techniques nécessaires à son fonctionnement. Des cookies analytiques peuvent être utilisés avec votre consentement.</p>
-            
-            <h4>6. Responsabilité</h4>
-            <p>ACL GESTION s'efforce d'assurer l'exactitude des informations diffusées mais ne saurait être tenue responsable des erreurs, omissions ou résultats obtenus suite à l'utilisation de ces informations.</p>
-            
-            <p class="text-muted mt-20"><em>Dernière mise à jour : ${new Date().toLocaleDateString('fr-FR')}</em></p>
+
+            <h4>4. Propriete intellectuelle</h4>
+            <p>L'ensemble du contenu de cette application (textes, images, logos, logiciels, code source, bases de donnees, architecture) est la propriete exclusive d'ACL GESTION SAS et est protege par les lois francaises et internationales relatives a la propriete intellectuelle. Toute reproduction, representation, modification ou exploitation non autorisee est interdite et constitue une contrefacon sanctionnee par les articles L.335-2 et suivants du Code de la propriete intellectuelle.</p>
+
+            <h4>5. Protection des donnees personnelles</h4>
+            <p>Conformement au RGPD et a la loi Informatique et Libertes, vous disposez de droits sur vos donnees personnelles. Consultez notre <a href="#" onclick="closeModal(); setTimeout(showPrivacyPolicy, 300); return false;">Politique de confidentialite</a> pour plus d'informations.<br>
+            Contact protection des donnees : <strong>contact@acl-gestion.com</strong></p>
+
+            <h4>6. Cookies</h4>
+            <p>Cette application utilise exclusivement des cookies techniques necessaires a son fonctionnement (authentification, preferences). Aucun cookie publicitaire ou de suivi tiers n'est utilise.</p>
+
+            <h4>7. Limitation de responsabilite</h4>
+            <p>ACL GESTION SAS s'efforce d'assurer l'exactitude et la mise a jour des informations diffusees sur la plateforme. Toutefois, ACL GESTION SAS ne saurait etre tenue responsable des erreurs, omissions, indisponibilites ou des resultats obtenus suite a l'utilisation de ces informations. L'utilisateur est seul responsable de l'utilisation qu'il fait du service.</p>
+
+            <h4>8. Droit applicable et juridiction</h4>
+            <p>Les presentes mentions legales sont soumises au droit francais. En cas de litige, les tribunaux competents de Bobigny seront seuls competents.</p>
+
+            <p class="text-muted mt-20"><em>Derniere mise a jour : ${new Date().toLocaleDateString('fr-FR')}</em></p>
         </div>
-        
+
         <div class="modal-footer">
             <button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button>
         </div>
     `, 'modal-lg');
+}
+
+function showCGV() {
+    openModal('Conditions Generales de Vente', \`
+        <div class="legal-content">
+            <h4>1. Objet</h4>
+            <p>Les presentes Conditions Generales de Vente (CGV) regissent les relations contractuelles entre ACL GESTION SAS (ci-apres "le Prestataire") et toute personne morale souscrivant au service ACL GESTION (ci-apres "le Client"). Toute souscription implique l'acceptation sans reserve des presentes CGV.</p>
+
+            <h4>2. Identification du Prestataire</h4>
+            <p>
+                <strong>ACL GESTION SAS</strong><br>
+                Capital social : 1 000 euros<br>
+                Siege social : 22 Avenue de Chalons, 93150 Le Blanc-Mesnil<br>
+                SIRET : 845 388 222 00018 — RCS Bobigny<br>
+                TVA intracommunautaire : FR59 845 388 222
+            </p>
+
+            <h4>3. Description du service</h4>
+            <p>ACL GESTION est une plateforme SaaS (Software as a Service) de gestion hoteliere multi-etablissements accessible via navigateur web et application mobile. Le service comprend l'ensemble des modules fonctionnels decrits sur le site, l'hebergement des donnees, la maintenance corrective et evolutive, et le support technique.</p>
+
+            <h4>4. Souscription et duree</h4>
+            <p>La souscription s'effectue par signature d'un bon de commande ou acceptation d'un devis. Le contrat prend effet a la date d'activation du compte. La duree initiale et les conditions de renouvellement sont precisees dans le bon de commande. A defaut, l'abonnement est mensuel avec un preavis de resiliation de 30 jours.</p>
+
+            <h4>5. Tarification et paiement</h4>
+            <ul>
+                <li>Les tarifs sont exprimes en euros hors taxes (HT) et communiques sur devis personnalise.</li>
+                <li>La TVA applicable est celle en vigueur au jour de la facturation (20%).</li>
+                <li>Les factures sont payables a 30 jours date de facture, sauf accord contraire.</li>
+                <li>Tout retard de paiement entraine de plein droit l'application de penalites de retard au taux annuel de 3 fois le taux d'interet legal, ainsi qu'une indemnite forfaitaire de 40 euros pour frais de recouvrement (art. L.441-10 du Code de commerce).</li>
+                <li>Le Prestataire se reserve le droit de suspendre l'acces au service en cas de non-paiement apres mise en demeure restee infructueuse pendant 15 jours.</li>
+            </ul>
+
+            <h4>6. Obligations du Prestataire</h4>
+            <ul>
+                <li>Fournir un service conforme a la description et aux specifications convenues.</li>
+                <li>Assurer la disponibilite du service avec un taux de disponibilite cible de 99,5% (hors maintenance planifiee).</li>
+                <li>Heberger les donnees en France, chez OVH SAS (Roubaix).</li>
+                <li>Assurer la sauvegarde quotidienne des donnees.</li>
+                <li>Assurer le support technique par email aux heures ouvrables (lundi-vendredi, 9h-18h).</li>
+                <li>Informer le Client de toute maintenance planifiee avec un preavis minimum de 48 heures.</li>
+            </ul>
+
+            <h4>7. Obligations du Client</h4>
+            <ul>
+                <li>Fournir des informations exactes et a jour lors de l'inscription.</li>
+                <li>Assurer la confidentialite des identifiants d'acces.</li>
+                <li>Utiliser le service conformement a sa destination et aux presentes CGV.</li>
+                <li>S'acquitter des sommes dues dans les delais impartis.</li>
+                <li>Respecter la reglementation applicable, notamment en matiere de protection des donnees.</li>
+            </ul>
+
+            <h4>8. Propriete intellectuelle</h4>
+            <p>Le service ACL GESTION, ses logiciels, interfaces, bases de donnees, documentation et tout element associe sont et demeurent la propriete exclusive d'ACL GESTION SAS. La souscription confere uniquement un droit d'utilisation non exclusif, non cessible et non transferable, pour la duree du contrat.</p>
+
+            <h4>9. Donnees du Client</h4>
+            <p>Le Client reste proprietaire de l'ensemble des donnees qu'il saisit dans la plateforme. ACL GESTION SAS s'interdit toute utilisation des donnees du Client a des fins autres que la fourniture du service. En cas de resiliation, le Client peut exporter ses donnees pendant une periode de 30 jours. Au-dela, les donnees seront supprimees.</p>
+
+            <h4>10. Limitation de responsabilite</h4>
+            <ul>
+                <li>La responsabilite du Prestataire est limitee aux dommages directs et previsibles, et ne saurait exceder le montant des sommes versees par le Client au titre des 12 derniers mois.</li>
+                <li>Le Prestataire ne saurait etre tenu responsable des dommages indirects (perte de chiffre d'affaires, perte de donnees due a un cas de force majeure, prejudice commercial).</li>
+                <li>Le Prestataire ne saurait etre tenu responsable des contenus saisis par le Client ou ses utilisateurs.</li>
+            </ul>
+
+            <h4>11. Force majeure</h4>
+            <p>Aucune des parties ne pourra etre tenue responsable de l'inexecution de ses obligations en cas de force majeure au sens de l'article 1218 du Code civil (catastrophe naturelle, pandemie, guerre, greve generale, panne de reseau internet, cyberattaque d'ampleur exceptionnelle).</p>
+
+            <h4>12. Resiliation</h4>
+            <ul>
+                <li>Chaque partie peut resilier le contrat avec un preavis de 30 jours avant la date de renouvellement.</li>
+                <li>En cas de manquement grave par l'une des parties, l'autre partie pourra resilier de plein droit apres mise en demeure restee sans effet pendant 15 jours.</li>
+                <li>Le Client peut exporter ses donnees via les fonctionnalites prevues a cet effet (export CSV, PDF, ZIP).</li>
+            </ul>
+
+            <h4>13. Protection des donnees</h4>
+            <p>Le Prestataire agit en qualite de sous-traitant au sens du RGPD pour les donnees personnelles traitees par le Client via la plateforme. Les modalites de traitement sont detaillees dans notre <a href="#" onclick="closeModal(); setTimeout(showPrivacyPolicy, 300); return false;">Politique de confidentialite</a>.</p>
+
+            <h4>14. Droit applicable et competence</h4>
+            <p>Les presentes CGV sont soumises au droit francais. Tout differend sera soumis, apres tentative de resolution amiable, a la competence exclusive des tribunaux de Bobigny.</p>
+
+            <p class="text-muted mt-20"><em>Derniere mise a jour : \${new Date().toLocaleDateString('fr-FR')}</em></p>
+        </div>
+
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button>
+        </div>
+    \`, 'modal-lg');
+}
+
+function showCGU() {
+    openModal("Conditions Generales d'Utilisation", \`
+        <div class="legal-content">
+            <h4>1. Objet</h4>
+            <p>Les presentes Conditions Generales d'Utilisation (CGU) definissent les regles d'utilisation de la plateforme ACL GESTION editee par ACL GESTION SAS. L'acces et l'utilisation de la plateforme impliquent l'acceptation pleine et entiere des presentes CGU.</p>
+
+            <h4>2. Definitions</h4>
+            <ul>
+                <li><strong>"Plateforme" :</strong> l'application web et mobile ACL GESTION accessible a l'adresse acl-gestion.com.</li>
+                <li><strong>"Editeur" :</strong> ACL GESTION SAS, 22 Avenue de Chalons, 93150 Le Blanc-Mesnil (SIRET 845 388 222 00018).</li>
+                <li><strong>"Utilisateur" :</strong> toute personne disposant d'un compte d'acces a la plateforme.</li>
+                <li><strong>"Client" :</strong> la personne morale ayant souscrit un abonnement au service.</li>
+                <li><strong>"Contenu" :</strong> toute donnee, fichier, texte ou document saisi ou televerse par l'Utilisateur.</li>
+            </ul>
+
+            <h4>3. Acces a la plateforme</h4>
+            <p>L'acces a la plateforme est reserve aux Utilisateurs disposant d'un compte valide, cree par le Client ou son administrateur. L'Utilisateur s'engage a :</p>
+            <ul>
+                <li>Fournir des informations exactes lors de la creation de son profil.</li>
+                <li>Preserver la confidentialite de ses identifiants de connexion (email et mot de passe).</li>
+                <li>Ne pas partager, ceder ou communiquer ses identifiants a des tiers.</li>
+                <li>Informer immediatement l'administrateur de toute utilisation non autorisee de son compte.</li>
+            </ul>
+            <p>L'Utilisateur est responsable de toute action effectuee depuis son compte.</p>
+
+            <h4>4. Utilisation autorisee</h4>
+            <p>La plateforme est destinee exclusivement a la gestion operationnelle d'etablissements hoteliers. L'Utilisateur s'engage a utiliser la plateforme conformement a sa destination professionnelle et dans le respect de la reglementation en vigueur.</p>
+
+            <h4>5. Comportements interdits</h4>
+            <p>Il est strictement interdit de :</p>
+            <ul>
+                <li>Tenter d'acceder a des donnees ou fonctionnalites non autorisees par son role.</li>
+                <li>Contourner, desactiver ou interferer avec les mecanismes de securite de la plateforme.</li>
+                <li>Utiliser la plateforme a des fins illicites, frauduleuses ou contraires a l'ordre public.</li>
+                <li>Introduire des virus, logiciels malveillants ou tout code nuisible.</li>
+                <li>Proceder a l'extraction systematique ou automatisee de donnees (scraping, crawling).</li>
+                <li>Reproduire, copier, decompiler, desassembler ou proceder a l'ingenierie inverse du logiciel.</li>
+                <li>Utiliser la plateforme pour stocker ou diffuser des contenus illicites.</li>
+                <li>Surcharger intentionnellement l'infrastructure technique du service.</li>
+            </ul>
+
+            <h4>6. Propriete intellectuelle</h4>
+            <p>L'ensemble des elements de la plateforme (logiciels, code source, interfaces, design, bases de donnees, textes, logos, marques) est la propriete exclusive d'ACL GESTION SAS, protege par le droit d'auteur, le droit des marques et le droit des bases de donnees. L'Utilisateur ne dispose d'aucun droit de propriete intellectuelle sur la plateforme. Toute reproduction, meme partielle, est interdite sans autorisation ecrite prealable.</p>
+
+            <h4>7. Contenu de l'Utilisateur</h4>
+            <ul>
+                <li>L'Utilisateur reste proprietaire des donnees et contenus qu'il saisit dans la plateforme.</li>
+                <li>L'Utilisateur garantit que les contenus qu'il publie ne portent pas atteinte aux droits de tiers et sont conformes a la reglementation.</li>
+                <li>L'Editeur se reserve le droit de supprimer tout contenu manifestement illicite, apres notification.</li>
+                <li>L'Editeur n'exerce aucun controle prealable sur les contenus saisis par les Utilisateurs.</li>
+            </ul>
+
+            <h4>8. Disponibilite du service</h4>
+            <p>L'Editeur s'efforce d'assurer la disponibilite de la plateforme 24h/24 et 7j/7. Toutefois, l'Editeur ne garantit pas une disponibilite ininterrompue et ne saurait etre tenu responsable des interruptions liees a :</p>
+            <ul>
+                <li>Des operations de maintenance planifiees ou urgentes.</li>
+                <li>Des pannes ou defaillances des reseaux de telecommunications.</li>
+                <li>Des cas de force majeure.</li>
+                <li>Des actes de malveillance ou intrusions informatiques.</li>
+            </ul>
+
+            <h4>9. Responsabilite de l'Editeur</h4>
+            <ul>
+                <li>L'Editeur n'est tenu que d'une obligation de moyens concernant le fonctionnement de la plateforme.</li>
+                <li>L'Editeur ne saurait etre tenu responsable des dommages indirects subis par l'Utilisateur (perte de donnees, perte de chiffre d'affaires, prejudice commercial, atteinte a l'image).</li>
+                <li>L'Editeur ne saurait etre tenu responsable de l'utilisation faite par l'Utilisateur du service, ni des decisions prises sur la base des informations fournies par la plateforme.</li>
+                <li>En tout etat de cause, la responsabilite de l'Editeur est plafonnee au montant des sommes effectivement versees par le Client au titre des 12 derniers mois.</li>
+            </ul>
+
+            <h4>10. Responsabilite de l'Utilisateur</h4>
+            <ul>
+                <li>L'Utilisateur est seul responsable de l'utilisation qu'il fait de la plateforme et des contenus qu'il y saisit.</li>
+                <li>L'Utilisateur s'engage a indemniser et garantir l'Editeur contre toute reclamation, action ou plainte de tiers resultant de son utilisation de la plateforme.</li>
+                <li>L'Utilisateur est responsable de la securite de ses equipements et de sa connexion internet.</li>
+            </ul>
+
+            <h4>11. Protection des donnees personnelles</h4>
+            <p>Le traitement des donnees personnelles est detaille dans notre <a href="#" onclick="closeModal(); setTimeout(showPrivacyPolicy, 300); return false;">Politique de confidentialite</a>. L'Utilisateur dispose des droits d'acces, rectification, suppression, portabilite, opposition et limitation du traitement. Contact : <strong>contact@acl-gestion.com</strong></p>
+
+            <h4>12. Suspension et resiliation</h4>
+            <ul>
+                <li>L'Editeur se reserve le droit de suspendre ou supprimer l'acces d'un Utilisateur en cas de violation des presentes CGU, sans preavis en cas de manquement grave.</li>
+                <li>En cas de suspension, l'Utilisateur sera informe par email des motifs de la suspension.</li>
+                <li>Le Client pourra demander la reactivation du compte apres regularisation de la situation.</li>
+            </ul>
+
+            <h4>13. Modification des CGU</h4>
+            <p>L'Editeur se reserve le droit de modifier les presentes CGU a tout moment. Les Utilisateurs seront informes de toute modification substantielle par notification dans l'application ou par email. L'utilisation continue de la plateforme apres notification vaut acceptation des CGU modifiees.</p>
+
+            <h4>14. Droit applicable et litiges</h4>
+            <p>Les presentes CGU sont soumises au droit francais. En cas de litige, les parties s'efforceront de trouver une solution amiable. A defaut, les tribunaux de Bobigny seront seuls competents.</p>
+
+            <h4>15. Contact</h4>
+            <p>Pour toute question relative aux presentes CGU :<br>
+            <strong>ACL GESTION SAS</strong><br>
+            22 Avenue de Chalons, 93150 Le Blanc-Mesnil<br>
+            Email : contact@acl-gestion.com</p>
+
+            <p class="text-muted mt-20"><em>Derniere mise a jour : \${new Date().toLocaleDateString('fr-FR')}</em></p>
+        </div>
+
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button>
+        </div>
+    \`, 'modal-lg');
 }
 
 // ==================== CONSENTEMENT INITIAL ====================
