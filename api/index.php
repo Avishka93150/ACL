@@ -12315,7 +12315,7 @@ try {
             $user = require_auth();
             $userRole = $user['role'];
             $userId = $user['id'];
-            $userHotelIds = $user['hotel_ids'] ?? [];
+            $userHotelIds = getManageableHotels($user);
 
             // --- GET /suppliers/search?q=xxx&hotel_id=X ---
             if ($method === 'GET' && $id === 'search') {
@@ -12603,7 +12603,7 @@ try {
             $user = require_auth();
             $userRole = $user['role'];
             $userId = $user['id'];
-            $userHotelIds = $user['hotel_ids'] ?? [];
+            $userHotelIds = getManageableHotels($user);
             $hotelList = implode(',', array_map('intval', $userHotelIds));
 
             // --- GET /invoices/stats ---
