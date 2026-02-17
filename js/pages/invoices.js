@@ -14,6 +14,7 @@ let invListStatus = '';
 let invListSearch = '';
 let invSearchTimer = null;
 let _invContainer = null;
+let invFintectureConfig = null; // Config Fintecture de l'hôtel courant
 
 // === HELPERS ===
 
@@ -21,7 +22,7 @@ function invStatusLabel(s) {
     const map = {
         draft: 'Brouillon', approved: 'À payer', paid: 'Payée', rejected: 'Rejetée',
         pending_review: 'À payer', pending_approval: 'À payer',
-        pending_payment: 'À payer', payment_initiated: 'À payer', cancelled: 'Annulée'
+        pending_payment: 'À payer', payment_initiated: 'Paiement en cours', cancelled: 'Annulée'
     };
     return map[s] || s;
 }
@@ -69,11 +70,27 @@ async function loadInvoices(container) {
 
         invCurrentHotel = invCurrentHotel || invHotels[0].id;
 
-        // Charger les catégories
-        try {
-            const catRes = await API.get(`contracts/categories?hotel_id=${invCurrentHotel}`);
-            invCategories = catRes.categories || [];
-        } catch (e) { invCategories = []; }
+        // Charger catégories + config Fintecture en parallèle
+        const [catResult, fintResult] = await Promise.allSettled([
+            API.get(`contracts/categories?hotel_id=${invCurrentHotel}`),
+            API.get(`invoices/fintecture-config?hotel_id=${invCurrentHotel}`)
+        ]);
+        invCategories = catResult.status === 'fulfilled' ? (catResult.value.categories || []) : [];
+        invFintectureConfig = fintResult.status === 'fulfilled' ? (fintResult.value.config || null) : null;
+
+        // Gérer le callback de paiement Fintecture (retour depuis la banque)
+        const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+        const callbackInvoiceId = urlParams.get('payment_callback');
+        if (callbackInvoiceId) {
+            // Nettoyer l'URL
+            window.location.hash = '#invoices';
+            invCurrentView = 'verify';
+            invCurrentInvoice = parseInt(callbackInvoiceId);
+            invRenderVerify(container, invCurrentInvoice);
+            // Vérifier le statut du paiement
+            setTimeout(() => invCheckPaymentStatus(invCurrentInvoice), 1000);
+            return;
+        }
 
         // Si on était sur la vérification, y retourner
         if (invCurrentView === 'verify' && invCurrentInvoice) {
@@ -121,8 +138,12 @@ function invRenderMain(container) {
 async function invChangeHotel(hotelId) {
     invCurrentHotel = parseInt(hotelId);
     try {
-        const catRes = await API.get(`contracts/categories?hotel_id=${invCurrentHotel}`);
-        invCategories = catRes.categories || [];
+        const [catResult, fintResult] = await Promise.allSettled([
+            API.get(`contracts/categories?hotel_id=${invCurrentHotel}`),
+            API.get(`invoices/fintecture-config?hotel_id=${invCurrentHotel}`)
+        ]);
+        invCategories = catResult.status === 'fulfilled' ? (catResult.value.categories || []) : [];
+        invFintectureConfig = fintResult.status === 'fulfilled' ? (fintResult.value.config || null) : null;
     } catch (e) { invCategories = []; }
     invSwitchTab(invActiveTab);
 }
@@ -423,6 +444,7 @@ function invRenderVerifyForm(inv, lines, isEditable) {
                             <option value="prelevement" ${inv.payment_method === 'prelevement' ? 'selected' : ''}>Prélèvement</option>
                             <option value="carte" ${inv.payment_method === 'carte' ? 'selected' : ''}>Carte bancaire</option>
                             <option value="especes" ${inv.payment_method === 'especes' ? 'selected' : ''}>Espèces</option>
+                            ${invFintectureConfig && invFintectureConfig.is_active ? `<option value="fintecture" ${inv.payment_method === 'fintecture' ? 'selected' : ''}>Fintecture (Open Banking)</option>` : (inv.payment_method === 'fintecture' ? '<option value="fintecture" selected>Fintecture</option>' : '')}
                             <option value="autre" ${inv.payment_method === 'autre' ? 'selected' : ''}>Autre</option>
                         </select>
                     </div>
@@ -439,6 +461,27 @@ function invRenderVerifyForm(inv, lines, isEditable) {
                     <label class="form-label">Notes</label>
                     <textarea id="inv-notes" class="form-control" rows="2" ${!isEditable ? 'readonly' : ''}>${esc(inv.notes || '')}</textarea>
                 </div>
+                ${inv.status === 'payment_initiated' ? `
+                    <div style="background:var(--info-50, #eff6ff);border:1px solid var(--info-200, #bfdbfe);border-radius:var(--radius-md);padding:var(--space-3);margin-top:var(--space-3)">
+                        <div style="display:flex;align-items:center;gap:var(--space-2)">
+                            <i class="fas fa-spinner fa-spin" style="color:var(--info-500, #3b82f6)"></i>
+                            <strong style="color:var(--info-700, #1d4ed8)">Paiement Fintecture en cours</strong>
+                        </div>
+                        <p style="margin:var(--space-1) 0 0;font-size:var(--font-size-sm);color:var(--text-secondary)">
+                            Le virement a été initié via Open Banking. Le statut sera mis à jour automatiquement.
+                            ${inv.fintecture_session_id ? `<br>Session : <code>${esc(inv.fintecture_session_id)}</code>` : ''}
+                        </p>
+                    </div>
+                ` : ''}
+                ${inv.status === 'paid' && inv.payment_method === 'fintecture' ? `
+                    <div style="background:var(--success-50, #f0fdf4);border:1px solid var(--success-200, #bbf7d0);border-radius:var(--radius-md);padding:var(--space-3);margin-top:var(--space-3)">
+                        <div style="display:flex;align-items:center;gap:var(--space-2)">
+                            <i class="fas fa-check-circle" style="color:var(--success-500, #22c55e)"></i>
+                            <strong style="color:var(--success-700, #15803d)">Payée via Fintecture</strong>
+                        </div>
+                        ${inv.payment_reference ? `<p style="margin:var(--space-1) 0 0;font-size:var(--font-size-sm);color:var(--text-secondary)">Réf : ${esc(inv.payment_reference)}</p>` : ''}
+                    </div>
+                ` : ''}
             </div>
         </div>
 
@@ -486,7 +529,14 @@ function invRenderVerifyForm(inv, lines, isEditable) {
                         <button class="btn btn-primary" onclick="invSaveInvoice('approved')"><i class="fas fa-check"></i> Valider à payer</button>
                         <button class="btn btn-outline" onclick="invSaveInvoice('draft')"><i class="fas fa-save"></i> Enregistrer brouillon</button>
                     ` : ''}
-                    ${invIsPayable(inv.status) ? `
+                    ${invIsPayable(inv.status) && inv.status !== 'payment_initiated' ? `
+                        ${invFintectureConfig && invFintectureConfig.is_active && inv.supplier_iban ? `
+                            <button class="btn btn-primary" onclick="invPayFintecture(${inv.id})"><i class="fas fa-university"></i> Payer via Fintecture</button>
+                        ` : ''}
+                        <button class="btn btn-success" onclick="invSaveInvoice('paid')"><i class="fas fa-money-check-alt"></i> Marquer comme payée</button>
+                    ` : ''}
+                    ${inv.status === 'payment_initiated' ? `
+                        <button class="btn btn-info" onclick="invCheckPaymentStatus(${inv.id})"><i class="fas fa-sync-alt"></i> Vérifier le paiement</button>
                         <button class="btn btn-success" onclick="invSaveInvoice('paid')"><i class="fas fa-money-check-alt"></i> Marquer comme payée</button>
                     ` : ''}
                     ${inv.status === 'paid' && hasPermission('invoices.edit') ? `
@@ -799,6 +849,47 @@ async function invSaveQuickSupplier(event) {
         }
     } catch (err) {
         toast(err.message || 'Erreur lors de la création', 'error');
+    }
+}
+
+// === PAIEMENT FINTECTURE ===
+
+async function invPayFintecture(invoiceId) {
+    if (!confirm('Initier le paiement via Fintecture (Open Banking) ?\n\nVous serez redirigé vers votre banque pour confirmer le virement.')) return;
+
+    try {
+        const res = await API.post(`invoices/${invoiceId}/pay`, { payment_method: 'fintecture' });
+
+        if (res.redirect_url) {
+            // Rediriger vers la banque
+            toast('Redirection vers votre banque...', 'info');
+            window.location.href = res.redirect_url;
+        } else {
+            toast('Paiement initié', 'success');
+            invRenderVerify(_invContainer, invoiceId);
+        }
+    } catch (err) {
+        toast(err.message || 'Erreur lors de l\'initiation du paiement', 'error');
+    }
+}
+
+async function invCheckPaymentStatus(invoiceId) {
+    try {
+        toast('Vérification du paiement...', 'info');
+        const res = await API.get(`invoices/${invoiceId}`);
+        const inv = res.invoice;
+
+        if (inv.status === 'paid') {
+            toast('Paiement confirmé !', 'success');
+        } else if (inv.status === 'payment_initiated') {
+            toast('Paiement en cours de traitement — le statut sera mis à jour automatiquement', 'info');
+        } else if (inv.status === 'approved') {
+            toast('Le paiement a échoué ou a été annulé — vous pouvez réessayer', 'warning');
+        }
+
+        invRenderVerify(_invContainer, invoiceId);
+    } catch (err) {
+        toast('Erreur lors de la vérification', 'error');
     }
 }
 
@@ -1171,6 +1262,49 @@ async function invRenderConfig(content) {
                 `}
             </div>
 
+            <!-- Fintecture (Open Banking) -->
+            <div class="card" style="margin-bottom:var(--space-4)">
+                <div class="card-header"><h3><i class="fas fa-university"></i> Fintecture — Paiement Open Banking</h3></div>
+                <div class="card-body" style="padding:var(--space-4)">
+                    <p style="color:var(--text-secondary);font-size:var(--font-size-sm);margin-bottom:var(--space-3)">
+                        <i class="fas fa-info-circle"></i> Fintecture permet de payer vos fournisseurs par virement instantané via Open Banking (PSD2).
+                        Le fournisseur doit avoir un IBAN renseigné.
+                    </p>
+                    <form onsubmit="invSaveFintectureConfig(event)">
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1"><label class="form-label">App ID</label>
+                                <input type="text" id="fint-app-id" class="form-control" value="${esc(invFintectureConfig?.app_id || '')}" placeholder="Votre App ID Fintecture"></div>
+                            <div class="form-group" style="flex:1"><label class="form-label">App Secret</label>
+                                <input type="password" id="fint-app-secret" class="form-control" placeholder="${invFintectureConfig?.has_secret ? '••••••••' : 'Votre App Secret'}"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1"><label class="form-label">Chemin clé privée RSA (optionnel)</label>
+                                <input type="text" id="fint-private-key" class="form-control" value="${esc(invFintectureConfig?.private_key_path || '')}" placeholder="/chemin/vers/private_key.pem"></div>
+                            <div class="form-group" style="flex:1"><label class="form-label">Environnement</label>
+                                <select id="fint-env" class="form-control">
+                                    <option value="sandbox" ${(invFintectureConfig?.environment || 'sandbox') === 'sandbox' ? 'selected' : ''}>Sandbox (test)</option>
+                                    <option value="production" ${invFintectureConfig?.environment === 'production' ? 'selected' : ''}>Production</option>
+                                </select></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1"><label class="form-label">Webhook Secret (optionnel)</label>
+                                <input type="password" id="fint-webhook" class="form-control" placeholder="${invFintectureConfig?.has_webhook_secret ? '••••••••' : 'Secret webhook'}"></div>
+                            <div class="form-group" style="flex:1;display:flex;align-items:flex-end">
+                                <label style="display:flex;align-items:center;gap:var(--space-2);cursor:pointer">
+                                    <input type="checkbox" id="fint-active" ${invFintectureConfig?.is_active ? 'checked' : ''}>
+                                    <strong>Activer Fintecture</strong>
+                                </label>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:var(--space-2);margin-top:var(--space-3)">
+                            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
+                            <button type="button" class="btn btn-outline" onclick="invTestFintecture()"><i class="fas fa-plug"></i> Tester la connexion</button>
+                        </div>
+                    </form>
+                    <div id="fint-test-result" style="margin-top:var(--space-3)"></div>
+                </div>
+            </div>
+
             <!-- Statut OCR -->
             <div class="card">
                 <div class="card-header"><h3><i class="fas fa-robot"></i> Statut OCR / IA</h3></div>
@@ -1189,6 +1323,61 @@ async function invRenderConfig(content) {
     } catch (err) {
         content.innerHTML = '<div class="alert alert-danger">Erreur de chargement de la configuration</div>';
         console.error(err);
+    }
+}
+
+async function invSaveFintectureConfig(event) {
+    event.preventDefault();
+    const data = {
+        hotel_id: invCurrentHotel,
+        app_id: document.getElementById('fint-app-id').value || null,
+        environment: document.getElementById('fint-env').value,
+        private_key_path: document.getElementById('fint-private-key').value || null,
+        is_active: document.getElementById('fint-active').checked ? 1 : 0
+    };
+
+    const secret = document.getElementById('fint-app-secret').value;
+    if (secret) data.app_secret = secret;
+    const webhook = document.getElementById('fint-webhook').value;
+    if (webhook) data.webhook_secret = webhook;
+
+    try {
+        await API.put('invoices/fintecture-config', data);
+        toast('Configuration Fintecture enregistrée', 'success');
+        // Recharger la config
+        const res = await API.get(`invoices/fintecture-config?hotel_id=${invCurrentHotel}`);
+        invFintectureConfig = res.config || null;
+    } catch (err) {
+        toast(err.message || 'Erreur', 'error');
+    }
+}
+
+async function invTestFintecture() {
+    const resultDiv = document.getElementById('fint-test-result');
+    if (!resultDiv) return;
+    resultDiv.innerHTML = '<span class="badge badge-info"><i class="fas fa-spinner fa-spin"></i> Test en cours...</span>';
+
+    try {
+        // Sauvegarder d'abord si besoin
+        const data = {
+            hotel_id: invCurrentHotel,
+            app_id: document.getElementById('fint-app-id').value || null,
+            environment: document.getElementById('fint-env').value,
+            private_key_path: document.getElementById('fint-private-key').value || null,
+            is_active: document.getElementById('fint-active').checked ? 1 : 0,
+            test_connection: true
+        };
+        const secret = document.getElementById('fint-app-secret').value;
+        if (secret) data.app_secret = secret;
+
+        const res = await API.put('invoices/fintecture-config', data);
+        if (res.test && res.test.success) {
+            resultDiv.innerHTML = `<span class="badge badge-success"><i class="fas fa-check-circle"></i> Connexion réussie (${esc(res.test.environment)})</span>`;
+        } else {
+            resultDiv.innerHTML = `<span class="badge badge-danger"><i class="fas fa-times-circle"></i> Échec : ${esc(res.test?.error || 'Erreur inconnue')}</span>`;
+        }
+    } catch (err) {
+        resultDiv.innerHTML = `<span class="badge badge-danger"><i class="fas fa-times-circle"></i> ${esc(err.message || 'Erreur')}</span>`;
     }
 }
 

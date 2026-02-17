@@ -13046,7 +13046,7 @@ try {
 
             // --- GET /invoices/fintecture-config ---
             if ($method === 'GET' && $id === 'fintecture-config') {
-                if (!hasPermission($userRole, 'invoices.configure')) json_error('Accès refusé', 403);
+                if (!hasPermission($userRole, 'invoices.configure') && !hasPermission($userRole, 'invoices.pay')) json_error('Accès refusé', 403);
                 $hotelId = (int)($_GET['hotel_id'] ?? 0);
                 if (!$hotelId || !in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
 
