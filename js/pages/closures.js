@@ -316,11 +316,12 @@ async function closureOpenDailyForm(date, closureId = null) {
         const closure = res.closure || {};
         const config = res.config || [];
         const documents = res.documents || [];
+        const linkedInvoice = res.linked_invoice || null;
         closureConfig = config;
-        
+
         const isReadOnly = closure.status === 'validated';
         const isEdit = !!closure.id;
-        
+
         container.innerHTML = `
             <div class="closure-form-page">
                 <div class="closure-form-header">
@@ -328,16 +329,29 @@ async function closureOpenDailyForm(date, closureId = null) {
                         <i class="fas fa-arrow-left"></i> ${t('common.back')}
                     </button>
                     <h3>
-                        <i class="fas fa-calendar-day"></i> 
+                        <i class="fas fa-calendar-day"></i>
                         Clôture du ${formatDateLong(date)}
                         ${closure.status ? closureStatusBadge(closure.status) : '<span class="badge badge-info">Nouvelle</span>'}
                     </h3>
                 </div>
-                
+
                 ${isReadOnly ? `
                     <div class="alert alert-info">
-                        <i class="fas fa-lock"></i> 
+                        <i class="fas fa-lock"></i>
                         Cette clôture a été validée et ne peut plus être modifiée.
+                    </div>
+                ` : ''}
+
+                ${linkedInvoice ? `
+                    <div style="margin-bottom:var(--space-4);padding:var(--space-3) var(--space-4);background:var(--primary-50, #eff6ff);border:1px solid var(--primary-200, #bfdbfe);border-radius:var(--radius-md);display:flex;align-items:center;justify-content:space-between">
+                        <div style="display:flex;align-items:center;gap:var(--space-3)">
+                            <i class="fas fa-file-invoice-dollar" style="color:var(--brand-secondary);font-size:1.1rem"></i>
+                            <span>Facture fournisseur liée : <strong>${linkedInvoice.invoice_number ? esc(linkedInvoice.invoice_number) : 'N° en attente'}</strong>
+                            — ${({draft:'Brouillon',approved:'À payer',paid:'Payée',rejected:'Rejetée'})[linkedInvoice.status] || linkedInvoice.status}</span>
+                        </div>
+                        <button class="btn btn-sm btn-primary" onclick="navigateTo('invoices')">
+                            <i class="fas fa-external-link-alt"></i> Voir la facture
+                        </button>
                     </div>
                 ` : ''}
                 
@@ -687,9 +701,17 @@ async function closureSaveDaily(e) {
     try {
         const btn = document.querySelector('.closure-form-actions');
         if (btn) btn.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i></div>';
-        
-        await API.upload('/closures/daily', formData);
+
+        const res = await API.upload('/closures/daily', formData);
         toast(t('closures.created'), 'success');
+        if (res.invoice_id) {
+            toast('Justificatif déposé dans Factures Fournisseurs — cliquez pour vérifier', 'info');
+            setTimeout(() => {
+                if (confirm('Une facture fournisseur a été créée automatiquement depuis le justificatif de dépense.\n\nVoulez-vous la consulter dans le module Factures Fournisseurs ?')) {
+                    navigateTo('invoices');
+                }
+            }, 500);
+        }
         showClosureTab('daily');
     } catch (e) {
         toast(e.message, 'error');

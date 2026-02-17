@@ -878,6 +878,12 @@ async function invRenderVerify(container, invoiceId) {
                 ${invStatusBadge(inv.status)}
             </div>
 
+            ${inv.closure_id ? `
+            <div style="margin-bottom:var(--space-4);padding:var(--space-3) var(--space-4);background:var(--primary-50, #eff6ff);border:1px solid var(--primary-200, #bfdbfe);border-radius:var(--radius-md);display:flex;align-items:center;gap:var(--space-3)">
+                <i class="fas fa-cash-register" style="color:var(--brand-secondary);font-size:1.1rem"></i>
+                <span style="color:var(--text-primary)">Facture créée automatiquement depuis une <strong>clôture journalière</strong> — Mode de paiement : <strong>Espèces</strong></span>
+            </div>` : ''}
+
             <div style="display:flex;gap:var(--space-4);align-items:flex-start">
                 <!-- GAUCHE : Formulaire de vérification -->
                 <div style="flex:1;min-width:0">
