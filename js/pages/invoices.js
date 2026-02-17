@@ -15,6 +15,8 @@ let invListSearch = '';
 let invSearchTimer = null;
 let _invContainer = null;
 let invFintectureConfig = null; // Config Fintecture de l'hôtel courant
+let invSelectedIds = []; // IDs des factures sélectionnées pour paiement batch
+let invListInvoicesCache = []; // Cache des factures affichées (pour SEPA XML)
 
 // === HELPERS ===
 
@@ -150,6 +152,7 @@ async function invChangeHotel(hotelId) {
 
 function invSwitchTab(tab) {
     invActiveTab = tab;
+    if (tab !== 'factures') { invSelectedIds = []; invListInvoicesCache = []; }
     document.querySelectorAll('.closure-tab').forEach(t => t.classList.toggle('active', t.textContent.trim().toLowerCase().includes(tab.substring(0, 4))));
     const content = document.getElementById('inv-tab-content');
     if (!content) return;
@@ -167,6 +170,19 @@ function invSwitchTab(tab) {
 
 async function invRenderFactures(content) {
     showLoading(content);
+
+    // Style pour les lignes sélectionnées
+    if (!document.getElementById('inv-batch-style')) {
+        const style = document.createElement('style');
+        style.id = 'inv-batch-style';
+        style.textContent = `
+            .table-row-selected { background: var(--primary-50, #eff6ff) !important; }
+            .table-row-selected td { background: inherit !important; }
+            .inv-batch-cb { width:16px; height:16px; cursor:pointer; }
+            #inv-select-all { width:16px; height:16px; cursor:pointer; }
+        `;
+        document.head.appendChild(style);
+    }
 
     // Zone d'upload + filtres
     content.innerHTML = `
@@ -203,6 +219,21 @@ async function invRenderFactures(content) {
             </div>
         </div>
 
+        <!-- Barre d'actions batch (masquée par défaut) -->
+        ${hasPermission('invoices.pay') ? `
+        <div id="inv-batch-bar" style="display:none;position:sticky;top:60px;z-index:50;margin-bottom:var(--space-4);padding:var(--space-3) var(--space-4);background:var(--brand-secondary);color:white;border-radius:var(--radius-md);box-shadow:var(--shadow-lg);display:none;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:var(--space-3)">
+                <i class="fas fa-check-square"></i>
+                <strong><span id="inv-batch-count">0</span> facture(s) sélectionnée(s)</strong>
+                <span id="inv-batch-total" style="opacity:0.9"></span>
+            </div>
+            <div style="display:flex;gap:var(--space-2)">
+                <button class="btn btn-sm" style="background:white;color:var(--brand-secondary)" onclick="invGenerateSepaXml()"><i class="fas fa-file-code"></i> Générer fichier SEPA XML</button>
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4)" onclick="invClearSelection()"><i class="fas fa-times"></i> Annuler</button>
+            </div>
+        </div>
+        ` : ''}
+
         <!-- Liste -->
         <div class="card">
             <div id="inv-list-content"><div style="padding:var(--space-6);text-align:center"><i class="fas fa-spinner fa-spin"></i></div></div>
@@ -224,9 +255,12 @@ async function invLoadList() {
         const res = await API.get(url);
         const invoices = res.invoices || [];
         const pagination = res.pagination || {};
+        invListInvoicesCache = invoices;
 
         const countEl = document.getElementById('inv-count');
         if (countEl) countEl.textContent = `${pagination.total || 0} facture(s)`;
+        const canPay = hasPermission('invoices.pay');
+        const payableStatuses = ['approved', 'pending_review', 'pending_approval', 'pending_payment'];
 
         if (invoices.length === 0) {
             listEl.innerHTML = `
@@ -244,6 +278,7 @@ async function invLoadList() {
                 <table class="table">
                     <thead>
                         <tr>
+                            ${canPay ? '<th style="width:40px"><input type="checkbox" id="inv-select-all" onchange="invToggleSelectAll(this.checked)" title="Tout sélectionner"></th>' : ''}
                             <th>Fournisseur</th>
                             <th>N° Facture</th>
                             <th>Date</th>
@@ -255,8 +290,13 @@ async function invLoadList() {
                         </tr>
                     </thead>
                     <tbody>
-                        ${invoices.map(inv => `
-                            <tr style="cursor:pointer" onclick="invOpenVerify(${inv.id})">
+                        ${invoices.map(inv => {
+                            const isPayable = payableStatuses.includes(inv.status);
+                            return `
+                            <tr style="cursor:pointer" onclick="invOpenVerify(${inv.id})" ${invSelectedIds.includes(inv.id) ? 'class="table-row-selected"' : ''}>
+                                ${canPay ? `<td onclick="event.stopPropagation()">
+                                    ${isPayable ? `<input type="checkbox" class="inv-batch-cb" value="${inv.id}" ${invSelectedIds.includes(inv.id) ? 'checked' : ''} onchange="invToggleSelect(${inv.id}, this.checked)">` : ''}
+                                </td>` : ''}
                                 <td><strong>${esc(inv.supplier_name || 'Non renseigné')}</strong>
                                     ${inv.category_name ? `<br><small style="color:${inv.category_color || 'var(--text-tertiary)'}">${esc(inv.category_name)}</small>` : ''}
                                 </td>
@@ -272,8 +312,8 @@ async function invLoadList() {
                                     <button class="btn btn-sm btn-outline" onclick="invOpenVerify(${inv.id})" title="Voir / Modifier"><i class="fas fa-eye"></i></button>
                                     ${inv.status === 'draft' ? `<button class="btn btn-sm btn-outline text-danger" onclick="invDeleteInvoice(${inv.id})" title="Supprimer"><i class="fas fa-trash"></i></button>` : ''}
                                 </td>
-                            </tr>
-                        `).join('')}
+                            </tr>`;
+                        }).join('')}
                     </tbody>
                 </table>
             </div>
@@ -288,6 +328,285 @@ async function invLoadList() {
 function invGoPage(page) {
     invListPage = page;
     invLoadList();
+}
+
+// === SÉLECTION BATCH & SEPA XML ===
+
+function invToggleSelect(id, checked) {
+    if (checked && !invSelectedIds.includes(id)) {
+        invSelectedIds.push(id);
+    } else if (!checked) {
+        invSelectedIds = invSelectedIds.filter(x => x !== id);
+    }
+    invUpdateBatchBar();
+}
+
+function invToggleSelectAll(checked) {
+    const payableStatuses = ['approved', 'pending_review', 'pending_approval', 'pending_payment'];
+    if (checked) {
+        invListInvoicesCache.forEach(inv => {
+            if (payableStatuses.includes(inv.status) && !invSelectedIds.includes(inv.id)) {
+                invSelectedIds.push(inv.id);
+            }
+        });
+    } else {
+        const pageIds = invListInvoicesCache.map(i => i.id);
+        invSelectedIds = invSelectedIds.filter(id => !pageIds.includes(id));
+    }
+    // Mettre à jour les checkboxes
+    document.querySelectorAll('.inv-batch-cb').forEach(cb => {
+        cb.checked = invSelectedIds.includes(parseInt(cb.value));
+    });
+    invUpdateBatchBar();
+}
+
+function invClearSelection() {
+    invSelectedIds = [];
+    document.querySelectorAll('.inv-batch-cb').forEach(cb => cb.checked = false);
+    const selAll = document.getElementById('inv-select-all');
+    if (selAll) selAll.checked = false;
+    invUpdateBatchBar();
+}
+
+function invUpdateBatchBar() {
+    const bar = document.getElementById('inv-batch-bar');
+    if (!bar) return;
+
+    if (invSelectedIds.length === 0) {
+        bar.style.display = 'none';
+        return;
+    }
+
+    bar.style.display = 'flex';
+    document.getElementById('inv-batch-count').textContent = invSelectedIds.length;
+
+    // Calculer le total
+    let total = 0;
+    invSelectedIds.forEach(id => {
+        const inv = invListInvoicesCache.find(i => i.id === id);
+        if (inv) total += parseFloat(inv.total_ttc || 0);
+    });
+    document.getElementById('inv-batch-total').textContent = '— ' + invFormatCurrency(total);
+}
+
+function invGenerateSepaXml() {
+    // Collecter les données des factures sélectionnées
+    const selected = invSelectedIds.map(id => invListInvoicesCache.find(i => i.id === id)).filter(Boolean);
+
+    if (selected.length === 0) {
+        toast('Aucune facture sélectionnée', 'warning');
+        return;
+    }
+
+    // Vérifier que toutes ont un IBAN fournisseur
+    const sansIban = selected.filter(inv => !inv.supplier_iban);
+    if (sansIban.length > 0) {
+        const noms = sansIban.map(i => i.supplier_name || 'N/A').join(', ');
+        toast(`IBAN manquant pour : ${noms}`, 'error');
+        return;
+    }
+
+    // Demander l'IBAN émetteur
+    const hotel = invHotels.find(h => h.id === invCurrentHotel);
+    const hotelName = hotel ? hotel.name : 'ACL GESTION';
+    const totalAmount = selected.reduce((sum, inv) => sum + parseFloat(inv.total_ttc || 0), 0);
+
+    openModal('Générer le fichier SEPA XML', `
+        <div style="margin-bottom:var(--space-4)">
+            <p><strong>${selected.length} facture(s)</strong> sélectionnée(s) pour un total de <strong>${invFormatCurrency(totalAmount)}</strong></p>
+            <div class="form-group">
+                <label class="form-label required">IBAN de l'émetteur (votre compte bancaire)</label>
+                <input type="text" id="sepa-debtor-iban" class="form-control" placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">BIC de l'émetteur</label>
+                <input type="text" id="sepa-debtor-bic" class="form-control" placeholder="BNPAFRPPXXX">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal()">Annuler</button>
+            <button class="btn btn-primary" onclick="invDoGenerateSepaXml()"><i class="fas fa-file-code"></i> Générer et télécharger</button>
+        </div>
+    `, 'modal-md');
+}
+
+function invDoGenerateSepaXml() {
+    const debtorIban = (document.getElementById('sepa-debtor-iban')?.value || '').replace(/\s/g, '');
+    const debtorBic = (document.getElementById('sepa-debtor-bic')?.value || '').replace(/\s/g, '');
+
+    if (!debtorIban || debtorIban.length < 15) {
+        toast('Veuillez renseigner un IBAN émetteur valide', 'warning');
+        return;
+    }
+
+    closeModal();
+
+    const selected = invSelectedIds.map(id => invListInvoicesCache.find(i => i.id === id)).filter(Boolean);
+    const hotel = invHotels.find(h => h.id === invCurrentHotel);
+    const hotelName = hotel ? hotel.name : 'ACL GESTION';
+
+    const now = new Date();
+    const msgId = 'ACL-' + now.toISOString().replace(/[-:T]/g, '').substring(0, 14) + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+    const creationDate = now.toISOString().split('.')[0];
+    const executionDate = now.toISOString().split('T')[0];
+
+    // Calculer le total
+    let totalAmount = 0;
+    selected.forEach(inv => { totalAmount += parseFloat(inv.total_ttc || 0); });
+
+    // Construire le XML SEPA pain.001.003.03
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.003.03" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\n';
+    xml += '  <CstmrCdtTrfInitn>\n';
+
+    // Group Header
+    xml += '    <GrpHdr>\n';
+    xml += `      <MsgId>${invEscXml(msgId)}</MsgId>\n`;
+    xml += `      <CreDtTm>${creationDate}</CreDtTm>\n`;
+    xml += `      <NbOfTxs>${selected.length}</NbOfTxs>\n`;
+    xml += `      <CtrlSum>${totalAmount.toFixed(2)}</CtrlSum>\n`;
+    xml += '      <InitgPty>\n';
+    xml += `        <Nm>${invEscXml(hotelName.substring(0, 70))}</Nm>\n`;
+    xml += '      </InitgPty>\n';
+    xml += '    </GrpHdr>\n';
+
+    // Payment Information
+    const pmtInfId = 'PMT-' + msgId;
+    xml += '    <PmtInf>\n';
+    xml += `      <PmtInfId>${invEscXml(pmtInfId)}</PmtInfId>\n`;
+    xml += '      <PmtMtd>TRF</PmtMtd>\n';
+    xml += `      <NbOfTxs>${selected.length}</NbOfTxs>\n`;
+    xml += `      <CtrlSum>${totalAmount.toFixed(2)}</CtrlSum>\n`;
+    xml += '      <PmtTpInf>\n';
+    xml += '        <SvcLvl><Cd>SEPA</Cd></SvcLvl>\n';
+    xml += '      </PmtTpInf>\n';
+    xml += `      <ReqdExctnDt>${executionDate}</ReqdExctnDt>\n`;
+    xml += '      <Dbtr>\n';
+    xml += `        <Nm>${invEscXml(hotelName.substring(0, 70))}</Nm>\n`;
+    xml += '      </Dbtr>\n';
+    xml += '      <DbtrAcct>\n';
+    xml += `        <Id><IBAN>${invEscXml(debtorIban)}</IBAN></Id>\n`;
+    xml += '      </DbtrAcct>\n';
+    xml += '      <DbtrAgt>\n';
+    xml += `        <FinInstnId>${debtorBic ? `<BIC>${invEscXml(debtorBic)}</BIC>` : '<Othr><Id>NOTPROVIDED</Id></Othr>'}</FinInstnId>\n`;
+    xml += '      </DbtrAgt>\n';
+    xml += '      <ChrgBr>SLEV</ChrgBr>\n';
+
+    // Credit Transfer Transactions
+    selected.forEach((inv, idx) => {
+        const amount = parseFloat(inv.total_ttc || 0).toFixed(2);
+        const endToEndId = 'INV-' + inv.id + '-' + now.getTime().toString(36);
+        const supplierName = (inv.supplier_name || 'Fournisseur').substring(0, 70);
+        const iban = (inv.supplier_iban || '').replace(/\s/g, '');
+        const bic = (inv.supplier_bic || '').replace(/\s/g, '');
+        const reference = inv.invoice_number || ('Facture-' + inv.id);
+
+        xml += '      <CdtTrfTxInf>\n';
+        xml += '        <PmtId>\n';
+        xml += `          <EndToEndId>${invEscXml(endToEndId.substring(0, 35))}</EndToEndId>\n`;
+        xml += '        </PmtId>\n';
+        xml += '        <Amt>\n';
+        xml += `          <InstdAmt Ccy="EUR">${amount}</InstdAmt>\n`;
+        xml += '        </Amt>\n';
+        if (bic) {
+            xml += '        <CdtrAgt>\n';
+            xml += `          <FinInstnId><BIC>${invEscXml(bic)}</BIC></FinInstnId>\n`;
+            xml += '        </CdtrAgt>\n';
+        }
+        xml += '        <Cdtr>\n';
+        xml += `          <Nm>${invEscXml(supplierName)}</Nm>\n`;
+        xml += '        </Cdtr>\n';
+        xml += '        <CdtrAcct>\n';
+        xml += `          <Id><IBAN>${invEscXml(iban)}</IBAN></Id>\n`;
+        xml += '        </CdtrAcct>\n';
+        xml += '        <RmtInf>\n';
+        xml += `          <Ustrd>${invEscXml(reference.substring(0, 140))}</Ustrd>\n`;
+        xml += '        </RmtInf>\n';
+        xml += '      </CdtTrfTxInf>\n';
+    });
+
+    xml += '    </PmtInf>\n';
+    xml += '  </CstmrCdtTrfInitn>\n';
+    xml += '</Document>';
+
+    // Télécharger le fichier XML
+    const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SEPA_virements_${executionDate}_${selected.length}factures.xml`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast(`Fichier SEPA XML généré (${selected.length} virements, ${invFormatCurrency(totalAmount)})`, 'success');
+
+    // Proposer de marquer comme payées
+    setTimeout(() => invProposeBatchMarkPaid(selected, msgId), 500);
+}
+
+function invEscXml(str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+function invProposeBatchMarkPaid(invoices, xmlRef) {
+    const totalAmount = invoices.reduce((sum, inv) => sum + parseFloat(inv.total_ttc || 0), 0);
+
+    openModal('Marquer les factures comme payées', `
+        <div style="margin-bottom:var(--space-4)">
+            <p>Le fichier SEPA XML a été téléchargé. Souhaitez-vous marquer ces <strong>${invoices.length} facture(s)</strong> comme payées ?</p>
+            <div style="background:var(--gray-50);border-radius:var(--radius-md);padding:var(--space-3);margin:var(--space-3) 0">
+                <table class="table table-sm" style="margin:0">
+                    <thead><tr><th>Fournisseur</th><th>N° Facture</th><th style="text-align:right">Montant TTC</th></tr></thead>
+                    <tbody>
+                        ${invoices.map(inv => `
+                            <tr>
+                                <td>${esc(inv.supplier_name || '-')}</td>
+                                <td>${esc(inv.invoice_number || '-')}</td>
+                                <td style="text-align:right">${invFormatCurrency(inv.total_ttc)}</td>
+                            </tr>
+                        `).join('')}
+                        <tr style="font-weight:var(--font-semibold);border-top:2px solid var(--gray-200)">
+                            <td colspan="2" style="text-align:right">Total</td>
+                            <td style="text-align:right">${invFormatCurrency(totalAmount)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Référence de paiement</label>
+                <input type="text" id="batch-pay-ref" class="form-control" value="Virement SEPA ${xmlRef}" placeholder="Référence du virement">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal()">Plus tard</button>
+            <button class="btn btn-success" onclick="invBatchMarkPaid()"><i class="fas fa-check-double"></i> Marquer comme payées</button>
+        </div>
+    `, 'modal-lg');
+}
+
+async function invBatchMarkPaid() {
+    const ref = document.getElementById('batch-pay-ref')?.value || 'Virement SEPA';
+
+    try {
+        const res = await API.post('invoices/batch-mark-paid', {
+            invoice_ids: invSelectedIds,
+            payment_reference: ref
+        });
+
+        closeModal();
+        toast(`${res.updated} facture(s) marquée(s) comme payée(s)`, 'success');
+
+        if (res.errors && res.errors.length > 0) {
+            toast(`Attention : ${res.errors.length} erreur(s)`, 'warning');
+        }
+
+        invClearSelection();
+        invLoadList();
+    } catch (err) {
+        toast(err.message || 'Erreur lors du marquage', 'error');
+    }
 }
 
 // === UPLOAD ===
