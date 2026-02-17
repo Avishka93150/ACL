@@ -1,29 +1,32 @@
 # ACL GESTION
 
-Plateforme SaaS de gestion hoteliere multi-etablissements. Application web SPA (Single Page Application) couvrant l'ensemble des operations quotidiennes d'un groupe hotelier : gouvernante, maintenance, blanchisserie, conges, planning, clotures financieres, audits qualite, revenue management, self check-in avec paiement en ligne, messagerie interne, automatisations, et conformite RGPD.
+Plateforme SaaS de gestion hôtelière multi-établissements destinée aux groupes hôteliers français. Application web SPA couvrant l'ensemble des opérations quotidiennes : gouvernante, maintenance, blanchisserie, congés, planning, clôtures financières, factures fournisseurs, contrats, audits qualité, revenue management, self check-in avec paiement en ligne, livret d'accueil numérique, messagerie interne, automatisations, et conformité RGPD.
 
 ## Stack technique
 
-- **Backend** : PHP pur (pas de framework), API REST monolithique (~10 380 lignes, 30+ endpoints)
-- **Frontend** : Vanilla JavaScript SPA avec routage hash (18 modules, ~19 800 lignes)
-- **Base de donnees** : MySQL / MariaDB avec PDO (55+ tables, 16 migrations)
+- **Backend** : PHP pur (pas de framework), API REST monolithique (~14 400 lignes, 35+ endpoints)
+- **Frontend** : Vanilla JavaScript SPA avec routage hash (21 modules, ~25 300 lignes)
+- **Base de données** : MySQL / MariaDB avec PDO (69+ tables, 27 migrations)
 - **Authentification** : JWT HMAC-SHA256 (expiration 7 jours)
 - **Application mobile** : iOS / Android via Capacitor 8 (WebView native)
 - **PWA** : Service Worker avec cache offline, notifications push, manifest
 - **CDN** : Font Awesome 6.4.0, Chart.js 4.4.1, Google Fonts (Inter), jsPDF
-- **API externes** : Xotelo (tarifs OTA / revenue management), Stripe (paiement en ligne)
-- **PMS** : Integration GeHo via agent relais (`pms-agent.php`)
-- **i18n** : Multi-langue (Francais, Anglais, Espagnol) - changement instantane
-- **Theme** : Mode clair / sombre avec detection automatique
-- **Securite** : Rate limiting, headers securite, CORS strict, RGPD, .htaccess uploads
+- **API externes** : Xotelo (tarifs OTA), Stripe (paiement en ligne), Fintecture (Open Banking PSD2), Anthropic Claude AI (OCR + analyse contrats)
+- **OCR** : Tesseract + Ghostscript (extraction texte) puis Claude AI (structuration JSON)
+- **SEPA** : Génération XML pain.001.001.03 pour virements bancaires
+- **PMS** : Intégration GeHo via agent relais (`pms-agent.php`)
+- **Email** : SMTP configurable par l'administrateur (PHPMailer)
+- **i18n** : Multi-langue (Français, Anglais, Espagnol) - changement instantané
+- **Thème** : Mode clair / sombre avec détection automatique
+- **Sécurité** : Rate limiting, headers sécurité, CORS strict, RGPD, .htaccess uploads
 - **Timezone** : Europe/Paris
 - **Aucun build tool** : pas de npm, Composer, Webpack, ou bundler en production
 
 ## Serveur VPS / Production
 
-| Element | Valeur |
+| Élément | Valeur |
 |---------|--------|
-| **Hebergeur** | OVH VPS |
+| **Hébergeur** | OVH VPS |
 | **OS** | Debian / Ubuntu Linux |
 | **Panel** | Plesk |
 | **Domaine** | acl-gestion.com |
@@ -31,34 +34,36 @@ Plateforme SaaS de gestion hoteliere multi-etablissements. Application web SPA (
 | **MySQL** | MariaDB 10.x |
 | **Webserver** | Apache (mod_rewrite actif) |
 | **SSL** | Let's Encrypt (auto-renew via Plesk) |
-| **Deploiement** | Script `deploy.sh` automatise (git pull + migrations + backup) ou FTP/SSH |
+| **Déploiement** | Script `deploy.sh` automatisé (git pull + migrations + backup) ou FTP/SSH |
 | **Logs** | Plesk > Logs ou `/var/log/apache2/` |
-| **Cron** | Configure via Plesk > Taches planifiees |
+| **Cron** | Configuré via Plesk > Tâches planifiées |
 | **BDD** | Accessible via phpMyAdmin (Plesk) |
 | **Sauvegardes** | Automatiques Plesk (quotidien) + backup dans `deploy.sh` |
+| **OCR** | Tesseract OCR + Ghostscript installés sur le serveur |
 
 ## Installation
 
-### Prerequis
+### Prérequis
 
 - PHP 7.4+ avec extension PDO MySQL
 - MySQL 5.6+ ou MariaDB 10.x
 - Serveur Apache (mod_rewrite pour les URL propres)
+- Tesseract OCR + Ghostscript (pour l'OCR des factures fournisseurs)
 
-### Installation rapide (script automatise)
+### Installation rapide (script automatisé)
 
 ```bash
-# Premier deploiement ou mise a jour
+# Premier déploiement ou mise à jour
 bash deploy.sh
 ```
 
-Le script gere automatiquement :
-- Detection premier deploiement vs mise a jour
-- Sauvegarde .env, uploads et base de donnees
+Le script gère automatiquement :
+- Détection premier déploiement vs mise à jour
+- Sauvegarde .env, uploads et base de données
 - Git clone/pull depuis GitHub
-- Execution des migrations SQL
-- Permissions fichiers et securite
-- Verification syntaxe PHP et fichiers critiques
+- Exécution des migrations SQL
+- Permissions fichiers et sécurité
+- Vérification syntaxe PHP et fichiers critiques
 
 ### Installation manuelle
 
@@ -67,11 +72,11 @@ Le script gere automatiquement :
    git clone <url_repo> /var/www/acl-gestion.com
    ```
 
-2. **Base de donnees**
+2. **Base de données**
    ```sql
    CREATE DATABASE acl_gestion CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
    ```
-   Importer le schema principal puis les migrations :
+   Importer le schéma principal puis les migrations :
    ```bash
    mysql -u user -p acl_gestion < database/schema.sql
    mysql -u user -p acl_gestion < database/migration_audit.sql
@@ -91,9 +96,24 @@ Le script gere automatiquement :
    mysql -u user -p acl_gestion < database/migration_maintenance_alerts.sql
    mysql -u user -p acl_gestion < database/migration_on_call_phone.sql
    mysql -u user -p acl_gestion < database/migration_stripe_permission.sql
+   mysql -u user -p acl_gestion < database/migration_bank_accounts.sql
+   mysql -u user -p acl_gestion < database/migration_contracts.sql
+   mysql -u user -p acl_gestion < database/migration_invoices.sql
+   mysql -u user -p acl_gestion < database/migration_invoices_v2.sql
+   mysql -u user -p acl_gestion < database/migration_invoices_v3.sql
+   mysql -u user -p acl_gestion < database/migration_welcome.sql
+   mysql -u user -p acl_gestion < database/migration_smtp.sql
+   mysql -u user -p acl_gestion < database/migration_walkin_hold.sql
+   mysql -u user -p acl_gestion < database/migration_payment_links.sql
+   mysql -u user -p acl_gestion < database/migration_hotel_modules.sql
    ```
 
-3. **Fichier .env** (a la racine du projet)
+3. **Dépendances système (OCR)**
+   ```bash
+   apt-get install tesseract-ocr tesseract-ocr-fra ghostscript
+   ```
+
+4. **Fichier .env** (à la racine du projet)
    ```env
    DB_HOST=localhost
    DB_NAME=acl_gestion
@@ -106,22 +126,22 @@ Le script gere automatiquement :
    DEBUG=false
    CORS_ORIGIN=https://acl-gestion.com
    ```
-   Generer le JWT_SECRET : `php -r "echo bin2hex(random_bytes(32));"`
+   Générer le JWT_SECRET : `php -r "echo bin2hex(random_bytes(32));"`
 
-4. **Permissions fichiers**
+5. **Permissions fichiers**
    ```bash
    chmod 755 uploads/
-   mkdir -p uploads/maintenance uploads/linen uploads/control uploads/closures uploads/audit uploads/evaluations uploads/tasks uploads/leaves uploads/profiles
+   mkdir -p uploads/{maintenance,linen,control,closures,audit,evaluations,tasks,leaves,profiles,invoices,contracts,welcome}
    chmod -R 775 uploads/
    chmod 600 .env
    ```
 
-5. **Cron jobs** (via Plesk ou crontab)
+6. **Cron jobs** (via Plesk ou crontab)
    ```crontab
-   # Alertes dispatch (12h) et controle (19h)
+   # Alertes dispatch (12h) et contrôle (19h)
    0 12 * * * php /var/www/acl-gestion.com/api/cron.php dispatch
    0 19 * * * php /var/www/acl-gestion.com/api/cron.php control
-   # Alertes maintenance, conges, taches, audit, cloture (9h)
+   # Alertes maintenance, congés, tâches, audit, clôture (9h)
    0 9 * * * php /var/www/acl-gestion.com/api/cron.php maintenance
    0 9 * * 1 php /var/www/acl-gestion.com/api/cron.php leaves_reminder
    0 9 * * * php /var/www/acl-gestion.com/api/cron.php tasks_due
@@ -129,75 +149,81 @@ Le script gere automatiquement :
    0 13 * * * php /var/www/acl-gestion.com/api/cron.php closure
    # Revenue management (6h)
    0 6 * * * php /var/www/acl-gestion.com/api/cron.php revenue
-   # Nettoyage systeme (3h)
+   # Nettoyage système (3h)
    0 3 * * * php /var/www/acl-gestion.com/api/cron.php cleanup
    # Runner automations (toutes les 30 min)
    */30 * * * * php /var/www/acl-gestion.com/api/cron_runner.php
    ```
 
-6. **Test**
+7. **Test**
    Ouvrir le site dans un navigateur. Se connecter avec le compte admin.
 
-## Connexion par defaut
+## Connexion par défaut
 
 | Email | Mot de passe |
 |-------|-------------|
 | admin@acl-gestion.fr | Admin@123 |
 
-**Changer ce mot de passe immediatement apres la premiere connexion.**
+**Changer ce mot de passe immédiatement après la première connexion.**
 
 ## Structure du projet
 
 ```
 ACL/
-├── index.html                    # Point d'entree SPA + landing page marketing
-├── booking.html                  # Self Check-in / reservation publique (Stripe + jsPDF)
-├── .env                          # Variables d'environnement (NON commite)
+├── index.html                    # Point d'entrée SPA + landing page marketing (768 L)
+├── booking.html                  # Self Check-in / réservation publique Stripe (1 809 L)
+├── welcome.html                  # Livret d'accueil public par hôtel (466 L)
+├── .env                          # Variables d'environnement (NON commité)
 ├── .env.example                  # Template .env
 ├── .gitignore                    # Exclusions Git (uploads, node_modules, .env)
-├── manifest.json                 # PWA manifest (standalone, icones, couleurs)
-├── sw.js                         # Service Worker (cache offline, push notifications)
-├── pms-agent.php                 # Agent relais PMS GeHo (long-polling, PC hotel)
-├── deploy.sh                     # Script deploiement automatise (backup + git + migrations)
+├── manifest.json                 # PWA manifest (standalone, icônes, couleurs)
+├── sw.js                         # Service Worker (cache offline, push notifications) (175 L)
+├── pms-agent.php                 # Agent relais PMS GeHo (long-polling, PC hôtel) (246 L)
+├── deploy.sh                     # Script déploiement automatisé (437 L)
 ├── capacitor.config.json         # Configuration Capacitor (app native iOS/Android)
-├── package.json                  # Dependencies Capacitor uniquement
+├── package.json                  # Dépendances Capacitor uniquement
 │
 ├── api/
 │   ├── .htaccess                 # Rewrite rules + passage header Authorization
-│   ├── config.php                # Config (.env, BDD, JWT, CORS, securite, rate limiting, upload)
-│   ├── Database.php              # Singleton PDO + helpers (query, queryOne, insert, execute, count)
-│   ├── Auth.php                  # JWT HMAC-SHA256 : generation, verification, getUser()
-│   ├── index.php                 # API REST complete (~10 380 lignes, 30+ resources)
-│   ├── cron.php                  # Cron dispatcher CLI (alertes automatiques, escalade)
-│   ├── cron_runner.php           # Runner automations planifiees (intervalle 30 min)
+│   ├── config.php                # Config (.env, BDD, JWT, CORS, sécurité, upload) (75 L)
+│   ├── Database.php              # Singleton PDO + helpers (query, insert, count...) (72 L)
+│   ├── Auth.php                  # JWT HMAC-SHA256 : génération, vérification, getUser() (99 L)
+│   ├── index.php                 # API REST complète (14 408 L, 35+ resources)
+│   ├── OcrClient.php             # OCR : Tesseract + Claude AI (extraction factures) (378 L)
+│   ├── FintectureClient.php      # Paiement Open Banking PSD2 via Fintecture (354 L)
+│   ├── cron.php                  # Cron dispatcher CLI (alertes, escalade) (1 970 L)
+│   ├── cron_runner.php           # Runner automations planifiées (381 L)
 │   └── test.php                  # Fichier de test
 │
 ├── js/
-│   ├── config.js                 # URL API (/api/index.php), cles localStorage
-│   ├── api.js                    # Fetch wrapper avec injection JWT automatique (426 L)
-│   ├── i18n.js                   # Traductions FR/EN/ES completes (2 192 L)
-│   ├── utils.js                  # Toast, modals, formatage, permissions RBAC, pagination (535 L)
-│   ├── app.js                    # Controleur SPA : routage, menu, session, dark mode, polling (802 L)
-│   ├── chatbot.js                # Assistant chatbot integre (pattern matching, navigation) (437 L)
-│   ├── capacitor-bridge.js       # Bridge Capacitor iOS/Android (push, camera, haptics) (291 L)
-│   └── pages/                    # 18 modules fonctionnels
-│       ├── dashboard.js          # KPIs temps reel, graphiques Chart.js (896 L)
-│       ├── hotels.js             # Hotels avec 6 onglets de configuration (1 939 L)
-│       ├── housekeeping.js       # Dispatch chambres + controle qualite (1 681 L)
+│   ├── config.js                 # URL API, clés localStorage (8 L)
+│   ├── api.js                    # Fetch wrapper avec injection JWT (438 L)
+│   ├── i18n.js                   # Traductions FR/EN/ES complètes (2 640 L)
+│   ├── utils.js                  # Toast, modals, formatage, permissions RBAC (565 L)
+│   ├── app.js                    # Contrôleur SPA : routage, menu, session, dark mode (866 L)
+│   ├── chatbot.js                # Assistant chatbot intégré (pattern matching) (437 L)
+│   ├── capacitor-bridge.js       # Bridge Capacitor iOS/Android (push, camera) (291 L)
+│   └── pages/                    # 21 modules fonctionnels
+│       ├── dashboard.js          # KPIs temps réel, graphiques Chart.js (896 L)
+│       ├── hotels.js             # Hôtels : 7 onglets de configuration (2 160 L)
+│       ├── housekeeping.js       # Dispatch chambres + contrôle qualité (1 681 L)
 │       ├── maintenance.js        # Tickets maintenance avec escalade (919 L)
-│       ├── linen.js              # Blanchisserie : collecte/reception/stock (615 L)
-│       ├── leaves.js             # Conges : demande/validation/config hotel (1 495 L)
+│       ├── linen.js              # Blanchisserie : collecte/réception/stock (615 L)
+│       ├── leaves.js             # Congés : demande/validation/config hôtel (1 495 L)
 │       ├── tasks.js              # Kanban multi-tableaux (902 L)
-│       ├── evaluations.js        # Evaluations personnel (2 121 L)
-│       ├── audit.js              # Audits qualite (1 500 L)
-│       ├── closures.js           # Clotures financieres (1 414 L)
+│       ├── evaluations.js        # Évaluations personnel (2 121 L)
+│       ├── audit.js              # Audits qualité (1 500 L)
+│       ├── closures.js           # Clôtures financières (1 436 L)
 │       ├── revenue.js            # Revenue management / OTA (1 129 L)
-│       ├── selfcheckin.js        # Self Check-in config (1 307 L)
+│       ├── selfcheckin.js        # Self Check-in config (1 716 L)
+│       ├── invoices.js           # Factures fournisseurs (OCR, SEPA, Fintecture) (2 238 L)
+│       ├── contracts.js          # Contrats fournisseurs (IA, alertes) (1 033 L)
+│       ├── welcome.js            # Livret d'accueil numérique (1 109 L)
 │       ├── automations.js        # Alertes automatiques (920 L)
 │       ├── messages.js           # Messagerie interne (408 L)
-│       ├── notifications.js      # Notifications ciblees (407 L)
-│       ├── rgpd.js               # RGPD admin (909 L)
-│       ├── settings.js           # Parametres systeme (674 L)
+│       ├── notifications.js      # Notifications ciblées (407 L)
+│       ├── rgpd.js               # RGPD admin + pages légales (1 137 L)
+│       ├── settings.js           # Paramètres système (1 107 L)
 │       └── users.js              # Gestion utilisateurs (387 L)
 │
 ├── css/
@@ -209,178 +235,203 @@ ACL/
 │   └── app-polish.css            # Raffinements visuels, animations (815 L)
 │
 ├── database/
-│   ├── schema.sql                # Schema principal (1 385 L, 55+ tables)
-│   └── migration_*.sql           # 16 fichiers de migration
+│   ├── schema.sql                # Schéma principal (1 385 L, 69+ tables)
+│   └── migration_*.sql           # 27 fichiers de migration
 │
-├── uploads/                      # Fichiers uploades (photos JPG/PNG, PDF)
-│   ├── .htaccess                 # Securite : bloque PHP, autorise JPG/PNG/PDF uniquement
+├── uploads/                      # Fichiers uploadés (photos JPG/PNG, PDF)
+│   ├── .htaccess                 # Sécurité : bloque PHP, autorise JPG/PNG/PDF
 │   ├── maintenance/              # Photos tickets maintenance
-│   ├── linen/                    # Bons de reception PDF
-│   ├── control/                  # Photos controle qualite
-│   ├── closures/                 # Documents clotures
+│   ├── linen/                    # Bons de réception PDF
+│   ├── control/                  # Photos contrôle qualité
+│   ├── closures/                 # Documents clôtures
 │   ├── audit/                    # Photos audits
-│   ├── evaluations/              # Documents evaluations
-│   ├── tasks/                    # Pieces jointes taches
-│   ├── leaves/                   # Documents conges
-│   └── profiles/                 # Photos de profil
+│   ├── evaluations/              # Documents évaluations
+│   ├── tasks/                    # Pièces jointes tâches
+│   ├── leaves/                   # Documents congés
+│   ├── profiles/                 # Photos de profil
+│   ├── invoices/                 # Factures fournisseurs (PDF, images)
+│   ├── contracts/                # Documents contrats
+│   └── welcome/                  # Photos livret d'accueil
 │
-├── icons/                        # Icones PWA (20x20 a 1024x1024)
+├── icons/                        # Icônes PWA (20x20 à 1024x1024)
 │
 └── ios/                          # Projet natif iOS (Capacitor / Xcode)
 ```
 
-## Modules fonctionnels (18+)
+## Modules fonctionnels (21)
 
-### Operations quotidiennes
+### Opérations quotidiennes
 
 | Module | Description | Fichier | Lignes |
 |--------|-------------|---------|--------|
-| **Dashboard** | KPIs temps reel par hotel, graphiques Chart.js (occupation, revenue, tickets), activite recente, raccourcis par role | `dashboard.js` | 896 |
-| **Gouvernante** | Dispatch chambres par femme de chambre (a blanc / recouche), suivi nettoyage en temps reel, controle qualite 6 criteres (literie, salle de bain, sol, equipements, ambiance, impression) avec photos, alertes automatiques a 12h et 19h | `housekeeping.js` | 1 681 |
-| **Maintenance** | Tickets avec 8 categories (plomberie, electricite, climatisation, mobilier, serrurerie, peinture, nettoyage, autre), 4 niveaux de priorite (basse a critique), assignation technicien, commentaires, photos avant/apres, escalade automatique progressive (2j, 5j, 7j), statistiques | `maintenance.js` | 919 |
-| **Blanchisserie** | Collecte linge sale par type (petits draps, grands draps, petites housses, grandes housses), reception linge propre avec suivi des ecarts, bons de reception PDF uploades, stock temps reel, configuration par hotel | `linen.js` | 615 |
+| **Dashboard** | KPIs temps réel par hôtel, graphiques Chart.js (occupation, revenue, tickets), activité récente, raccourcis par rôle | `dashboard.js` | 896 |
+| **Gouvernante** | Dispatch chambres par femme de chambre (à blanc / recouche), suivi nettoyage en temps réel, contrôle qualité 6 critères (literie, salle de bain, sol, équipements, ambiance, impression) avec photos, alertes automatiques à 12h et 19h | `housekeeping.js` | 1 681 |
+| **Maintenance** | Tickets avec 8 catégories (plomberie, électricité, climatisation, mobilier, serrurerie, peinture, nettoyage, autre), 4 niveaux de priorité, assignation technicien, commentaires, photos avant/après, escalade automatique progressive (2j, 5j, 7j) | `maintenance.js` | 919 |
+| **Blanchisserie** | Collecte linge sale par type (petits draps, grands draps, petites housses, grandes housses), réception linge propre avec suivi des écarts, bons de réception PDF, stock temps réel, configuration par hôtel | `linen.js` | 615 |
 
 ### Ressources humaines
 
 | Module | Description | Fichier | Lignes |
 |--------|-------------|---------|--------|
-| **Conges** | Demande de conges multi-types (CP, RTT, sans solde, maladie, etc.), validation hierarchique avec commentaires, calendrier equipe, export CSV, rapport trimestriel, **configuration des dates limites par hotel** (debut de saison, fin de saison, etc.), possibilite de poser un conge pour un autre employe | `leaves.js` | 1 495 |
-| **Evaluations** | Grilles d'evaluation personnalisables avec sections et criteres ponderes (note 1-5, oui/non, texte libre, choix multiples), historique par employe, statistiques comparatives, duplication de grilles, upload de documents | `evaluations.js` | 2 121 |
-| **Taches** | Kanban multi-tableaux par hotel, colonnes personnalisables (drag & drop), taches avec priorites (urgent, haute, moyenne, basse), echeances, assignation, checklist, commentaires, pieces jointes, archivage automatique | `tasks.js` | 902 |
+| **Congés** | Demande multi-types (CP, RTT, sans solde, maladie, etc.), validation hiérarchique avec commentaires, calendrier équipe, export CSV, rapport trimestriel, configuration des dates limites par hôtel, possibilité de poser un congé pour un autre employé | `leaves.js` | 1 495 |
+| **Évaluations** | Grilles personnalisables avec sections et critères pondérés (note 1-5, oui/non, texte libre, choix multiples), historique par employé, statistiques comparatives, duplication de grilles, upload documents | `evaluations.js` | 2 121 |
+| **Tâches** | Kanban multi-tableaux par hôtel, colonnes personnalisables (drag & drop), tâches avec priorités, échéances, assignation, checklist, commentaires, pièces jointes, archivage automatique | `tasks.js` | 902 |
 
-### Finance et qualite
-
-| Module | Description | Fichier | Lignes |
-|--------|-------------|---------|--------|
-| **Clotures** | Cloture journaliere : cash recu, cash depense, remise banque, achats, autres depenses, champs configurables par hotel, documents justificatifs (PDF/JPG), commentaires, validation, export CSV mensuel, historique | `closures.js` | 1 414 |
-| **Revenue** | Tarifs OTA via API Xotelo (Booking.com, Expedia, etc.), comparaison avec concurrents, historique des prix, evenements calendrier (salons, vacances, etc.), indicateurs RevPAR, ADR, taux d'occupation, alertes prix | `revenue.js` | 1 129 |
-| **Audits** | Grilles configurables avec sections et questions (4 types : note 1-5, oui/non, texte libre, choix multiples), ponderation par question, scoring automatique, planification periodique (quotidien, hebdomadaire, mensuel, trimestriel), audits en attente, duplication de grilles, attribution par hotel | `audit.js` | 1 500 |
-
-### Reservation et check-in
+### Finance et comptabilité
 
 | Module | Description | Fichier | Lignes |
 |--------|-------------|---------|--------|
-| **Self Check-in** | Configuration par hotel : QR codes, instructions personnalisees, casiers connectes, tarification dynamique, page publique `booking.html` avec paiement Stripe integre, generation facture PDF via jsPDF, synchronisation PMS GeHo | `selfcheckin.js` + `booking.html` | 1 307 + ~1 500 |
+| **Clôtures** | Clôture journalière : cash reçu, cash dépensé, remise banque, achats, espèces, autres dépenses, champs configurables par hôtel, documents justificatifs (PDF/JPG), validation, export CSV mensuel, création automatique de facture depuis ticket de caisse | `closures.js` | 1 436 |
+| **Factures fournisseurs** | Module complet : dépôt PDF/image avec OCR (Tesseract + Claude AI), extraction automatique données, workflow de validation multi-niveaux configurable par hôtel (seuils, double approbation, réplication règles), paiement via Fintecture (Open Banking PSD2) ou virement SEPA XML (pain.001.001.03), ventilation par catégorie, reporting annuel croisé (catégories × mois), extraction comptable avec export CSV/PDF/ZIP | `invoices.js` | 2 238 |
+| **Contrats** | Gestion contrats fournisseurs par hôtel, catégories, alertes d'échéance, upload documents, analyse IA via Claude (extraction clauses, risques, recommandations), charges fixes récurrentes, export PDF | `contracts.js` | 1 033 |
+
+### Qualité
+
+| Module | Description | Fichier | Lignes |
+|--------|-------------|---------|--------|
+| **Revenue** | Tarifs OTA via API Xotelo (Booking.com, Expedia, etc.), comparaison concurrents, historique prix, événements calendrier, indicateurs RevPAR, ADR, taux d'occupation, alertes prix | `revenue.js` | 1 129 |
+| **Audits** | Grilles configurables avec sections et questions (4 types), pondération, scoring automatique, planification périodique, audits en attente, duplication, attribution par hôtel | `audit.js` | 1 500 |
+
+### Réservation et accueil
+
+| Module | Description | Fichier | Lignes |
+|--------|-------------|---------|--------|
+| **Self Check-in** | Configuration par hôtel : QR codes, instructions personnalisées, casiers connectés, tarification dynamique, page publique `booking.html` avec paiement Stripe, génération facture PDF via jsPDF, synchronisation PMS GeHo, liens de paiement par email | `selfcheckin.js` + `booking.html` | 1 716 + 1 809 |
+| **Livret d'accueil** | Livret numérique par hôtel : onglets personnalisables (restaurant, spa, activités...), éléments avec photos, informations pratiques (WiFi, parking, transports...), page publique `welcome.html` accessible via URL/QR code, configuration logo et bannière | `welcome.js` + `welcome.html` | 1 109 + 466 |
 
 ### Administration
 
 | Module | Description | Fichier | Lignes |
 |--------|-------------|---------|--------|
-| **Hotels** | Page complete avec **6 onglets** : General (nom, adresse, categorie, etoiles, etages, description), Reservation (slug, booking en ligne), PMS & Paiement (GeHo relais, cles Stripe), Conges (config dates limites par hotel), Clotures (champs personnalises), Revenue (cle Xotelo, concurrents) | `hotels.js` | 1 939 |
-| **Utilisateurs** | CRUD comptes utilisateurs, assignation roles (7 niveaux) et hotels multiples, activation/desactivation | `users.js` | 387 |
-| **Parametres** | **3 onglets** : Modules (activer/desactiver chaque module du systeme), Permissions (matrice interactive par role avec 60+ permissions granulaires), Notifications (envoi cible + historique campagnes) | `settings.js` | 674 |
-| **Notifications** | Envoi cible (tous les utilisateurs, par hotel, par role, utilisateurs specifiques), historique des campagnes, renvoi, suppression | `notifications.js` | 407 |
-| **Messagerie** | Conversations temps reel entre employes, messages directs, par hotel, broadcast, compteur messages non lus, notifications push | `messages.js` | 408 |
-| **RGPD** | Gestion consentements (cookies, donnees personnelles, communications), export donnees personnelles, demandes RGPD (acces, rectification, effacement, portabilite), logs d'acces, parametres de retention | `rgpd.js` | 909 |
+| **Hôtels** | Page complète avec **7 onglets** : Général (nom, adresse, catégorie, étoiles, étages, description), Réservation (slug, booking en ligne), PMS & Paiement (GeHo relais, clés Stripe), Congés (config dates limites), Clôtures (champs personnalisés), Revenue (clé Xotelo, concurrents), Comptes bancaires (IBAN/BIC pour SEPA) | `hotels.js` | 2 160 |
+| **Utilisateurs** | CRUD comptes utilisateurs, assignation rôles (7 niveaux) et hôtels multiples, activation/désactivation | `users.js` | 387 |
+| **Paramètres** | **3 onglets** : Modules (activer/désactiver chaque module), Permissions (matrice interactive par rôle avec 70+ permissions granulaires), Notifications (envoi ciblé + historique campagnes) | `settings.js` | 1 107 |
+| **Notifications** | Envoi ciblé (tous les utilisateurs, par hôtel, par rôle, utilisateurs spécifiques), historique des campagnes, renvoi, suppression | `notifications.js` | 407 |
+| **Messagerie** | Conversations temps réel entre employés, messages directs, par hôtel, broadcast, compteur non lus, notifications push | `messages.js` | 408 |
+| **RGPD** | Gestion consentements, export données personnelles, demandes RGPD (accès, rectification, effacement, portabilité), logs d'accès, paramètres de rétention, pages légales (CGV, CGU, mentions légales, politique de confidentialité) | `rgpd.js` | 1 137 |
 
-### Systeme
+### Système
 
 | Composant | Description |
 |-----------|-------------|
-| **Automations** | Configuration des alertes planifiees par hotel : type d'alerte, horaire d'execution, jours de la semaine, hotels concernes, destinataires, logs d'execution, test manuel |
-| **Chatbot** | Assistant integre avec pattern matching (salutations, aide, navigation, FAQ par module : maintenance, gouvernante, conges, blanchisserie, taches, evaluations, audits, clotures), action de navigation directe |
-| **Cron** | 9 types d'alertes automatiques : dispatch, controle, maintenance, conges, taches, audit, cloture, revenue, nettoyage. Escalade progressive hierarchique |
+| **Automations** | Configuration alertes planifiées par hôtel : type d'alerte, horaire, jours, hôtels concernés, destinataires, logs d'exécution, test manuel |
+| **Chatbot** | Assistant intégré avec pattern matching (salutations, aide, navigation, FAQ par module), action de navigation directe |
+| **Cron** | 9 types d'alertes automatiques : dispatch, contrôle, maintenance, congés, tâches, audit, clôture, revenue, nettoyage. Escalade progressive hiérarchique |
+| **SMTP** | Configuration email SMTP par l'administrateur (serveur, port, identifiants, TLS), test d'envoi |
 | **Service Worker** | Cache offline (stale-while-revalidate pour assets, network-first pour API), notifications push natives, fallback offline |
-| **Application mobile** | iOS/Android via Capacitor 8 : push notifications, camera native, retour haptique, safe areas iOS, gestion clavier, deep links, back button Android |
-| **Landing page** | Page marketing integree dans `index.html` : hero section, fonctionnalites, modules, avantages, formulaire de contact (honeypot + captcha math), mentions legales, footer |
-| **i18n** | 3 langues (FR, EN, ES), 2 192 lignes de traductions, changement instantane sans rechargement |
-| **Dark mode** | Theme clair/sombre, bascule dans le header, persistance localStorage, variables CSS dynamiques |
+| **Application mobile** | iOS/Android via Capacitor 8 : push notifications, caméra native, retour haptique, safe areas iOS, gestion clavier, deep links, back button Android |
+| **Landing page** | Page marketing intégrée dans `index.html` : hero, 18 modules présentés, avantages, formulaire de contact (honeypot + captcha), mentions légales, CGV, CGU |
+| **i18n** | 3 langues (FR, EN, ES), 2 640 lignes de traductions, changement instantané sans rechargement |
+| **Dark mode** | Thème clair/sombre, bascule dans le header, persistance localStorage, variables CSS dynamiques |
 
-## Roles et permissions
+## Rôles et permissions
 
-7 roles hierarchiques avec controle d'acces granulaire via la table `role_permissions` :
+7 rôles hiérarchiques avec contrôle d'accès granulaire via la table `role_permissions` :
 
-| Role | Code | Portee |
+| Rôle | Code | Portée |
 |------|------|--------|
-| Administrateur | `admin` | Acces complet, gestion permissions, config systeme, tous les hotels |
-| Responsable Groupe | `groupe_manager` | Multi-hotels, escalade, validation conges/audits, notifications |
-| Responsable Hotel | `hotel_manager` | Son hotel, validation conges, dispatch, clotures, Stripe config |
-| Comptabilite | `comptabilite` | Clotures, blanchisserie, rapports financiers, export |
-| Ressources Humaines | `rh` | Conges, evaluations, planning, gestion personnel |
-| Receptionniste | `receptionniste` | Dispatch, controle, clotures journalieres, maintenance |
-| Employe | `employee` | Taches quotidiennes, consulter planning, demander conges |
+| Administrateur | `admin` | Accès complet, gestion permissions, config système, tous les hôtels |
+| Responsable Groupe | `groupe_manager` | Multi-hôtels, escalade, validation congés/audits, factures, contrats |
+| Responsable Hôtel | `hotel_manager` | Son hôtel, validation congés, dispatch, clôtures, factures |
+| Comptabilité | `comptabilite` | Clôtures, blanchisserie, factures fournisseurs, paiements, export |
+| Ressources Humaines | `rh` | Congés, évaluations, planning, gestion personnel |
+| Réceptionniste | `receptionniste` | Dispatch, contrôle, clôtures journalières, maintenance, dépôt factures |
+| Employé | `employee` | Tâches quotidiennes, consulter planning, demander congés |
 
-Les permissions sont configurables par module dans **Parametres > onglet Permissions** (admin uniquement). 60+ permissions granulaires reparties en modules : `hotels`, `rooms`, `users`, `dispatch`, `linen`, `leaves`, `maintenance`, `tasks`, `evaluations`, `audit`, `revenue`, `closures`, `messages`, `notifications`, `dashboard`, `reports`, `permissions`, `selfcheckin`.
+Les permissions sont configurables dans **Paramètres > Permissions** (admin uniquement). 70+ permissions granulaires réparties en modules : `hotels`, `rooms`, `users`, `dispatch`, `linen`, `leaves`, `maintenance`, `tasks`, `evaluations`, `audit`, `revenue`, `closures`, `messages`, `notifications`, `dashboard`, `reports`, `permissions`, `selfcheckin`, `invoices`, `suppliers`, `contracts`, `welcome`.
 
 ## API REST
 
-Point d'entree unique : `api/index.php`
+Point d'entrée unique : `api/index.php`
 
 Routage : `/{resource}/{id}/{action}/{subaction}`
 
-Toutes les requetes (sauf `auth/login`, `health`, `contact`, `booking/public`) necessitent le header :
+Toutes les requêtes (sauf `auth/login`, `health`, `contact`, `booking/public`, `welcome/public`, `fintecture_webhook`) nécessitent le header :
 ```
 Authorization: Bearer <jwt_token>
 ```
 
-### Endpoints principaux (30+)
+### Endpoints principaux (35+)
 
-| Resource | Methodes | Description |
+| Resource | Méthodes | Description |
 |----------|----------|-------------|
 | `health` | GET | Status API (health check) |
 | `contact` | POST | Formulaire contact landing page (public) |
-| `auth` | POST login/logout, PUT profile, GET management-info | Authentification JWT, profil, info hotels |
-| `dashboard` | GET stats | Statistiques agregees multi-hotel (KPIs) |
-| `hotels` | CRUD + leave-config, categories, booking-config, stripe-config | Hotels complets avec 6 onglets de config |
-| `rooms` | CRUD | Chambres par hotel (numero, etage, type, statut) |
-| `dispatch` | CRUD + complete, control, alerts | Dispatch gouvernante (chambres, nettoyage, controle) |
+| `auth` | POST login/logout, PUT profile, GET management-info | Authentification JWT, profil, info hôtels |
+| `dashboard` | GET stats | Statistiques agrégées multi-hôtel (KPIs) |
+| `hotels` | CRUD + leave-config, categories, booking-config, stripe-config, bank-accounts | Hôtels complets avec 7 onglets de config |
+| `rooms` | CRUD | Chambres par hôtel (numéro, étage, type, statut) |
+| `dispatch` | CRUD + complete, control, alerts | Dispatch gouvernante (chambres, nettoyage, contrôle) |
 | `maintenance` | CRUD + assign, resolve, comment, stats | Tickets maintenance avec escalade automatique |
-| `linen` | GET/POST transactions + config | Blanchisserie (collecte, reception, stock, config hotel) |
-| `leaves` | CRUD + approve, reject, report, for-other, hotel-config | Conges avec validation hierarchique |
-| `tasks` | CRUD boards, columns, tasks, checklist, comments, attachments | Kanban complet avec pieces jointes |
-| `evaluations` | CRUD grids, questions, evaluations, stats, duplicate | Evaluations avec grilles personnalisables |
-| `audit` | CRUD grids, questions, audits, answers, pending, schedules | Audits qualite avec planification |
-| `closures` | CRUD + validate, field-configs, documents, export | Clotures financieres avec champs configurables |
+| `linen` | GET/POST transactions + config | Blanchisserie (collecte, réception, stock) |
+| `leaves` | CRUD + approve, reject, report, for-other, hotel-config | Congés avec validation hiérarchique |
+| `tasks` | CRUD boards, columns, tasks, checklist, comments, attachments | Kanban complet avec pièces jointes |
+| `evaluations` | CRUD grids, questions, evaluations, stats, duplicate | Évaluations avec grilles personnalisables |
+| `audit` | CRUD grids, questions, audits, answers, pending, schedules | Audits qualité avec planification |
+| `closures` | CRUD + validate, field-configs, documents, export | Clôtures financières avec champs configurables |
 | `revenue` | CRUD competitors, rates, events, history | Revenue management (API Xotelo) |
 | `price_alerts` | CRUD | Alertes prix (seuils par concurrent) |
-| `users` | CRUD + hotels assignment | Gestion utilisateurs multi-hotels |
+| `invoices` | CRUD + upload/OCR, submit, review, approve, reject, pay, mark-paid, batch-mark-paid, stats, reporting, extract, export, approval-rules, fintecture-config | Factures fournisseurs (workflow complet) |
+| `suppliers` | CRUD + search, hotels assignment, invoices | Fournisseurs multi-hôtel |
+| `contracts` | CRUD + stats, categories, documents, alerts, analyze, charges, export-pdf | Contrats fournisseurs avec analyse IA |
+| `welcome` | CRUD config, tabs, items, infos + public/{slug} | Livret d'accueil numérique |
+| `payment-links` | CRUD + email Stripe | Liens de paiement self check-in |
+| `smtp` | GET, PUT, POST test | Configuration email SMTP |
+| `users` | CRUD + hotels assignment | Gestion utilisateurs multi-hôtels |
 | `messages` | GET, POST | Messages internes (legacy) |
-| `messaging` | CRUD conversations, messages, users, unread-count | Messagerie interne temps reel |
+| `messaging` | CRUD conversations, messages, users, unread-count | Messagerie interne temps réel |
 | `notifications` | GET, PUT, DELETE + poll | Notifications in-app + long polling |
-| `notifications/admin/*` | GET, POST, DELETE | Campagnes notifications (envoi cible par hotel/role/users) |
-| `permissions` | GET, PUT | Permissions par role (matrice RBAC) |
-| `modules` | GET, POST/PUT | Activation/desactivation modules |
-| `time` | CRUD services, positions, contracts, templates, schedules, entries, timesheet, counters, holidays | Planning complet (services, postes, contrats, emargement) |
-| `rgpd` | CRUD consents, requests, settings, access-logs | Conformite RGPD complete |
-| `booking` | GET/POST + Stripe, availability, pms-sync | Reservation en ligne (public + admin) |
-| `selfcheckin` | CRUD config, instructions, lockers, pricing | Self check-in par hotel |
+| `notifications/admin/*` | GET, POST, DELETE | Campagnes notifications ciblées |
+| `permissions` | GET, PUT | Permissions par rôle (matrice RBAC) |
+| `modules` | GET, POST/PUT | Activation/désactivation modules |
+| `time` | CRUD services, positions, contracts, templates, schedules, entries, timesheet, counters, holidays | Planning complet |
+| `rgpd` | CRUD consents, requests, settings, access-logs | Conformité RGPD complète |
+| `booking` | GET/POST + Stripe, availability, pms-sync | Réservation en ligne (public + admin) |
+| `selfcheckin` | CRUD config, instructions, lockers, pricing | Self check-in par hôtel |
 | `lockers` | CRUD | Gestion casiers self check-in |
 | `selfcheckin-pricing` | CRUD | Tarification self check-in |
-| `automations` | CRUD + logs, test | Automations planifiees avec execution test |
+| `automations` | CRUD + logs, test | Automations planifiées |
+| `fintecture_webhook` | POST | Webhook Fintecture (public, vérifie signature) |
 
-## Systeme d'escalade automatique
+## Système d'escalade automatique
 
-Les cron jobs (`api/cron.php`) gerent des alertes progressives avec escalade hierarchique :
+Les cron jobs (`api/cron.php`) gèrent des alertes progressives avec escalade hiérarchique :
 
 | Module | Horaire | Seuil | Escalade |
 |--------|---------|-------|----------|
-| **Dispatch** | 12h | Aucun dispatch cree | hotel_manager → 2j: groupe_manager → 5j: admin |
-| **Controle** | 19h | Chambres nettoyees non controlees | hotel_manager → 2j: groupe_manager → 5j: admin |
-| **Maintenance** | 9h | Ticket ouvert depuis 2j | groupe_manager → 5j: priorite urgente → 7j: priorite grave |
-| **Conges** | Lundi 9h | Demandes en attente de validation | Rappel aux validateurs |
-| **Taches** | 9h | Taches arrivant a echeance | Rappel aux assignes |
+| **Dispatch** | 12h | Aucun dispatch créé | hotel_manager → 2j: groupe_manager → 5j: admin |
+| **Contrôle** | 19h | Chambres nettoyées non contrôlées | hotel_manager → 2j: groupe_manager → 5j: admin |
+| **Maintenance** | 9h | Ticket ouvert depuis 2j | groupe_manager → 5j: priorité urgente → 7j: priorité grave |
+| **Congés** | Lundi 9h | Demandes en attente de validation | Rappel aux validateurs |
+| **Tâches** | 9h | Tâches arrivant à échéance | Rappel aux assignés |
 | **Audit** | 9h | X jours avant deadline | Rappel → 2j retard: groupe_manager → 5j: admin |
-| **Cloture** | 13h | Pas de cloture aujourd'hui | hotel_manager → 48h: admin |
-| **Revenue** | 6h | Quotidien | Mise a jour automatique tarifs OTA via Xotelo |
-| **Nettoyage** | 3h | Quotidien | Purge notifications anciennes, sessions expirees |
+| **Clôture** | 13h | Pas de clôture aujourd'hui | hotel_manager → 48h: admin |
+| **Revenue** | 6h | Quotidien | Mise à jour automatique tarifs OTA via Xotelo |
+| **Nettoyage** | 3h | Quotidien | Purge notifications anciennes, sessions expirées |
 
-Les automations personnalisees (`api/cron_runner.php`) s'executent toutes les 30 minutes.
+Les automations personnalisées (`api/cron_runner.php`) s'exécutent toutes les 30 minutes.
 
-## Integrations externes
+## Intégrations externes
 
 | Service | Usage | Configuration |
 |---------|-------|---------------|
-| **Xotelo API** | Tarifs OTA (Booking.com, Expedia, Hotels.com...) pour revenue management | Cle Xotelo par hotel (`hotels.xotelo_hotel_key`) |
-| **Stripe** | Paiement en ligne pour self check-in / booking (Stripe Elements) | Cles par hotel (`stripe_publishable_key` + `stripe_secret_key`) |
-| **PMS GeHo** | Synchronisation reservations via agent relais long-polling | `pms-agent.php` installe sur le PC hotel (meme reseau) |
-| **Chart.js 4.4.1** | Graphiques dashboard, revenue, statistiques (CDN) | Auto-charge dans index.html |
-| **Font Awesome 6.4.0** | Icones interface (900+ icones) (CDN) | Auto-charge dans index.html |
-| **Google Fonts** | Police Inter (400, 500, 600, 700) (CDN) | Auto-charge dans index.html |
-| **jsPDF 2.5.1** | Generation factures/recus PDF dans booking.html (CDN) | Auto-charge dans booking.html |
+| **Xotelo API** | Tarifs OTA (Booking.com, Expedia, Hotels.com...) pour revenue management | Clé Xotelo par hôtel (`hotels.xotelo_hotel_key`) |
+| **Stripe** | Paiement en ligne pour self check-in / booking (Stripe Elements) | Clés par hôtel (`stripe_publishable_key` + `stripe_secret_key`) |
+| **Fintecture** | Paiement par virement bancaire Open Banking PSD2 (initiation + suivi) | Config par hôtel dans `fintecture_config` (app_id, app_secret, private_key) |
+| **Anthropic Claude AI** | OCR factures (extraction structurée JSON) + analyse contrats (clauses, risques) | Clé API dans `hotel_contracts_config.anthropic_api_key` |
+| **Tesseract OCR** | Extraction texte brut depuis PDF/images de factures | Installé sur le serveur (`tesseract-ocr` + `tesseract-ocr-fra`) |
+| **Ghostscript** | Conversion PDF → PNG pour traitement OCR Tesseract | Installé sur le serveur |
+| **PMS GeHo** | Synchronisation réservations via agent relais long-polling | `pms-agent.php` sur le PC hôtel |
+| **SEPA XML** | Génération fichiers de virement bancaire (pain.001.001.03) | Comptes bancaires hôtel dans `hotel_bank_accounts` |
+| **SMTP** | Envoi emails (liens de paiement, notifications) | Config dans `system_config` (PHPMailer) |
+| **Chart.js 4.4.1** | Graphiques dashboard, revenue, statistiques (CDN) | Auto-chargé dans index.html |
+| **Font Awesome 6.4.0** | Icônes interface (CDN) | Auto-chargé dans index.html |
+| **Google Fonts** | Police Inter (400, 500, 600, 700) (CDN) | Auto-chargé dans index.html |
+| **jsPDF 2.5.1** | Génération factures/reçus PDF (CDN) | Auto-chargé dans booking.html |
 
 ## Application mobile (Capacitor 8)
 
-| Element | Valeur |
+| Élément | Valeur |
 |---------|--------|
 | **App ID** | `com.aclgestion.app` |
 | **Nom** | ACL GESTION |
@@ -388,12 +439,12 @@ Les automations personnalisees (`api/cron_runner.php`) s'executent toutes les 30
 | **Mode** | WebView pointant vers `https://acl-gestion.com` (pas de bundle local) |
 | **iOS** | Xcode project dans `ios/App/` (Swift) |
 | **Plugins** | Camera, PushNotifications, StatusBar, Keyboard, Haptics, SplashScreen, App |
-| **Bridge** | `js/capacitor-bridge.js` - detection automatique web vs natif |
+| **Bridge** | `js/capacitor-bridge.js` - détection automatique web vs natif |
 
-### Fonctionnalites natives
+### Fonctionnalités natives
 
-- **Push notifications** : Envoi via APNS/FCM, reception en foreground (toast) et background
-- **Camera** : Prise de photo native pour tickets maintenance, controles qualite
+- **Push notifications** : Envoi via APNS/FCM, réception en foreground (toast) et background
+- **Caméra** : Prise de photo native pour tickets maintenance, contrôles qualité
 - **Haptics** : Retour haptique (light, medium, heavy)
 - **Safe areas** : Gestion encoche iPhone et barre home
 - **Clavier** : Gestion resize body, accessory bar
@@ -408,114 +459,143 @@ npm run cap:sync     # Synchroniser le projet web
 npm run cap:open:ios # Ouvrir dans Xcode
 ```
 
-## Base de donnees
+## Base de données
 
-Schema principal dans `database/schema.sql` + 16 migrations (~55 tables) :
+Schéma principal dans `database/schema.sql` + 27 migrations (~69+ tables) :
 
 ### Tables par domaine
 
-- **Core** : `users`, `user_hotels`, `role_permissions`, `hotels`, `rooms`
-- **Operations** : `room_dispatch`, `dispatch_control`, `dispatch_alerts`, `maintenance_tickets`
+- **Core** : `users`, `user_hotels`, `role_permissions`, `hotels`, `rooms`, `modules_config`, `system_config`
+- **Opérations** : `room_dispatch`, `dispatch_control`, `dispatch_alerts`, `maintenance_tickets`
 - **Blanchisserie** : `linen_transactions`, `linen_stock`, `linen_hotel_config`
-- **RH** : `leave_requests`, `leave_approvals`, `hotel_leave_config`, `task_definitions`, `task_assignments`, `task_boards`, `task_columns`, `task_checklist`, `task_comments`, `task_attachments`, `evaluations`, `evaluation_grids`, `evaluation_questions`, `evaluation_answers`
+- **RH** : `leave_requests`, `leave_approvals`, `hotel_leave_config`, `task_boards`, `task_columns`, `task_definitions`, `task_assignments`, `task_checklist`, `task_comments`, `task_attachments`, `evaluations`, `evaluation_grids`, `evaluation_questions`, `evaluation_answers`
 - **Planning** : `time_schedules`, `time_schedule_entries`, `time_entries`, `time_contracts`, `time_positions`, `time_services`, `time_counters`, `time_user_positions`, `time_holidays`, `time_templates`
-- **Qualite** : `audit_grids`, `audit_questions`, `audit_answers`, `audit_grid_permissions`, `audit_grid_hotels`, `audit_schedules`
+- **Qualité** : `audit_grids`, `audit_questions`, `audit_answers`, `audit_grid_permissions`, `audit_grid_hotels`, `audit_schedules`
 - **Finance** : `daily_closures`, `closure_documents`, `closure_field_configs`, `closure_field_values`
+- **Factures** : `suppliers`, `hotel_suppliers`, `supplier_invoices`, `supplier_invoice_lines`, `invoice_approvals`, `invoice_approval_rules`, `invoice_documents`, `invoice_payments`, `fintecture_config`
+- **Contrats** : `contract_categories`, `contracts`, `contract_documents`, `contract_alerts`, `hotel_contracts_config`
 - **Revenue** : `hotel_competitors`, `xotelo_rates_cache`, `xotelo_rates_history`, `xotelo_api_logs`, `revenue_events`, `price_alerts`
-- **Reservation** : `pms_bookings`, `selfcheckin_config`, `selfcheckin_instructions`, `selfcheckin_lockers`, `selfcheckin_pricing`, `hotel_categories`
+- **Réservation** : `pms_bookings`, `selfcheckin_config`, `selfcheckin_instructions`, `selfcheckin_lockers`, `selfcheckin_pricing`, `hotel_categories`, `payment_links`
+- **Accueil** : `hotel_welcome_config`, `hotel_welcome_tabs`, `hotel_welcome_items`, `hotel_welcome_infos`
+- **Banque** : `hotel_bank_accounts` (IBAN/BIC chiffrés AES-256 pour SEPA)
 - **RGPD** : `user_consents`, `gdpr_requests`, `gdpr_settings`, `access_logs`
-- **Securite** : `login_attempts` (rate limiting)
+- **Sécurité** : `login_attempts` (rate limiting)
 - **Messaging** : `notifications`, `notification_campaigns`, `messages`, `conversations`, `conversation_participants`, `conversation_messages`
 - **Automations** : `automations`, `automation_hotels`, `automation_recipients`, `automation_logs`
-- **Config** : `modules_config`, `contact_requests`
+- **Contact** : `contact_requests`
 
-### Migrations (ordre d'execution)
+### Migrations (ordre d'exécution)
 
 ```
-1.  schema.sql                     # Schema principal (55+ tables)
-2.  migration_audit.sql            # Audits qualite (grilles, questions, permissions)
-3.  migration_automations.sql      # Automatisations (rules, logs)
-4.  migration_revenue.sql          # Revenue management (concurrents, cache Xotelo)
-5.  migration_revenue_events.sql   # Evenements calendrier revenue
-6.  migration_revenue_history.sql  # Historique tarifs OTA
-7.  migration_revenue_global.sql   # Statistiques revenue globales
-8.  migration_task_archive.sql     # Archivage taches Kanban
-9.  migration_security.sql         # Rate limiting, permissions push
-10. migration_pms_stripe.sql       # PMS GeHo, Stripe, booking, categories, config conges hotel
-11. migration_pms_relay.sql        # Relais PMS GeHo
-12. migration_selfcheckin.sql      # Self check-in (config, instructions)
-13. migration_selfcheckin_v2.sql   # Self check-in v2 (ameliorations)
-14. migration_selfcheckin_v3.sql   # Self check-in v3 (casiers, consignes)
-15. migration_hotel_description.sql # Texte descriptif par hotel
-16. migration_maintenance_alerts.sql # Alertes maintenance
-17. migration_on_call_phone.sql    # Telephone d'astreinte hotel
-18. migration_stripe_permission.sql # Permission gestion cles Stripe
+1.  schema.sql                        # Schéma principal (69+ tables)
+2.  migration_audit.sql               # Audits qualité (grilles, questions, permissions)
+3.  migration_automations.sql         # Automatisations (rules, logs)
+4.  migration_revenue.sql             # Revenue management (concurrents, cache Xotelo)
+5.  migration_revenue_events.sql      # Événements calendrier revenue
+6.  migration_revenue_history.sql     # Historique tarifs OTA
+7.  migration_revenue_global.sql      # Statistiques revenue globales
+8.  migration_task_archive.sql        # Archivage tâches Kanban
+9.  migration_security.sql            # Rate limiting, permissions push
+10. migration_pms_stripe.sql          # PMS GeHo, Stripe, booking, catégories hôtel
+11. migration_pms_relay.sql           # Relais PMS GeHo
+12. migration_selfcheckin.sql         # Self check-in (config, instructions)
+13. migration_selfcheckin_v2.sql      # Self check-in v2
+14. migration_selfcheckin_v3.sql      # Self check-in v3 (casiers, consignes)
+15. migration_hotel_description.sql   # Texte descriptif par hôtel
+16. migration_maintenance_alerts.sql  # Alertes maintenance
+17. migration_on_call_phone.sql       # Téléphone d'astreinte hôtel
+18. migration_stripe_permission.sql   # Permission gestion clés Stripe
+19. migration_bank_accounts.sql       # Comptes bancaires hôtel (SEPA)
+20. migration_contracts.sql           # Contrats fournisseurs
+21. migration_invoices.sql            # Factures fournisseurs (tables principales)
+22. migration_invoices_v2.sql         # Factures v2 (améliorations)
+23. migration_invoices_v3.sql         # Factures v3 (ventilation, export)
+24. migration_welcome.sql             # Livret d'accueil
+25. migration_smtp.sql                # Configuration SMTP
+26. migration_walkin_hold.sql         # Walk-in hold réservations
+27. migration_payment_links.sql       # Liens de paiement Stripe
+28. migration_hotel_modules.sql       # Modules activés par hôtel
 ```
 
-## Securite
+## Sécurité
 
-| Mesure | Detail |
+| Mesure | Détail |
 |--------|--------|
 | **Authentification** | JWT HMAC-SHA256, expiration 7 jours, header Bearer |
 | **Rate limiting** | 5 tentatives de login, blocage 15 min (table `login_attempts`) |
 | **Headers HTTP** | X-Content-Type-Options: nosniff, X-Frame-Options: DENY, X-XSS-Protection, Referrer-Policy |
-| **CORS** | Origine stricte configuree dans `.env` (`CORS_ORIGIN`) |
-| **Uploads** | .htaccess bloque execution PHP, autorise JPG/PNG/PDF uniquement, max 5 Mo images / 10 Mo PDF |
-| **XSS** | Fonction `esc()` cote frontend, echappement attributs `escAttr()` |
-| **Anti-bot** | Honeypot + captcha mathematique sur formulaire contact |
-| **RGPD** | Module complet : consentements, export donnees, demandes RGPD, logs acces |
+| **CORS** | Origine stricte configurée dans `.env` (`CORS_ORIGIN`) |
+| **Uploads** | .htaccess bloque exécution PHP, autorise JPG/PNG/PDF uniquement, max 5 Mo images / 10 Mo PDF |
+| **XSS** | Fonction `esc()` côté frontend, échappement attributs `escAttr()` |
+| **Anti-bot** | Honeypot + captcha mathématique sur formulaire contact |
+| **RGPD** | Module complet : consentements, export données, demandes RGPD, logs accès |
 | **Mots de passe** | `password_hash()` / `password_verify()` avec bcrypt |
-| **.env** | Fichier non commite, permissions 600 |
+| **Chiffrement** | IBAN/BIC chiffrés AES-256 en base (fournisseurs + comptes bancaires hôtel) |
+| **Webhooks** | Vérification signature asymétrique (Fintecture) |
+| **.env** | Fichier non commité, permissions 600 |
 
-## Depannage
+## Pages légales
+
+Accessibles depuis le footer de l'application et de la landing page :
+- **Mentions légales** : informations éditeur (ACL GESTION SAS), hébergeur (OVH), directeur de publication
+- **CGV** (14 articles) : conditions générales de vente, tarification, paiement, obligations
+- **CGU** (15 articles) : conditions d'utilisation, accès, propriété intellectuelle, responsabilité
+- **Politique de confidentialité** (12 articles) : traitement données personnelles, droits RGPD, cookies, durée conservation
+
+## Dépannage
 
 ### Erreur 500
-- Verifier les logs PHP (Plesk > Logs ou `/var/log/apache2/`)
-- Verifier les identifiants MySQL dans `.env`
-- Verifier que toutes les tables sont creees (schema.sql + toutes les migrations)
-- Verifier que le `.htaccess` dans `api/` est present et fonctionnel
+- Vérifier les logs PHP (Plesk > Logs ou `/var/log/apache2/`)
+- Vérifier les identifiants MySQL dans `.env`
+- Vérifier que toutes les tables sont créées (schema.sql + toutes les migrations)
+- Vérifier que le `.htaccess` dans `api/` est présent et fonctionnel
 
 ### Page blanche
-- Verifier que tous les fichiers JS sont presents dans `js/pages/`
+- Vérifier que tous les fichiers JS sont présents dans `js/pages/` (21 modules)
 - Ouvrir la console du navigateur (F12) pour voir les erreurs JavaScript
-- Verifier que tous les `<script>` sont charges dans `index.html` (18 modules)
-- Verifier le cache du navigateur (vider si version JS ancienne)
+- Vérifier que tous les `<script>` sont chargés dans `index.html`
+- Vérifier le cache du navigateur (vider si version JS ancienne)
+
+### OCR ne fonctionne pas
+- Vérifier que Tesseract est installé : `tesseract --version`
+- Vérifier que Ghostscript est installé : `gs --version`
+- Vérifier les langues installées : `tesseract --list-langs` (doit contenir `fra`)
+- Vérifier la clé API Anthropic dans la configuration contrats de l'hôtel
 
 ### Erreur de connexion
-- Verifier que la base de donnees est importee correctement (schema + migrations)
-- Verifier que l'utilisateur admin existe dans la table `users`
-- Verifier le `JWT_SECRET` dans `.env`
-- Verifier que la table `login_attempts` existe (migration_security.sql)
-- Tester directement : `curl -X POST https://acl-gestion.com/api/index.php/auth/login -d '{"email":"admin@acl-gestion.fr","password":"Admin@123"}'`
+- Vérifier que la base de données est importée correctement (schéma + migrations)
+- Vérifier que l'utilisateur admin existe dans la table `users`
+- Vérifier le `JWT_SECRET` dans `.env`
+- Vérifier que la table `login_attempts` existe (migration_security.sql)
 
 ### Notifications ne s'affichent pas
-- Verifier que la classe `.active` est correctement ajoutee au dropdown (css/layout.css)
-- La permission `notifications.manage` doit etre presente dans `role_permissions`
-- Verifier le long polling dans l'onglet Network du navigateur (`/notifications/poll`)
+- Vérifier que la classe `.active` est correctement ajoutée au dropdown (css/layout.css)
+- La permission `notifications.manage` doit être présente dans `role_permissions`
+- Vérifier le long polling dans l'onglet Network du navigateur (`/notifications/poll`)
 
 ### Permissions non visibles dans le menu
-- Verifier la synchronisation entre `role_permissions` (SQL), `getDefaultPermissions()` (utils.js), et `PERMISSION_LABELS` (settings.js)
-- Le menu est filtre par `updateMenuByPermissions()` dans `app.js`
-- Un module desactive dans Parametres > Modules sera cache du menu
+- Vérifier la synchronisation entre `role_permissions` (SQL), `getDefaultPermissions()` (utils.js), et `PERMISSION_LABELS` (settings.js)
+- Le menu est filtré par `updateMenuByPermissions()` dans `app.js`
+- Un module désactivé dans Paramètres > Modules sera caché du menu
 
 ### Cron ne fonctionne pas
 - Tester manuellement : `php api/cron.php dispatch`
-- Verifier que le chemin est absolu dans le crontab
-- Verifier les permissions du fichier
-- Verifier que la timezone est Europe/Paris : `php -r "echo date_default_timezone_get();"`
+- Vérifier que le chemin est absolu dans le crontab
+- Vérifier les permissions du fichier
+- Vérifier que la timezone est Europe/Paris : `php -r "echo date_default_timezone_get();"`
 
 ### Application mobile
-- Verifier que le serveur est accessible depuis le device
-- Verifier les certificats SSL (Capacitor refuse les certificats invalides)
+- Vérifier que le serveur est accessible depuis le device
+- Vérifier les certificats SSL (Capacitor refuse les certificats invalides)
 - Logs debug : `npm run cap:open:ios` puis Xcode Console
-- Verifier `capacitor.config.json > server.url`
+- Vérifier `capacitor.config.json > server.url`
 
-### Deploy.sh echoue
-- Verifier les droits d'execution : `chmod +x deploy.sh`
-- Verifier les credentials MySQL dans `.env`
-- Verifier l'acces Git au repository
+### Deploy.sh échoue
+- Vérifier les droits d'exécution : `chmod +x deploy.sh`
+- Vérifier les credentials MySQL dans `.env`
+- Vérifier l'accès Git au repository
 - Consulter les logs dans `/var/www/vhosts/acl-gestion.com/backups/`
 
 ---
 
-**ACL GESTION** - 2024-2026
+**ACL GESTION** - SAS au capital de 1 000 € - SIRET 845 388 222 00018 - RCS Bobigny - 2024-2026
