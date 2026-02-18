@@ -13573,6 +13573,9 @@ try {
                         $invoice['ocr_confidence'] = $ocrRaw['data']['confidence'] ?? null;
                         $invoice['ocr_invoice'] = $ocrRaw['data']['invoice'] ?? null;
                     }
+                    $invoice['ocr_pipeline'] = $ocrRaw['pipeline'] ?? null;
+                    $invoice['ocr_elapsed'] = $ocrRaw['elapsed_seconds'] ?? null;
+                    $invoice['ocr_model'] = (isset($ocrRaw['usage']) && isset($ocrRaw['usage']['model'])) ? $ocrRaw['usage']['model'] : null;
                 }
 
                 json_out(['invoice' => $invoice]);
