@@ -87,14 +87,17 @@ function invRenderOcrBanner(inv, ocrSupplier, ocrConfidence, ocrInvoice, supplie
         const matched = inv.supplier_id && inv.supplier_name;
         if (matched) {
             supplierHtml = `
-                <div style="display:flex;align-items:center;gap:var(--space-2)">
-                    <i class="fas fa-check-circle" style="color:var(--success-500, #22c55e)"></i>
-                    <span><strong>Fournisseur reconnu :</strong> ${esc(inv.supplier_name)}</span>
-                    ${ocrSupplier.siret ? `<span style="color:var(--text-tertiary);font-size:var(--font-size-xs)">SIRET: ${esc(ocrSupplier.siret)}</span>` : ''}
+                <div id="inv-ocr-supplier-section">
+                    <div style="display:flex;align-items:center;gap:var(--space-2)">
+                        <i class="fas fa-check-circle" style="color:var(--success-500, #22c55e)"></i>
+                        <span><strong>Fournisseur reconnu :</strong> ${esc(inv.supplier_name)}</span>
+                        ${ocrSupplier.siret ? `<span style="color:var(--text-tertiary);font-size:var(--font-size-xs)">SIRET: ${esc(ocrSupplier.siret)}</span>` : ''}
+                    </div>
                 </div>`;
         } else {
             // Fournisseur détecté mais pas matché
-            supplierHtml = `
+            supplierHtml = `<div id="inv-ocr-supplier-section">`;
+            supplierHtml += `
                 <div style="display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap">
                     <i class="fas fa-search" style="color:var(--warning-500, #f59e0b)"></i>
                     <span><strong>Fournisseur détecté :</strong> ${esc(ocrSupplier.name)}</span>
@@ -120,6 +123,7 @@ function invRenderOcrBanner(inv, ocrSupplier, ocrConfidence, ocrInvoice, supplie
                         </button>
                     </div>`;
             }
+            supplierHtml += `</div>`;
         }
     }
 
@@ -1670,6 +1674,21 @@ function invSelectSupplier(id, name) {
     document.getElementById('inv-supplier-id').value = id;
     document.getElementById('inv-supplier-search').value = name;
     document.getElementById('inv-supplier-dropdown').style.display = 'none';
+
+    // Masquer les boutons "Créer fournisseur" dans le bandeau OCR et le dropdown
+    invHideCreateSupplierButtons(name);
+}
+
+function invHideCreateSupplierButtons(supplierName) {
+    // Remplacer la section fournisseur du bandeau OCR par un état "reconnu"
+    const ocrBanner = document.querySelector('#inv-ocr-supplier-section');
+    if (ocrBanner) {
+        ocrBanner.innerHTML = `
+            <div style="display:flex;align-items:center;gap:var(--space-2)">
+                <i class="fas fa-check-circle" style="color:var(--success-500, #22c55e)"></i>
+                <span><strong>Fournisseur sélectionné :</strong> ${esc(supplierName)}</span>
+            </div>`;
+    }
 }
 
 function invQuickCreateSupplier(prefillName) {
