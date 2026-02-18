@@ -13627,10 +13627,12 @@ try {
                 // OCR si pas de skip
                 $skipOcr = !empty($_POST['skip_ocr']);
                 $ocrResult = null;
+                $supplierSuggestions = [];
 
                 if (!$skipOcr) {
                     db()->execute("UPDATE supplier_invoices SET ocr_status = 'processing' WHERE id = ?", [$invoiceId]);
 
+                    try {
                     // Récupérer la clé API IA et le modèle configuré
                     $aiConfig = db()->queryOne("SELECT * FROM hotel_contracts_config WHERE hotel_id = ? AND ai_enabled = 1", [$hotelId]);
                     $apiKey = $aiConfig['anthropic_api_key'] ?? null;
@@ -13787,6 +13789,16 @@ try {
                             [$ocrStatus, json_encode($ocrResult), date('Y-m-d H:i:s'), date('Y-m-d H:i:s'), $invoiceId]
                         );
                     }
+                    } catch (Exception $ocrException) {
+                        // OCR a échoué mais la facture est créée — on continue
+                        $ocrResult = ['success' => false, 'error' => $ocrException->getMessage()];
+                        try {
+                            db()->execute(
+                                "UPDATE supplier_invoices SET ocr_status = 'failed', ocr_raw_data = ?, ocr_processed_at = ?, updated_at = ? WHERE id = ?",
+                                [json_encode(['error' => $ocrException->getMessage()]), date('Y-m-d H:i:s'), date('Y-m-d H:i:s'), $invoiceId]
+                            );
+                        } catch (Exception $e2) {}
+                    }
                 }
 
                 rgpdLog($userId, 'create', 'supplier_invoice', $invoiceId, json_encode(['hotel_id' => $hotelId]));
@@ -13809,8 +13821,8 @@ try {
 
                 // Préparer les données OCR enrichies pour le frontend
                 $ocrEnriched = $ocrResult;
-                if ($ocrResult && $ocrResult['success'] && $ocrResult['data']) {
-                    $ocrEnriched['supplier_suggestions'] = $supplierSuggestions ?? [];
+                if ($ocrResult && !empty($ocrResult['success']) && !empty($ocrResult['data'])) {
+                    $ocrEnriched['supplier_suggestions'] = $supplierSuggestions;
                     $ocrEnriched['ocr_supplier'] = $ocrResult['data']['supplier'] ?? null;
                 }
 
