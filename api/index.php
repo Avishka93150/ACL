@@ -12697,14 +12697,32 @@ try {
 
                 if (empty($data['name'])) json_error('La raison sociale est obligatoire');
 
-                // Vérifier unicité SIRET
-                if (!empty($data['siret'])) {
-                    $existing = db()->queryOne("SELECT id FROM suppliers WHERE siret = ?", [$data['siret']]);
-                    if ($existing) json_error('Un fournisseur avec ce SIRET existe déjà (ID: ' . $existing['id'] . ')');
-                }
-
                 $hotelIds = $data['hotel_ids'] ?? [];
                 if (empty($hotelIds)) json_error('Au moins un hôtel doit être sélectionné');
+
+                // Vérifier unicité SIRET par hôtel
+                if (!empty($data['siret'])) {
+                    $hotelList = implode(',', array_map('intval', $hotelIds));
+                    $existing = db()->queryOne(
+                        "SELECT s.id, s.name FROM suppliers s
+                         JOIN hotel_suppliers hs ON s.id = hs.supplier_id
+                         WHERE s.siret = ? AND hs.hotel_id IN ($hotelList) AND hs.is_active = 1 LIMIT 1",
+                        [$data['siret']]
+                    );
+                    if ($existing) json_error('Le fournisseur « ' . $existing['name'] . ' » avec ce SIRET est déjà associé à cet hôtel. Recherchez-le dans la liste.');
+                }
+
+                // Vérifier unicité N° TVA par hôtel
+                if (!empty($data['tva_number'])) {
+                    $hotelList = implode(',', array_map('intval', $hotelIds));
+                    $existing = db()->queryOne(
+                        "SELECT s.id, s.name FROM suppliers s
+                         JOIN hotel_suppliers hs ON s.id = hs.supplier_id
+                         WHERE s.tva_number = ? AND hs.hotel_id IN ($hotelList) AND hs.is_active = 1 LIMIT 1",
+                        [$data['tva_number']]
+                    );
+                    if ($existing) json_error('Le fournisseur « ' . $existing['name'] . ' » avec ce N° TVA est déjà associé à cet hôtel. Recherchez-le dans la liste.');
+                }
 
                 // Vérifier droits sur les hôtels
                 foreach ($hotelIds as $hId) {
@@ -12761,10 +12779,36 @@ try {
                 $data = get_input();
                 if (empty($data['name'])) json_error('La raison sociale est obligatoire');
 
-                // Vérifier unicité SIRET (hors soi-même)
+                // Vérifier unicité SIRET par hôtel (hors soi-même)
                 if (!empty($data['siret'])) {
-                    $existing = db()->queryOne("SELECT id FROM suppliers WHERE siret = ? AND id != ?", [$data['siret'], (int)$id]);
-                    if ($existing) json_error('Un autre fournisseur avec ce SIRET existe déjà');
+                    $linkedHotels = db()->query("SELECT hotel_id FROM hotel_suppliers WHERE supplier_id = ? AND is_active = 1", [(int)$id]);
+                    $linkedHotelIds = array_column($linkedHotels, 'hotel_id');
+                    if (!empty($linkedHotelIds)) {
+                        $hotelList = implode(',', array_map('intval', $linkedHotelIds));
+                        $existing = db()->queryOne(
+                            "SELECT s.id, s.name FROM suppliers s
+                             JOIN hotel_suppliers hs ON s.id = hs.supplier_id
+                             WHERE s.siret = ? AND s.id != ? AND hs.hotel_id IN ($hotelList) AND hs.is_active = 1 LIMIT 1",
+                            [$data['siret'], (int)$id]
+                        );
+                        if ($existing) json_error('Le fournisseur « ' . $existing['name'] . ' » avec ce SIRET est déjà associé à cet hôtel.');
+                    }
+                }
+
+                // Vérifier unicité N° TVA par hôtel (hors soi-même)
+                if (!empty($data['tva_number'])) {
+                    $linkedHotels = isset($linkedHotels) ? $linkedHotels : db()->query("SELECT hotel_id FROM hotel_suppliers WHERE supplier_id = ? AND is_active = 1", [(int)$id]);
+                    $linkedHotelIds = array_column($linkedHotels, 'hotel_id');
+                    if (!empty($linkedHotelIds)) {
+                        $hotelList = implode(',', array_map('intval', $linkedHotelIds));
+                        $existing = db()->queryOne(
+                            "SELECT s.id, s.name FROM suppliers s
+                             JOIN hotel_suppliers hs ON s.id = hs.supplier_id
+                             WHERE s.tva_number = ? AND s.id != ? AND hs.hotel_id IN ($hotelList) AND hs.is_active = 1 LIMIT 1",
+                            [$data['tva_number'], (int)$id]
+                        );
+                        if ($existing) json_error('Le fournisseur « ' . $existing['name'] . ' » avec ce N° TVA est déjà associé à cet hôtel.');
+                    }
                 }
 
                 $sets = [
