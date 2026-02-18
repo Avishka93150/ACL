@@ -149,7 +149,9 @@ function invRenderOcrBanner(inv, ocrSupplier, ocrConfidence, ocrInvoice, supplie
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-2)">
                 <div style="display:flex;align-items:center;gap:var(--space-2)">
                     <i class="fas fa-robot" style="color:var(--brand-secondary);font-size:1.2rem"></i>
-                    <strong style="color:var(--text-primary)">Lecture automatique (OCR)</strong>
+                    <strong style="color:var(--text-primary)">Lecture automatique (IA)</strong>
+                    ${inv.ocr_elapsed ? `<span style="font-size:var(--font-size-xs);color:var(--text-tertiary);background:var(--gray-100);padding:1px 8px;border-radius:var(--radius-full)"><i class="fas fa-bolt"></i> ${inv.ocr_elapsed}s</span>` : ''}
+                    ${inv.ocr_pipeline ? `<span style="font-size:var(--font-size-xs);color:var(--text-tertiary)">${inv.ocr_pipeline === 'pdftotext+claude_text' ? 'PDF natif' : inv.ocr_pipeline === 'claude_vision' ? 'Vision IA' : 'Vision IA (scan)'}</span>` : ''}
                 </div>
                 <div style="display:flex;align-items:center;gap:var(--space-2)">
                     ${invConfidenceBadge(overall)}
