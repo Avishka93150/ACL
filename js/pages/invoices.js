@@ -78,6 +78,77 @@ function invConfidenceBadge(score) {
     return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--radius-full);font-size:var(--font-size-xs);font-weight:var(--font-semibold);color:${color};background:${color}15;border:1px solid ${color}30">${s}% ${label}</span>`;
 }
 
+function invRenderDuplicateBanner(inv) {
+    const duplicates = inv.duplicates || [];
+    if (duplicates.length === 0 || inv.not_duplicate) return '';
+
+    const matchLabels = {
+        exact: 'Meme fournisseur + meme n\u00b0 facture',
+        invoice_number: 'Meme n\u00b0 de facture',
+        amount_date: 'Meme montant + meme date + meme fournisseur',
+        amount_supplier: 'Meme montant + meme fournisseur (dates proches)'
+    };
+
+    return `
+        <div id="inv-duplicate-banner" style="margin-bottom:var(--space-4);padding:var(--space-4);background:var(--warning-50, #fffbeb);border:1px solid var(--warning-300, #fcd34d);border-radius:var(--radius-md)">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-3)">
+                <div style="display:flex;align-items:flex-start;gap:var(--space-3);flex:1">
+                    <i class="fas fa-exclamation-triangle" style="color:var(--warning-500, #f59e0b);font-size:1.3rem;margin-top:2px"></i>
+                    <div style="flex:1">
+                        <div style="font-weight:var(--font-semibold);color:var(--warning-800, #92400e);margin-bottom:var(--space-2)">
+                            Doublon potentiel detect\u00e9
+                        </div>
+                        <div style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-3)">
+                            Cette facture ressemble \u00e0 ${duplicates.length > 1 ? 'plusieurs factures existantes' : 'une facture existante'} :
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:var(--space-2)">
+                            ${duplicates.map(d => `
+                                <div style="display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) var(--space-3);background:white;border-radius:var(--radius-sm);border:1px solid var(--warning-200, #fde68a)">
+                                    <div style="flex:1">
+                                        <strong style="color:var(--text-primary)">${esc(d.supplier_name || 'Fournisseur inconnu')}</strong>
+                                        ${d.invoice_number ? ` &mdash; N\u00b0 ${esc(d.invoice_number)}` : ''}
+                                        <br>
+                                        <span style="font-size:var(--font-size-xs);color:var(--text-tertiary)">
+                                            ${d.invoice_date ? formatDate(d.invoice_date) : ''}
+                                            ${d.total_ttc ? ' &mdash; ' + invFormatCurrency(d.total_ttc) : ''}
+                                            &mdash; ${invStatusLabel(d.status)}
+                                        </span>
+                                    </div>
+                                    <span style="font-size:var(--font-size-xs);padding:2px 8px;border-radius:var(--radius-full);background:var(--warning-100, #fef3c7);color:var(--warning-700, #b45309)">
+                                        ${matchLabels[d.match_type] || d.match_type}
+                                    </span>
+                                    <button class="btn btn-sm btn-outline" onclick="invOpenVerify(${d.id})" title="Voir cette facture">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex;gap:var(--space-2);margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px solid var(--warning-200, #fde68a);justify-content:flex-end">
+                <button class="btn btn-sm" style="background:var(--success-500, #22c55e);color:white;border:none" onclick="invMarkNotDuplicate(${inv.id})">
+                    <i class="fas fa-check"></i> Non, ce n'est pas un doublon
+                </button>
+                <button class="btn btn-sm" style="background:var(--danger-500, #ef4444);color:white;border:none" onclick="invDeleteInvoice(${inv.id}, '${inv.status}')">
+                    <i class="fas fa-trash"></i> Supprimer cette facture
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+async function invMarkNotDuplicate(invoiceId) {
+    try {
+        await API.put(`invoices/${invoiceId}/not-duplicate`, {});
+        toast('Facture confirmee — alerte doublon supprimee', 'success');
+        const banner = document.getElementById('inv-duplicate-banner');
+        if (banner) banner.remove();
+    } catch (err) {
+        toast(err.message || 'Erreur', 'error');
+    }
+}
+
 function invRenderOcrBanner(inv, ocrSupplier, ocrConfidence, ocrInvoice, supplierSuggestions, isEditable) {
     const overall = ocrConfidence ? (ocrConfidence.overall || 0) : (inv.ocr_confidence || 0);
     const confidenceColor = overall >= 85 ? 'var(--success-500, #22c55e)' : overall >= 60 ? 'var(--warning-500, #f59e0b)' : 'var(--danger-500, #ef4444)';
@@ -594,6 +665,7 @@ async function invLoadList() {
                                 </td>` : ''}
                                 <td><strong>${esc(inv.supplier_name || 'Non renseigné')}</strong>
                                     ${inv.category_name ? `<br><small style="color:${inv.category_color || 'var(--text-tertiary)'}">${esc(inv.category_name)}</small>` : ''}
+                                    ${inv.is_duplicate && !inv.not_duplicate ? '<br><span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:var(--radius-full);font-size:0.7rem;font-weight:600;color:var(--warning-700, #b45309);background:var(--warning-50, #fffbeb);border:1px solid var(--warning-200, #fde68a)"><i class="fas fa-clone"></i> Doublon potentiel</span>' : ''}
                                 </td>
                                 <td>${esc(inv.invoice_number || '-')}</td>
                                 <td>${inv.invoice_date ? formatDate(inv.invoice_date) : '-'}</td>
@@ -1001,7 +1073,11 @@ async function invHandleFiles(files) {
         if (res.success && res.id) {
             // Stocker les données OCR pour les afficher dans la page de vérification
             invLastOcrResult = res.ocr || null;
-            toast('Facture déposée — complétez la vérification', 'success');
+            if (res.duplicates && res.duplicates.length > 0) {
+                toast('Doublon potentiel detecte — verifiez avant de valider', 'warning');
+            } else {
+                toast('Facture deposee — completez la verification', 'success');
+            }
             invOpenVerify(res.id);
         } else {
             toast('Erreur lors du dépôt', 'error');
@@ -1051,6 +1127,8 @@ async function invRenderVerify(container, invoiceId) {
                 <i class="fas fa-cash-register" style="color:var(--brand-secondary);font-size:1.1rem"></i>
                 <span style="color:var(--text-primary)">Facture créée automatiquement depuis une <strong>clôture journalière</strong> — Mode de paiement : <strong>Espèces</strong></span>
             </div>` : ''}
+
+            ${invRenderDuplicateBanner(inv)}
 
             <div style="display:flex;gap:var(--space-4);align-items:flex-start">
                 <!-- GAUCHE : Formulaire de vérification -->
