@@ -11606,6 +11606,15 @@ try {
                     [$config['hotel_id']]
                 );
 
+                // Charger les sections dynamiques
+                $sections = db()->query(
+                    "SELECT id, type, title, content, config, image_path, is_visible, display_order
+                     FROM hotel_welcome_sections
+                     WHERE hotel_id = ? AND is_visible = 1
+                     ORDER BY display_order, id",
+                    [$config['hotel_id']]
+                );
+
                 // Retirer les données sensibles
                 unset($config['id']);
                 $hotelId = $config['hotel_id'];
@@ -11614,7 +11623,8 @@ try {
                 json_out([
                     'config' => $config,
                     'tabs' => $tabs,
-                    'infos' => $infos
+                    'infos' => $infos,
+                    'sections' => $sections
                 ]);
             }
 
@@ -12073,6 +12083,251 @@ try {
 
                 db()->execute("DELETE FROM hotel_welcome_infos WHERE id = ?", [$infoId]);
                 json_out(['message' => 'Info supprimée']);
+            }
+
+            // --- SECTIONS DYNAMIQUES ---
+
+            // GET /welcome/sections?hotel_id=X
+            if ($method === 'GET' && $id === 'sections') {
+                $hotelId = $_GET['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $sections = db()->query(
+                    "SELECT * FROM hotel_welcome_sections WHERE hotel_id = ? ORDER BY display_order, id",
+                    [$hotelId]
+                );
+
+                json_out(['sections' => $sections]);
+            }
+
+            // POST /welcome/sections - Créer une section
+            if ($method === 'POST' && $id === 'sections' && !$action) {
+                $data = get_input();
+                $hotelId = $data['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $allowedTypes = ['banner','header','text','image','gallery','services','infos','contact','schedule','wifi','social','separator','map','spacer'];
+                $type = $data['type'] ?? '';
+                if (!in_array($type, $allowedTypes)) json_error('Type de section invalide');
+
+                $maxOrder = db()->queryOne("SELECT MAX(display_order) as m FROM hotel_welcome_sections WHERE hotel_id = ?", [$hotelId]);
+
+                $insertId = db()->insert('hotel_welcome_sections', [
+                    'hotel_id' => $hotelId,
+                    'type' => $type,
+                    'title' => $data['title'] ?? null,
+                    'content' => $data['content'] ?? null,
+                    'config' => isset($data['config']) ? (is_string($data['config']) ? $data['config'] : json_encode($data['config'])) : null,
+                    'image_path' => null,
+                    'is_visible' => 1,
+                    'display_order' => ($maxOrder['m'] ?? 0) + 1,
+                    'created_at' => date('Y-m-d H:i:s')
+                ]);
+
+                json_out(['message' => 'Section créée', 'id' => $insertId], 201);
+            }
+
+            // PUT /welcome/sections/reorder - Réordonner les sections
+            if ($method === 'PUT' && $id === 'sections' && $action === 'reorder') {
+                $data = get_input();
+                $hotelId = $data['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $order = $data['order'] ?? [];
+                foreach ($order as $i => $sectionId) {
+                    db()->execute(
+                        "UPDATE hotel_welcome_sections SET display_order = ? WHERE id = ? AND hotel_id = ?",
+                        [$i, (int)$sectionId, $hotelId]
+                    );
+                }
+
+                json_out(['message' => 'Ordre mis à jour']);
+            }
+
+            // PUT /welcome/sections/init - Initialiser sections par défaut depuis config existante
+            if ($method === 'PUT' && $id === 'sections' && $action === 'init') {
+                $data = get_input();
+                $hotelId = $data['hotel_id'] ?? null;
+                if (!$hotelId) json_error('hotel_id requis');
+                if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                // Vérifier qu'il n'y a pas déjà des sections
+                $existing = db()->count("SELECT COUNT(*) FROM hotel_welcome_sections WHERE hotel_id = ?", [$hotelId]);
+                if ($existing > 0) json_error('Des sections existent déjà pour cet hôtel');
+
+                // Charger la config actuelle
+                $config = db()->queryOne("SELECT * FROM hotel_welcome_config WHERE hotel_id = ?", [$hotelId]);
+
+                $order = 0;
+                $now = date('Y-m-d H:i:s');
+
+                // Bannière
+                db()->insert('hotel_welcome_sections', [
+                    'hotel_id' => $hotelId, 'type' => 'banner', 'title' => null, 'content' => null,
+                    'config' => json_encode(['height' => (int)($config['banner_height'] ?? 320), 'overlay' => (int)($config['banner_overlay'] ?? 1)]),
+                    'image_path' => $config['banner_path'] ?? null,
+                    'is_visible' => 1, 'display_order' => $order++, 'created_at' => $now
+                ]);
+
+                // Header
+                db()->insert('hotel_welcome_sections', [
+                    'hotel_id' => $hotelId, 'type' => 'header', 'title' => null, 'content' => null,
+                    'config' => json_encode(['style' => $config['header_style'] ?? 'card']),
+                    'image_path' => null,
+                    'is_visible' => (int)($config['show_header'] ?? 1), 'display_order' => $order++, 'created_at' => $now
+                ]);
+
+                // Schedule
+                if ($config && ($config['checkin_time'] || $config['checkout_time'])) {
+                    db()->insert('hotel_welcome_sections', [
+                        'hotel_id' => $hotelId, 'type' => 'schedule', 'title' => null, 'content' => null,
+                        'config' => json_encode(['checkin' => $config['checkin_time'] ?? '15:00:00', 'checkout' => $config['checkout_time'] ?? '11:00:00']),
+                        'image_path' => null,
+                        'is_visible' => (int)($config['show_schedule'] ?? 1), 'display_order' => $order++, 'created_at' => $now
+                    ]);
+                }
+
+                // WiFi
+                if ($config && $config['wifi_name']) {
+                    db()->insert('hotel_welcome_sections', [
+                        'hotel_id' => $hotelId, 'type' => 'wifi', 'title' => null, 'content' => null,
+                        'config' => json_encode(['name' => $config['wifi_name'], 'password' => $config['wifi_password'] ?? '']),
+                        'image_path' => null,
+                        'is_visible' => (int)($config['show_wifi'] ?? 1), 'display_order' => $order++, 'created_at' => $now
+                    ]);
+                }
+
+                // Welcome text
+                if ($config && ($config['welcome_title'] || $config['welcome_text'])) {
+                    db()->insert('hotel_welcome_sections', [
+                        'hotel_id' => $hotelId, 'type' => 'text', 'title' => $config['welcome_title'] ?? null,
+                        'content' => $config['welcome_text'] ?? null,
+                        'config' => json_encode(['alignment' => 'left']),
+                        'image_path' => $config['welcome_image_path'] ?? null,
+                        'is_visible' => (int)($config['show_welcome'] ?? 1), 'display_order' => $order++, 'created_at' => $now
+                    ]);
+                }
+
+                // Services (tabs)
+                db()->insert('hotel_welcome_sections', [
+                    'hotel_id' => $hotelId, 'type' => 'services', 'title' => null, 'content' => null,
+                    'config' => json_encode(['tab_style' => $config['tab_style'] ?? 'pills', 'item_layout' => $config['item_layout'] ?? 'cards']),
+                    'image_path' => null,
+                    'is_visible' => 1, 'display_order' => $order++, 'created_at' => $now
+                ]);
+
+                // Infos pratiques
+                db()->insert('hotel_welcome_sections', [
+                    'hotel_id' => $hotelId, 'type' => 'infos', 'title' => 'Informations pratiques', 'content' => null,
+                    'config' => null, 'image_path' => null,
+                    'is_visible' => (int)($config['show_infos'] ?? 1), 'display_order' => $order++, 'created_at' => $now
+                ]);
+
+                // Contact
+                if ($config && ($config['phone'] || $config['email'] || $config['address'])) {
+                    db()->insert('hotel_welcome_sections', [
+                        'hotel_id' => $hotelId, 'type' => 'contact', 'title' => 'Nous contacter', 'content' => null,
+                        'config' => json_encode([
+                            'phone' => $config['phone'] ?? '', 'email' => $config['email'] ?? '',
+                            'address' => $config['address'] ?? '', 'maps_url' => $config['google_maps_url'] ?? ''
+                        ]),
+                        'image_path' => null,
+                        'is_visible' => (int)($config['show_contact'] ?? 1), 'display_order' => $order++, 'created_at' => $now
+                    ]);
+                }
+
+                // Social
+                if ($config && ($config['facebook_url'] || $config['instagram_url'] || $config['website_url'])) {
+                    db()->insert('hotel_welcome_sections', [
+                        'hotel_id' => $hotelId, 'type' => 'social', 'title' => null, 'content' => null,
+                        'config' => json_encode([
+                            'facebook' => $config['facebook_url'] ?? '', 'instagram' => $config['instagram_url'] ?? '',
+                            'website' => $config['website_url'] ?? ''
+                        ]),
+                        'image_path' => null,
+                        'is_visible' => (int)($config['show_social'] ?? 1), 'display_order' => $order++, 'created_at' => $now
+                    ]);
+                }
+
+                json_out(['message' => 'Sections par défaut créées', 'count' => $order]);
+            }
+
+            // PUT /welcome/sections/{sectionId} - Mettre à jour une section
+            if ($method === 'PUT' && $id === 'sections' && $action && $action !== 'reorder' && $action !== 'init') {
+                $sectionId = (int)$action;
+                $data = get_input();
+
+                $section = db()->queryOne("SELECT * FROM hotel_welcome_sections WHERE id = ?", [$sectionId]);
+                if (!$section) json_error('Section non trouvée', 404);
+                if (!in_array($section['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                $sets = [];
+                $params = [];
+                foreach (['title', 'content', 'is_visible', 'display_order'] as $field) {
+                    if (isset($data[$field])) {
+                        $sets[] = "$field = ?";
+                        $params[] = $data[$field];
+                    }
+                }
+                if (isset($data['config'])) {
+                    $sets[] = "config = ?";
+                    $params[] = is_string($data['config']) ? $data['config'] : json_encode($data['config']);
+                }
+                if (empty($sets)) json_error('Rien à modifier');
+
+                $sets[] = "updated_at = NOW()";
+                $params[] = $sectionId;
+                db()->execute("UPDATE hotel_welcome_sections SET " . implode(', ', $sets) . " WHERE id = ?", $params);
+
+                json_out(['message' => 'Section mise à jour']);
+            }
+
+            // DELETE /welcome/sections/{sectionId}
+            if ($method === 'DELETE' && $id === 'sections' && $action) {
+                $sectionId = (int)$action;
+                $section = db()->queryOne("SELECT * FROM hotel_welcome_sections WHERE id = ?", [$sectionId]);
+                if (!$section) json_error('Section non trouvée', 404);
+                if (!in_array($section['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                // Supprimer l'image associée si elle existe
+                if ($section['image_path']) {
+                    $old = __DIR__ . '/../' . $section['image_path'];
+                    if (file_exists($old)) unlink($old);
+                }
+
+                db()->execute("DELETE FROM hotel_welcome_sections WHERE id = ?", [$sectionId]);
+                json_out(['message' => 'Section supprimée']);
+            }
+
+            // POST /welcome/sections/{sectionId}/image - Upload image section
+            if ($method === 'POST' && $id === 'sections' && $action && $subId === 'image') {
+                $sectionId = (int)$action;
+                $section = db()->queryOne("SELECT * FROM hotel_welcome_sections WHERE id = ?", [$sectionId]);
+                if (!$section) json_error('Section non trouvée', 404);
+                if (!in_array($section['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                if (!isset($_FILES['file'])) json_error('Aucun fichier envoyé');
+                $ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
+                if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) json_error('Format non autorisé (JPG, PNG, WEBP)');
+                if ($_FILES['file']['size'] > 5 * 1024 * 1024) json_error('Fichier trop volumineux (max 5 Mo)');
+
+                $filename = 'section_' . $sectionId . '_' . uniqid() . '.' . $ext;
+                $uploadDir = __DIR__ . '/../uploads/welcome/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0775, true);
+
+                if ($section['image_path']) {
+                    $old = __DIR__ . '/../' . $section['image_path'];
+                    if (file_exists($old)) unlink($old);
+                }
+
+                move_uploaded_file($_FILES['file']['tmp_name'], $uploadDir . $filename);
+                $path = 'uploads/welcome/' . $filename;
+                db()->execute("UPDATE hotel_welcome_sections SET image_path = ?, updated_at = NOW() WHERE id = ?", [$path, $sectionId]);
+
+                json_out(['path' => $path, 'message' => 'Image uploadée']);
             }
 
             json_error('Endpoint welcome non trouvé', 404);
