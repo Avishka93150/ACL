@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACL GESTION - Presentation commerciale</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #1a56db;
+            --primary-light: #eff6ff;
+            --primary-dark: #1e40af;
+            --accent: #059669;
+            --accent-light: #ecfdf5;
+            --gold: #d97706;
+            --gold-light: #fffbeb;
+            --dark: #111827;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            color: var(--dark);
+            background: #fff;
+            -webkit-font-smoothing: antialiased;
+            font-size: 11pt;
+            line-height: 1.6;
+        }
+
+        /* ===== PRINT LAYOUT ===== */
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            padding: 0;
+            position: relative;
+            overflow: hidden;
+            page-break-after: always;
+            background: #fff;
+        }
+        .page:last-child { page-break-after: avoid; }
+
+        @media print {
+            body { background: #fff; }
+            .page {
+                margin: 0;
+                box-shadow: none;
+                page-break-after: always;
+            }
+            .page:last-child { page-break-after: avoid; }
+            .no-print { display: none !important; }
+        }
+
+        @media screen {
+            body { background: #e5e7eb; padding: 20px 0; }
+            .page {
+                box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+                margin-bottom: 30px;
+                border-radius: 4px;
+            }
+            .print-btn {
+                position: fixed; top: 20px; right: 20px; z-index: 100;
+                background: var(--primary); color: #fff; border: none;
+                padding: 12px 24px; border-radius: 8px; font-size: 14px;
+                font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif;
+                box-shadow: 0 4px 12px rgba(26,86,219,0.3);
+                display: flex; align-items: center; gap: 8px;
+            }
+            .print-btn:hover { background: var(--primary-dark); }
+        }
+
+        /* ===== PAGE 1: COVER ===== */
+        .cover {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 40%, #1a56db 100%);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 60px;
+        }
+        .cover-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.12);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 8px 24px;
+            border-radius: 50px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 40px;
+        }
+        .cover-logo {
+            font-size: 52px;
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #fff 0%, #93c5fd 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .cover-tagline {
+            font-size: 20px;
+            font-weight: 300;
+            color: rgba(255,255,255,0.8);
+            margin-bottom: 60px;
+            max-width: 500px;
+            line-height: 1.5;
+        }
+        .cover-features {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            width: 100%;
+            max-width: 600px;
+            margin-bottom: 60px;
+        }
+        .cover-feat {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 14px;
+            padding: 20px 16px;
+        }
+        .cover-feat i {
+            font-size: 26px;
+            margin-bottom: 10px;
+            display: block;
+            color: #93c5fd;
+        }
+        .cover-feat strong {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .cover-feat small {
+            display: block;
+            font-size: 9px;
+            color: rgba(255,255,255,0.6);
+            margin-top: 4px;
+        }
+        .cover-bottom {
+            margin-top: auto;
+            font-size: 10px;
+            color: rgba(255,255,255,0.5);
+        }
+        .cover-bottom strong { color: rgba(255,255,255,0.8); }
+
+        /* ===== PAGE HEADER (inner pages) ===== */
+        .page-inner {
+            padding: 48px 56px;
+        }
+        .page-number {
+            position: absolute;
+            bottom: 24px;
+            right: 56px;
+            font-size: 9px;
+            color: var(--gray-400);
+        }
+        .page-footer-brand {
+            position: absolute;
+            bottom: 24px;
+            left: 56px;
+            font-size: 9px;
+            color: var(--gray-400);
+            font-weight: 600;
+        }
+        .section-label {
+            display: inline-block;
+            background: var(--primary-light);
+            color: var(--primary);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            padding: 5px 14px;
+            border-radius: 50px;
+            margin-bottom: 16px;
+        }
+        .section-title {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--dark);
+            line-height: 1.2;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+        }
+        .section-subtitle {
+            font-size: 13px;
+            color: var(--gray-500);
+            line-height: 1.7;
+            max-width: 480px;
+            margin-bottom: 36px;
+        }
+
+        /* ===== STATS BAR ===== */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 36px;
+        }
+        .stat-card {
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            padding: 18px 16px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--primary);
+            display: block;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+        .stat-label {
+            font-size: 10px;
+            color: var(--gray-500);
+            font-weight: 500;
+        }
+
+        /* ===== MODULE GRID ===== */
+        .modules-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+        .module-card {
+            display: flex;
+            gap: 14px;
+            padding: 16px;
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            background: #fff;
+            align-items: flex-start;
+        }
+        .module-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .module-icon.blue { background: #eff6ff; color: #1a56db; }
+        .module-icon.green { background: #ecfdf5; color: #059669; }
+        .module-icon.purple { background: #f5f3ff; color: #7c3aed; }
+        .module-icon.orange { background: #fff7ed; color: #ea580c; }
+        .module-icon.red { background: #fef2f2; color: #dc2626; }
+        .module-icon.teal { background: #f0fdfa; color: #0d9488; }
+        .module-icon.pink { background: #fdf2f8; color: #db2777; }
+        .module-icon.yellow { background: #fffbeb; color: #d97706; }
+        .module-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 2px;
+        }
+        .module-desc {
+            font-size: 9.5px;
+            color: var(--gray-500);
+            line-height: 1.4;
+        }
+
+        /* ===== FEATURE HIGHLIGHT ===== */
+        .highlight-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 18px;
+            margin-bottom: 32px;
+        }
+        .highlight-card {
+            border: 1px solid var(--gray-200);
+            border-radius: 14px;
+            padding: 24px 20px;
+            text-align: center;
+            background: #fff;
+        }
+        .highlight-card .h-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            margin: 0 auto 14px;
+        }
+        .highlight-card h4 {
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: var(--dark);
+        }
+        .highlight-card p {
+            font-size: 10px;
+            color: var(--gray-500);
+            line-height: 1.5;
+        }
+
+        /* ===== VALUE PROPS ===== */
+        .value-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .value-item {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            padding: 18px 20px;
+            background: var(--gray-50);
+            border-radius: 12px;
+            border: 1px solid var(--gray-100);
+        }
+        .value-num {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: var(--primary);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 800;
+            flex-shrink: 0;
+        }
+        .value-item h4 {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 3px;
+        }
+        .value-item p {
+            font-size: 10px;
+            color: var(--gray-500);
+            line-height: 1.5;
+        }
+
+        /* ===== WORKFLOW ===== */
+        .workflow-steps {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+        .workflow-step {
+            text-align: center;
+            padding: 20px 12px;
+            background: var(--gray-50);
+            border-radius: 12px;
+            border: 1px solid var(--gray-200);
+            position: relative;
+        }
+        .workflow-step .step-num {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            margin: 0 auto 10px;
+        }
+        .workflow-step h4 {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 4px;
+        }
+        .workflow-step p {
+            font-size: 9px;
+            color: var(--gray-500);
+            line-height: 1.4;
+        }
+
+        /* ===== TECH STACK ===== */
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+        .tech-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            border: 1px solid var(--gray-200);
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .tech-item i {
+            font-size: 16px;
+            color: var(--primary);
+            width: 20px;
+            text-align: center;
+        }
+
+        /* ===== ROLES TABLE ===== */
+        .roles-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            overflow: hidden;
+            font-size: 10px;
+        }
+        .roles-table th {
+            background: var(--primary);
+            color: #fff;
+            padding: 10px 14px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 10px;
+        }
+        .roles-table td {
+            padding: 9px 14px;
+            border-bottom: 1px solid var(--gray-100);
+        }
+        .roles-table tr:last-child td { border-bottom: none; }
+        .roles-table tr:nth-child(even) td { background: var(--gray-50); }
+        .check { color: var(--accent); font-weight: 700; }
+        .cross { color: var(--gray-300); }
+
+        /* ===== PRICING ===== */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .pricing-card {
+            border: 2px solid var(--gray-200);
+            border-radius: 16px;
+            padding: 28px 22px;
+            text-align: center;
+            position: relative;
+            background: #fff;
+        }
+        .pricing-card.featured {
+            border-color: var(--primary);
+            box-shadow: 0 4px 24px rgba(26,86,219,0.12);
+        }
+        .pricing-badge {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary);
+            color: #fff;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 4px 16px;
+            border-radius: 50px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .pricing-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 4px;
+        }
+        .pricing-desc {
+            font-size: 10px;
+            color: var(--gray-500);
+            margin-bottom: 16px;
+        }
+        .pricing-price {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--primary);
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+        .pricing-price span {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--gray-500);
+        }
+        .pricing-unit {
+            font-size: 10px;
+            color: var(--gray-400);
+            margin-bottom: 18px;
+        }
+        .pricing-features {
+            text-align: left;
+            font-size: 10px;
+            list-style: none;
+        }
+        .pricing-features li {
+            padding: 5px 0;
+            border-bottom: 1px solid var(--gray-100);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .pricing-features li:last-child { border-bottom: none; }
+        .pricing-features li i { color: var(--accent); font-size: 10px; }
+
+        /* ===== CONTACT PAGE ===== */
+        .contact-page {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 40%, #1a56db 100%);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 60px;
+        }
+        .contact-title {
+            font-size: 36px;
+            font-weight: 800;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+        }
+        .contact-sub {
+            font-size: 15px;
+            color: rgba(255,255,255,0.7);
+            max-width: 460px;
+            line-height: 1.6;
+            margin-bottom: 48px;
+        }
+        .contact-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            width: 100%;
+            max-width: 500px;
+            margin-bottom: 48px;
+        }
+        .contact-card {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 14px;
+            padding: 24px 20px;
+        }
+        .contact-card i {
+            font-size: 24px;
+            color: #93c5fd;
+            margin-bottom: 12px;
+            display: block;
+        }
+        .contact-card strong {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+        .contact-card span {
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+        }
+        .contact-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #fff;
+            color: var(--primary);
+            padding: 14px 32px;
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 700;
+            text-decoration: none;
+            margin-bottom: 40px;
+        }
+        .contact-legal {
+            font-size: 9px;
+            color: rgba(255,255,255,0.35);
+            max-width: 400px;
+            line-height: 1.5;
+        }
+
+        /* ===== TESTIMONIAL ===== */
+        .quote-block {
+            background: var(--primary-light);
+            border-left: 4px solid var(--primary);
+            border-radius: 0 12px 12px 0;
+            padding: 20px 24px;
+            margin: 24px 0;
+        }
+        .quote-block p {
+            font-size: 12px;
+            font-style: italic;
+            color: var(--gray-700);
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+        .quote-block cite {
+            font-size: 10px;
+            font-style: normal;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        /* ===== CHECKLIST ===== */
+        .checklist {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 24px;
+        }
+        .checklist-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            padding: 6px 0;
+        }
+        .checklist-item i {
+            color: var(--accent);
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        /* ===== DIVIDER ===== */
+        .divider {
+            height: 1px;
+            background: var(--gray-200);
+            margin: 28px 0;
+        }
+    </style>
+</head>
+<body>
+
+<!-- PRINT BUTTON (screen only) -->
+<button class="print-btn no-print" onclick="window.print()">
+    <i class="fas fa-file-pdf"></i> Exporter en PDF
+</button>
+
+<!-- ===== PAGE 1: COVER ===== -->
+<div class="page cover">
+    <div class="cover-badge">Plateforme SaaS Hoteliere</div>
+    <div class="cover-logo">ACL GESTION</div>
+    <p class="cover-tagline">
+        La plateforme tout-en-un pour piloter vos etablissements hoteliers.
+        Gouvernante, maintenance, finances, reservations et bien plus.
+    </p>
+    <div class="cover-features">
+        <div class="cover-feat">
+            <i class="fas fa-hotel"></i>
+            <strong>Multi-Hotels</strong>
+            <small>Gerez tous vos etablissements</small>
+        </div>
+        <div class="cover-feat">
+            <i class="fas fa-mobile-alt"></i>
+            <strong>Mobile & Web</strong>
+            <small>iOS, Android & navigateur</small>
+        </div>
+        <div class="cover-feat">
+            <i class="fas fa-robot"></i>
+            <strong>Intelligence IA</strong>
+            <small>OCR et analyse automatique</small>
+        </div>
+    </div>
+    <div class="cover-bottom">
+        <strong>acl-gestion.com</strong> &nbsp;&bull;&nbsp; Presentation commerciale 2026
+    </div>
+</div>
+
+<!-- ===== PAGE 2: OVERVIEW ===== -->
+<div class="page">
+    <div class="page-inner">
+        <span class="section-label">Presentation</span>
+        <h2 class="section-title">Votre hotel, simplifie.</h2>
+        <p class="section-subtitle">
+            ACL GESTION centralise l'ensemble des operations quotidiennes de vos hotels
+            dans une interface unique, intuitive et accessible depuis n'importe quel appareil.
+        </p>
+
+        <div class="stats-bar">
+            <div class="stat-card">
+                <span class="stat-number">21</span>
+                <span class="stat-label">Modules integres</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number">7</span>
+                <span class="stat-label">Niveaux de roles</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number">3</span>
+                <span class="stat-label">Langues (FR/EN/ES)</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number">24/7</span>
+                <span class="stat-label">Accessible en continu</span>
+            </div>
+        </div>
+
+        <div class="highlight-grid">
+            <div class="highlight-card">
+                <div class="h-icon" style="background:#eff6ff;color:#1a56db">
+                    <i class="fas fa-tachometer-alt"></i>
+                </div>
+                <h4>Tableau de bord temps reel</h4>
+                <p>KPIs, graphiques et activite en direct sur tous vos hotels depuis un seul ecran.</p>
+            </div>
+            <div class="highlight-card">
+                <div class="h-icon" style="background:#ecfdf5;color:#059669">
+                    <i class="fas fa-lock"></i>
+                </div>
+                <h4>Securite & Conformite</h4>
+                <p>Chiffrement AES-256, RGPD integre, controle d'acces granulaire par role.</p>
+            </div>
+            <div class="highlight-card">
+                <div class="h-icon" style="background:#fff7ed;color:#ea580c">
+                    <i class="fas fa-bolt"></i>
+                </div>
+                <h4>Automatisations</h4>
+                <p>Alertes, escalades et rappels automatiques pour ne jamais rien oublier.</p>
+            </div>
+        </div>
+
+        <div class="quote-block">
+            <p>"ACL GESTION a transforme notre facon de travailler. Ce qui prenait des heures
+            se fait maintenant en quelques clics. Nos equipes sont plus efficaces et nos clients mieux servis."</p>
+            <cite>-- Directeur d'un groupe hotelier, 4 etablissements</cite>
+        </div>
+    </div>
+    <div class="page-footer-brand">ACL GESTION &bull; acl-gestion.com</div>
+    <div class="page-number">2</div>
+</div>
+
+<!-- ===== PAGE 3: MODULES (1/2) ===== -->
+<div class="page">
+    <div class="page-inner">
+        <span class="section-label">Modules</span>
+        <h2 class="section-title">21 modules pour tout gerer</h2>
+        <p class="section-subtitle">
+            Chaque module est concu pour repondre a un besoin precis de la gestion hoteliere.
+            Activez uniquement ceux dont vous avez besoin.
+        </p>
+
+        <div class="modules-grid">
+            <div class="module-card">
+                <div class="module-icon blue"><i class="fas fa-chart-line"></i></div>
+                <div>
+                    <div class="module-name">Dashboard</div>
+                    <div class="module-desc">KPIs en temps reel, graphiques d'activite, vue multi-hotels</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon green"><i class="fas fa-broom"></i></div>
+                <div>
+                    <div class="module-name">Gouvernante</div>
+                    <div class="module-desc">Dispatch chambres, controle qualite 6 criteres, photos</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon orange"><i class="fas fa-tools"></i></div>
+                <div>
+                    <div class="module-name">Maintenance</div>
+                    <div class="module-desc">Tickets, priorites, escalade automatique, commentaires</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon purple"><i class="fas fa-tshirt"></i></div>
+                <div>
+                    <div class="module-name">Blanchisserie</div>
+                    <div class="module-desc">Collecte, reception, stock, bons de livraison PDF</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon teal"><i class="fas fa-calendar-check"></i></div>
+                <div>
+                    <div class="module-name">Conges</div>
+                    <div class="module-desc">Demandes, validation hierarchique, export CSV, calendrier</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon pink"><i class="fas fa-columns"></i></div>
+                <div>
+                    <div class="module-name">Kanban / Taches</div>
+                    <div class="module-desc">Boards, colonnes, drag & drop, checklist, archivage</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon yellow"><i class="fas fa-star-half-alt"></i></div>
+                <div>
+                    <div class="module-name">Evaluations</div>
+                    <div class="module-desc">Grilles personnalisables, criteres ponderes, historique</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon red"><i class="fas fa-clipboard-check"></i></div>
+                <div>
+                    <div class="module-name">Audits Qualite</div>
+                    <div class="module-desc">Grilles, sections, scoring, planification, photos</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon blue"><i class="fas fa-cash-register"></i></div>
+                <div>
+                    <div class="module-name">Clotures Financieres</div>
+                    <div class="module-desc">Caisse, especes, remise banque, champs configurables</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon green"><i class="fas fa-chart-bar"></i></div>
+                <div>
+                    <div class="module-name">Revenue Management</div>
+                    <div class="module-desc">Tarifs OTA temps reel, concurrents, alertes prix</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="page-footer-brand">ACL GESTION &bull; acl-gestion.com</div>
+    <div class="page-number">3</div>
+</div>
+
+<!-- ===== PAGE 4: MODULES (2/2) ===== -->
+<div class="page">
+    <div class="page-inner">
+        <span class="section-label">Modules (suite)</span>
+        <h2 class="section-title">Et bien plus encore...</h2>
+        <p class="section-subtitle">
+            Des modules avances pour digitaliser chaque aspect de votre activite hoteliere.
+        </p>
+
+        <div class="modules-grid">
+            <div class="module-card">
+                <div class="module-icon orange"><i class="fas fa-file-invoice-dollar"></i></div>
+                <div>
+                    <div class="module-name">Factures Fournisseurs</div>
+                    <div class="module-desc">OCR IA, workflow validation, paiement SEPA/Open Banking</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon purple"><i class="fas fa-file-contract"></i></div>
+                <div>
+                    <div class="module-name">Contrats</div>
+                    <div class="module-desc">Suivi, alertes echeance, analyse IA, charges fixes</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon teal"><i class="fas fa-qrcode"></i></div>
+                <div>
+                    <div class="module-name">Self Check-in</div>
+                    <div class="module-desc">QR codes, consignes, casiers, paiement Stripe en ligne</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon blue"><i class="fas fa-book-open"></i></div>
+                <div>
+                    <div class="module-name">Livret d'Accueil</div>
+                    <div class="module-desc">Room directory digital, page builder, QR code chambre</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon pink"><i class="fas fa-envelope"></i></div>
+                <div>
+                    <div class="module-name">Messagerie</div>
+                    <div class="module-desc">Communication interne, broadcast, notifications ciblees</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon yellow"><i class="fas fa-robot"></i></div>
+                <div>
+                    <div class="module-name">Automatisations</div>
+                    <div class="module-desc">Alertes planifiees, escalade multi-niveaux, rappels</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon green"><i class="fas fa-shield-alt"></i></div>
+                <div>
+                    <div class="module-name">RGPD</div>
+                    <div class="module-desc">Consentements, droit d'acces, export, logs d'audit</div>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-icon red"><i class="fas fa-users-cog"></i></div>
+                <div>
+                    <div class="module-name">Utilisateurs & Permissions</div>
+                    <div class="module-desc">RBAC granulaire, 7 roles, affectation multi-hotels</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;color:var(--dark)">
+            <i class="fas fa-puzzle-piece" style="color:var(--primary);margin-right:6px"></i>
+            Modules activables par hotel
+        </h3>
+        <p style="font-size:11px;color:var(--gray-500);line-height:1.6;max-width:520px">
+            Chaque hotel peut activer uniquement les modules dont il a besoin.
+            Un petit boutique-hotel n'a pas les memes besoins qu'un grand resort.
+            ACL GESTION s'adapte a votre structure.
+        </p>
+    </div>
+    <div class="page-footer-brand">ACL GESTION &bull; acl-gestion.com</div>
+    <div class="page-number">4</div>
+</div>
+
+<!-- ===== PAGE 5: FOCUS FACTURES + IA ===== -->
+<div class="page">
+    <div class="page-inner">
+        <span class="section-label">Innovation</span>
+        <h2 class="section-title">L'IA au service de votre hotel</h2>
+        <p class="section-subtitle">
+            ACL GESTION integre l'intelligence artificielle Claude d'Anthropic pour automatiser
+            les taches les plus chronophages de votre quotidien.
+        </p>
+
+        <div class="highlight-grid">
+            <div class="highlight-card">
+                <div class="h-icon" style="background:#f5f3ff;color:#7c3aed">
+                    <i class="fas fa-file-invoice"></i>
+                </div>
+                <h4>OCR Factures</h4>
+                <p>Scannez une facture PDF ou photo. L'IA extrait automatiquement : fournisseur, montants, lignes, TVA.</p>
+            </div>
+            <div class="highlight-card">
+                <div class="h-icon" style="background:#fff7ed;color:#ea580c">
+                    <i class="fas fa-file-contract"></i>
+                </div>
+                <h4>Analyse Contrats</h4>
+                <p>L'IA lit vos contrats et identifie les clauses cles, les risques et les dates importantes.</p>
+            </div>
+            <div class="highlight-card">
+                <div class="h-icon" style="background:#ecfdf5;color:#059669">
+                    <i class="fas fa-check-double"></i>
+                </div>
+                <h4>Confiance graduee</h4>
+                <p>Chaque champ extrait indique son niveau de confiance : vert (&gt;90%), orange, rouge.</p>
+            </div>
+        </div>
+
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;color:var(--dark)">
+            <i class="fas fa-money-check-alt" style="color:var(--primary);margin-right:6px"></i>
+            Workflow complet de gestion des factures
+        </h3>
+
+        <div class="workflow-steps">
+            <div class="workflow-step">
+                <div class="step-num">1</div>
+                <h4>Upload</h4>
+                <p>Deposez le PDF ou la photo de la facture</p>
+            </div>
+            <div class="workflow-step">
+                <div class="step-num">2</div>
+                <h4>OCR + IA</h4>
+                <p>Extraction automatique de toutes les donnees</p>
+            </div>
+            <div class="workflow-step">
+                <div class="step-num">3</div>
+                <h4>Validation</h4>
+                <p>Circuit d'approbation multi-niveaux</p>
+            </div>
+            <div class="workflow-step">
+                <div class="step-num">4</div>
+                <h4>Paiement</h4>
+                <p>SEPA XML, Open Banking ou virement manuel</p>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;color:var(--dark)">
+            <i class="fas fa-credit-card" style="color:var(--primary);margin-right:6px"></i>
+            Moyens de paiement integres
+        </h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+            <div style="padding:16px;border:1px solid var(--gray-200);border-radius:12px;text-align:center">
+                <i class="fab fa-stripe" style="font-size:28px;color:#635bff;display:block;margin-bottom:8px"></i>
+                <strong style="font-size:12px;display:block">Stripe</strong>
+                <span style="font-size:9px;color:var(--gray-500)">Self check-in & liens de paiement</span>
+            </div>
+            <div style="padding:16px;border:1px solid var(--gray-200);border-radius:12px;text-align:center">
+                <i class="fas fa-university" style="font-size:28px;color:#059669;display:block;margin-bottom:8px"></i>
+                <strong style="font-size:12px;display:block">Open Banking (PSD2)</strong>
+                <span style="font-size:9px;color:var(--gray-500)">Virement instantane via Fintecture</span>
+            </div>
+            <div style="padding:16px;border:1px solid var(--gray-200);border-radius:12px;text-align:center">
+                <i class="fas fa-file-code" style="font-size:28px;color:#1a56db;display:block;margin-bottom:8px"></i>
+                <strong style="font-size:12px;display:block">SEPA XML</strong>
+                <span style="font-size:9px;color:var(--gray-500)">Fichiers de virement bancaire batch</span>
+            </div>
+        </div>
+    </div>
+    <div class="page-footer-brand">ACL GESTION &bull; acl-gestion.com</div>
+    <div class="page-number">5</div>
+</div>
+
+<!-- ===== PAGE 6: ROLES + SECURITE ===== -->
+<div class="page">
+    <div class="page-inner">
+        <span class="section-label">Organisation</span>
+        <h2 class="section-title">Des roles adaptes a chaque metier</h2>
+        <p class="section-subtitle">
+            7 niveaux de roles avec des permissions granulaires.
+            Chaque collaborateur voit uniquement ce dont il a besoin.
+        </p>
+
+        <table class="roles-table">
+            <thead>
+                <tr>
+                    <th>Role</th>
+                    <th>Portee</th>
+                    <th>Dashboard</th>
+                    <th>Dispatch</th>
+                    <th>Finances</th>
+                    <th>RH</th>
+                    <th>Admin</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Administrateur</strong></td>
+                    <td>Tous les hotels</td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                </tr>
+                <tr>
+                    <td><strong>Resp. Groupe</strong></td>
+                    <td>Multi-hotels</td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="cross">&mdash;</td>
+                </tr>
+                <tr>
+                    <td><strong>Resp. Hotel</strong></td>
+                    <td>Son hotel</td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="cross">&mdash;</td>
+                </tr>
+                <tr>
+                    <td><strong>Comptabilite</strong></td>
+                    <td>Finances</td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="cross">&mdash;</td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="cross">&mdash;</td>
+                    <td class="cross">&mdash;</td>
+                </tr>
+                <tr>
+                    <td><strong>RH</strong></td>
+                    <td>Personnel</td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="cross">&mdash;</td>
+                    <td class="cross">&mdash;</td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="cross">&mdash;</td>
+                </tr>
+                <tr>
+                    <td><strong>Receptionniste</strong></td>
+                    <td>Operations</td>
+                    <td class="cross">&mdash;</td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="check"><i class="fas fa-check"></i></td>
+                    <td class="cross">&mdash;</td>
+                    <td class="cross">&mdash;</td>
+                </tr>
+                <tr>
+                    <td><strong>Employe</strong></td>
+                    <td>Ses taches</td>
+                    <td class="cross">&mdash;</td>
+                    <td class="cross">&mdash;</td>
+                    <td class="cross">&mdash;</td>
+                    <td class="cross">&mdash;</td>
+                    <td class="cross">&mdash;</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="divider"></div>
+
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;color:var(--dark)">
+            <i class="fas fa-shield-alt" style="color:var(--accent);margin-right:6px"></i>
+            Securite & Infrastructure
+        </h3>
+
+        <div class="checklist">
+            <div class="checklist-item"><i class="fas fa-check-circle"></i> Chiffrement AES-256 (IBAN, BIC)</div>
+            <div class="checklist-item"><i class="fas fa-check-circle"></i> JWT HMAC-SHA256 (authentification)</div>
+            <div class="checklist-item"><i class="fas fa-check-circle"></i> HTTPS / SSL Let's Encrypt</div>
+            <div class="checklist-item"><i class="fas fa-check-circle"></i> Rate limiting (anti brute-force)</div>
+            <div class="checklist-item"><i class="fas fa-check-circle"></i> Headers securite (XSS, CORS, nosniff)</div>
+            <div class="checklist-item"><i class="fas fa-check-circle"></i> Module RGPD complet</div>
+            <div class="checklist-item"><i class="fas fa-check-circle"></i> Sauvegardes quotidiennes</div>
+            <div class="checklist-item"><i class="fas fa-check-circle"></i> Hebergement OVH (France)</div>
+            <div class="checklist-item"><i class="fas fa-check-circle"></i> PWA + mode offline partiel</div>
+            <div class="checklist-item"><i class="fas fa-check-circle"></i> App native iOS & Android</div>
+            <div class="checklist-item"><i class="fas fa-check-circle"></i> Notifications push temps reel</div>
+            <div class="checklist-item"><i class="fas fa-check-circle"></i> Multi-langue (FR, EN, ES)</div>
+        </div>
+    </div>
+    <div class="page-footer-brand">ACL GESTION &bull; acl-gestion.com</div>
+    <div class="page-number">6</div>
+</div>
+
+<!-- ===== PAGE 7: AVANTAGES ===== -->
+<div class="page">
+    <div class="page-inner">
+        <span class="section-label">Pourquoi nous choisir</span>
+        <h2 class="section-title">Les avantages ACL GESTION</h2>
+        <p class="section-subtitle">
+            Plus qu'un logiciel, un partenaire qui comprend les enjeux
+            quotidiens de l'hotellerie francaise.
+        </p>
+
+        <div class="value-list">
+            <div class="value-item">
+                <div class="value-num">1</div>
+                <div>
+                    <h4>Tout-en-un, sans multiplication des outils</h4>
+                    <p>Fini les 10 logiciels differents. Gouvernante, maintenance, comptabilite, RH, reservations,
+                    communication : tout est dans ACL GESTION. Un seul login, une seule interface.</p>
+                </div>
+            </div>
+            <div class="value-item">
+                <div class="value-num">2</div>
+                <div>
+                    <h4>Deploiement rapide, sans installation</h4>
+                    <p>Application 100% web, accessible immediatement depuis n'importe quel navigateur.
+                    Pas besoin d'installer quoi que ce soit sur vos postes. Formation en 1 heure.</p>
+                </div>
+            </div>
+            <div class="value-item">
+                <div class="value-num">3</div>
+                <div>
+                    <h4>Multi-hotels natif</h4>
+                    <p>Gerez 1 ou 50 hotels depuis le meme compte. Chaque hotel a sa propre configuration,
+                    ses propres modules actives, ses propres permissions. Vision groupe consolidee.</p>
+                </div>
+            </div>
+            <div class="value-item">
+                <div class="value-num">4</div>
+                <div>
+                    <h4>Automatisation intelligente</h4>
+                    <p>Escalade automatique des tickets, rappels de conges, alertes de cloture, OCR factures.
+                    L'IA travaille pour vous pendant que vous gerez vos clients.</p>
+                </div>
+            </div>
+            <div class="value-item">
+                <div class="value-num">5</div>
+                <div>
+                    <h4>Experience client digitale</h4>
+                    <p>Self check-in avec paiement en ligne, livret d'accueil numerique avec QR code,
+                    reservations directes sans commission OTA. Modernisez l'accueil de vos clients.</p>
+                </div>
+            </div>
+            <div class="value-item">
+                <div class="value-num">6</div>
+                <div>
+                    <h4>Donnees hebergees en France</h4>
+                    <p>Infrastructure OVH, hebergement en France, conformite RGPD complete.
+                    Vos donnees restent sous legislation francaise et europeenne.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="page-footer-brand">ACL GESTION &bull; acl-gestion.com</div>
+    <div class="page-number">7</div>
+</div>
+
+<!-- ===== PAGE 8: CONTACT ===== -->
+<div class="page contact-page">
+    <div class="cover-badge" style="margin-bottom:30px">Prochaine etape</div>
+    <h2 class="contact-title">Pret a digitaliser<br>votre groupe hotelier ?</h2>
+    <p class="contact-sub">
+        Demandez une demonstration personnalisee gratuite.
+        Nous adaptons la plateforme a vos besoins specifiques.
+    </p>
+
+    <div class="contact-grid">
+        <div class="contact-card">
+            <i class="fas fa-globe"></i>
+            <strong>Site web</strong>
+            <span>acl-gestion.com</span>
+        </div>
+        <div class="contact-card">
+            <i class="fas fa-envelope"></i>
+            <strong>Email</strong>
+            <span>contact@acl-gestion.com</span>
+        </div>
+        <div class="contact-card">
+            <i class="fas fa-calendar-check"></i>
+            <strong>Demo gratuite</strong>
+            <span>30 min, sans engagement</span>
+        </div>
+        <div class="contact-card">
+            <i class="fas fa-headset"></i>
+            <strong>Support</strong>
+            <span>Accompagnement personnalise</span>
+        </div>
+    </div>
+
+    <a href="#" class="contact-cta">
+        <i class="fas fa-rocket"></i> Demander une demonstration
+    </a>
+
+    <div style="display:flex;gap:40px;margin-bottom:40px">
+        <div style="text-align:center">
+            <div style="font-size:32px;font-weight:800;color:#fff">21</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.5)">Modules</div>
+        </div>
+        <div style="text-align:center">
+            <div style="font-size:32px;font-weight:800;color:#fff">100%</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.5)">Cloud</div>
+        </div>
+        <div style="text-align:center">
+            <div style="font-size:32px;font-weight:800;color:#fff">24/7</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.5)">Disponible</div>
+        </div>
+        <div style="text-align:center">
+            <div style="font-size:32px;font-weight:800;color:#fff">RGPD</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.5)">Conforme</div>
+        </div>
+    </div>
+
+    <div class="contact-legal">
+        ACL GESTION &bull; Plateforme SaaS de gestion hoteliere multi-etablissements<br>
+        Presentation commerciale 2026 &bull; Tous droits reserves
+    </div>
+</div>
+
+</body>
+</html>

@@ -13194,6 +13194,91 @@ try {
             $userHotelIds = getManageableHotels($user);
             $hotelList = implode(',', array_map('intval', $userHotelIds));
 
+            // --- Helper : détection de doublons potentiels ---
+            function findInvoiceDuplicates($invoiceId, $hotelId, $supplierId, $invoiceNumber, $totalTtc, $invoiceDate) {
+                $duplicates = [];
+                if (!$hotelId) return $duplicates;
+
+                // 1. Match exact : même fournisseur + même numéro de facture
+                if ($supplierId && $invoiceNumber) {
+                    $exactMatches = db()->query(
+                        "SELECT si.id, si.invoice_number, si.invoice_date, si.total_ttc, si.status, si.created_at,
+                                s.name as supplier_name
+                         FROM supplier_invoices si
+                         LEFT JOIN suppliers s ON si.supplier_id = s.id
+                         WHERE si.hotel_id = ? AND si.supplier_id = ? AND si.invoice_number = ? AND si.id != ?
+                         LIMIT 5",
+                        [$hotelId, $supplierId, $invoiceNumber, $invoiceId]
+                    );
+                    foreach ($exactMatches as $m) {
+                        $duplicates[] = array_merge($m, ['match_type' => 'exact', 'confidence' => 99]);
+                    }
+                }
+
+                // 2. Match numéro facture seul (même hôtel, fournisseur différent ou null)
+                if ($invoiceNumber && empty($duplicates)) {
+                    $numMatches = db()->query(
+                        "SELECT si.id, si.invoice_number, si.invoice_date, si.total_ttc, si.status, si.created_at,
+                                s.name as supplier_name
+                         FROM supplier_invoices si
+                         LEFT JOIN suppliers s ON si.supplier_id = s.id
+                         WHERE si.hotel_id = ? AND si.invoice_number = ? AND si.id != ?
+                         LIMIT 5",
+                        [$hotelId, $invoiceNumber, $invoiceId]
+                    );
+                    foreach ($numMatches as $m) {
+                        $alreadyFound = false;
+                        foreach ($duplicates as $d) { if ($d['id'] == $m['id']) { $alreadyFound = true; break; } }
+                        if (!$alreadyFound) {
+                            $duplicates[] = array_merge($m, ['match_type' => 'invoice_number', 'confidence' => 90]);
+                        }
+                    }
+                }
+
+                // 3. Match montant + date + fournisseur (même montant TTC, même date, même fournisseur)
+                if ($supplierId && $totalTtc > 0 && $invoiceDate) {
+                    $amountMatches = db()->query(
+                        "SELECT si.id, si.invoice_number, si.invoice_date, si.total_ttc, si.status, si.created_at,
+                                s.name as supplier_name
+                         FROM supplier_invoices si
+                         LEFT JOIN suppliers s ON si.supplier_id = s.id
+                         WHERE si.hotel_id = ? AND si.supplier_id = ? AND si.total_ttc = ? AND si.invoice_date = ? AND si.id != ?
+                         LIMIT 5",
+                        [$hotelId, $supplierId, $totalTtc, $invoiceDate, $invoiceId]
+                    );
+                    foreach ($amountMatches as $m) {
+                        $alreadyFound = false;
+                        foreach ($duplicates as $d) { if ($d['id'] == $m['id']) { $alreadyFound = true; break; } }
+                        if (!$alreadyFound) {
+                            $duplicates[] = array_merge($m, ['match_type' => 'amount_date', 'confidence' => 85]);
+                        }
+                    }
+                }
+
+                // 4. Match montant + fournisseur (même montant TTC, même fournisseur, dates proches)
+                if ($supplierId && $totalTtc > 0 && $invoiceDate && empty($duplicates)) {
+                    $closeMatches = db()->query(
+                        "SELECT si.id, si.invoice_number, si.invoice_date, si.total_ttc, si.status, si.created_at,
+                                s.name as supplier_name
+                         FROM supplier_invoices si
+                         LEFT JOIN suppliers s ON si.supplier_id = s.id
+                         WHERE si.hotel_id = ? AND si.supplier_id = ? AND si.total_ttc = ?
+                               AND ABS(DATEDIFF(si.invoice_date, ?)) <= 7 AND si.id != ?
+                         LIMIT 5",
+                        [$hotelId, $supplierId, $totalTtc, $invoiceDate, $invoiceId]
+                    );
+                    foreach ($closeMatches as $m) {
+                        $alreadyFound = false;
+                        foreach ($duplicates as $d) { if ($d['id'] == $m['id']) { $alreadyFound = true; break; } }
+                        if (!$alreadyFound) {
+                            $duplicates[] = array_merge($m, ['match_type' => 'amount_supplier', 'confidence' => 75]);
+                        }
+                    }
+                }
+
+                return $duplicates;
+            }
+
             // --- GET /invoices/stats ---
             if ($method === 'GET' && $id === 'stats') {
                 if (!hasPermission($userRole, 'invoices.view')) json_error('Accès refusé', 403);
@@ -13898,6 +13983,22 @@ try {
                     $invoice['ocr_model'] = (isset($ocrRaw['usage']) && isset($ocrRaw['usage']['model'])) ? $ocrRaw['usage']['model'] : null;
                 }
 
+                // Détection de doublons (si pas déjà marqué "pas un doublon")
+                $duplicates = [];
+                try {
+                    if (empty($invoice['not_duplicate'])) {
+                        $duplicates = findInvoiceDuplicates(
+                            (int)$id,
+                            $invoice['hotel_id'],
+                            $invoice['supplier_id'],
+                            $invoice['invoice_number'],
+                            (float)($invoice['total_ttc'] ?? 0),
+                            $invoice['invoice_date']
+                        );
+                    }
+                } catch (\Throwable $e) {}
+                $invoice['duplicates'] = $duplicates;
+
                 json_out(['invoice' => $invoice]);
             }
 
@@ -14149,13 +14250,28 @@ try {
                     $ocrEnriched['ocr_supplier'] = $ocrResult['data']['supplier'] ?? null;
                 }
 
+                // Détection de doublons potentiels
+                $duplicates = findInvoiceDuplicates(
+                    $invoiceId,
+                    $hotelId,
+                    $createdInvoice['supplier_id'],
+                    $createdInvoice['invoice_number'],
+                    (float)($createdInvoice['total_ttc'] ?? 0),
+                    $createdInvoice['invoice_date']
+                );
+                if (!empty($duplicates)) {
+                    try { db()->execute("UPDATE supplier_invoices SET is_duplicate = 1 WHERE id = ?", [$invoiceId]); } catch (\Throwable $e) {}
+                    $createdInvoice['is_duplicate'] = 1;
+                }
+
                 json_out([
                     'success' => true,
                     'id' => $invoiceId,
                     'file_url' => 'uploads/invoices/' . $filename,
                     'invoice' => $createdInvoice,
                     'lines' => $lines,
-                    'ocr' => $ocrEnriched
+                    'ocr' => $ocrEnriched,
+                    'duplicates' => $duplicates
                 ], 201);
             }
 
@@ -14685,6 +14801,22 @@ try {
                 ]);
 
                 json_out(['success' => true, 'id' => $docId, 'file_url' => 'uploads/invoices/' . $filename]);
+            }
+
+            // --- PUT /invoices/{id}/not-duplicate (marquer comme non-doublon) ---
+            if ($method === 'PUT' && $id && is_numeric($id) && $action === 'not-duplicate') {
+                if (!hasPermission($userRole, 'invoices.edit')) json_error('Accès refusé', 403);
+
+                $invoice = db()->queryOne("SELECT * FROM supplier_invoices WHERE id = ?", [(int)$id]);
+                if (!$invoice) json_error('Facture non trouvée', 404);
+                if (!in_array($invoice['hotel_id'], $userHotelIds)) json_error('Accès non autorisé', 403);
+
+                db()->execute(
+                    "UPDATE supplier_invoices SET not_duplicate = 1, is_duplicate = 0, updated_at = ? WHERE id = ?",
+                    [date('Y-m-d H:i:s'), (int)$id]
+                );
+
+                json_out(['success' => true, 'message' => 'Facture marquée comme non-doublon']);
             }
 
             // --- DELETE /invoices/{id} ---
