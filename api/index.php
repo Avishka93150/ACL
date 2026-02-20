@@ -11580,7 +11580,7 @@ try {
                 if (!$config) json_error('Livret non trouvé ou non publié', 404);
 
                 $tabs = db()->query(
-                    "SELECT id, name, icon, description, banner_path, sort_order
+                    "SELECT id, name, icon, description, banner_path, layout, sort_order
                      FROM hotel_welcome_tabs
                      WHERE hotel_id = ? AND is_active = 1
                      ORDER BY sort_order, id",
@@ -11589,7 +11589,7 @@ try {
 
                 foreach ($tabs as &$tab) {
                     $tab['items'] = db()->query(
-                        "SELECT id, title, description, photo_path, price, schedule, external_link, sort_order
+                        "SELECT id, title, subtitle, description, photo_path, price, schedule, external_link, badge_text, badge_color, sort_order
                          FROM hotel_welcome_items
                          WHERE tab_id = ? AND is_active = 1
                          ORDER BY sort_order, id",
@@ -11675,6 +11675,23 @@ try {
                     'wifi_password' => $data['wifi_password'] ?? null,
                     'checkin_time' => $data['checkin_time'] ?? '15:00:00',
                     'checkout_time' => $data['checkout_time'] ?? '11:00:00',
+                    'banner_height' => (int)($data['banner_height'] ?? 320),
+                    'banner_overlay' => (int)($data['banner_overlay'] ?? 1),
+                    'header_style' => $data['header_style'] ?? 'card',
+                    'tab_style' => $data['tab_style'] ?? 'pills',
+                    'item_layout' => $data['item_layout'] ?? 'cards',
+                    'title_font' => $data['title_font'] ?? null,
+                    'title_size' => $data['title_size'] ?? 'lg',
+                    'body_font_size' => $data['body_font_size'] ?? 'md',
+                    'section_order' => $data['section_order'] ?? null,
+                    'show_header' => (int)($data['show_header'] ?? 1),
+                    'show_wifi' => (int)($data['show_wifi'] ?? 1),
+                    'show_schedule' => (int)($data['show_schedule'] ?? 1),
+                    'show_welcome' => (int)($data['show_welcome'] ?? 1),
+                    'show_contact' => (int)($data['show_contact'] ?? 1),
+                    'show_social' => (int)($data['show_social'] ?? 1),
+                    'show_infos' => (int)($data['show_infos'] ?? 1),
+                    'custom_css' => $data['custom_css'] ?? null,
                     'updated_at' => date('Y-m-d H:i:s')
                 ];
 
@@ -11696,8 +11713,8 @@ try {
                 }
             }
 
-            // POST /welcome/config/logo ou /welcome/config/banner - Upload images config
-            if ($method === 'POST' && $id === 'config' && in_array($action, ['logo', 'banner'])) {
+            // POST /welcome/config/logo ou /welcome/config/banner ou /welcome/config/welcome-image - Upload images config
+            if ($method === 'POST' && $id === 'config' && in_array($action, ['logo', 'banner', 'welcome-image'])) {
                 $hotelId = $_POST['hotel_id'] ?? null;
                 if (!$hotelId) json_error('hotel_id requis');
                 if (!in_array($hotelId, $userHotelIds)) json_error('Accès non autorisé', 403);
@@ -11717,7 +11734,7 @@ try {
                     json_error('Erreur lors de l\'upload');
                 }
 
-                $column = $action . '_path';
+                $column = str_replace('-', '_', $action) . '_path';
                 $relativePath = 'uploads/welcome/' . $filename;
 
                 // Supprimer l'ancien fichier
@@ -11772,6 +11789,7 @@ try {
                     'name' => $data['name'],
                     'icon' => $data['icon'] ?? 'concierge-bell',
                     'description' => $data['description'] ?? null,
+                    'layout' => $data['layout'] ?? 'cards',
                     'sort_order' => ($maxOrder['m'] ?? 0) + 1,
                     'is_active' => 1,
                     'created_at' => date('Y-m-d H:i:s')
@@ -11791,7 +11809,7 @@ try {
 
                 $sets = [];
                 $params = [];
-                foreach (['name', 'icon', 'description', 'is_active', 'sort_order'] as $field) {
+                foreach (['name', 'icon', 'description', 'layout', 'is_active', 'sort_order'] as $field) {
                     if (isset($data[$field])) {
                         $sets[] = "$field = ?";
                         $params[] = $data[$field];
@@ -11896,10 +11914,13 @@ try {
                     'tab_id' => $tabId,
                     'hotel_id' => $tab['hotel_id'],
                     'title' => $data['title'],
+                    'subtitle' => $data['subtitle'] ?? null,
                     'description' => $data['description'] ?? null,
                     'price' => $data['price'] ?? null,
                     'schedule' => $data['schedule'] ?? null,
                     'external_link' => $data['external_link'] ?? null,
+                    'badge_text' => $data['badge_text'] ?? null,
+                    'badge_color' => $data['badge_color'] ?? null,
                     'sort_order' => ($maxOrder['m'] ?? 0) + 1,
                     'is_active' => 1,
                     'created_at' => date('Y-m-d H:i:s')
@@ -11919,7 +11940,7 @@ try {
 
                 $sets = [];
                 $params = [];
-                foreach (['title', 'description', 'price', 'schedule', 'external_link', 'is_active', 'sort_order'] as $field) {
+                foreach (['title', 'subtitle', 'description', 'price', 'schedule', 'external_link', 'badge_text', 'badge_color', 'is_active', 'sort_order'] as $field) {
                     if (isset($data[$field])) {
                         $sets[] = "$field = ?";
                         $params[] = $data[$field];
