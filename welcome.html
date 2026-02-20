@@ -33,9 +33,6 @@
         /* ===== ANIMATIONS ===== */
         .wl-anim{opacity:0;transform:translateY(24px);transition:opacity .6s ease,transform .6s ease;}
         .wl-anim.visible{opacity:1;transform:none;}
-        .wl-anim-delay-1{transition-delay:.1s;}
-        .wl-anim-delay-2{transition-delay:.2s;}
-        .wl-anim-delay-3{transition-delay:.3s;}
 
         /* ===== CONTAINER ===== */
         .wl-container{max-width:760px;margin:0 auto;padding:0 20px;}
@@ -45,12 +42,9 @@
         .wl-banner-img{width:100%;height:100%;object-fit:cover;display:block;}
         .wl-banner-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.1) 0%,rgba(0,0,0,.45) 100%);pointer-events:none;}
         .wl-banner-no-overlay .wl-banner-overlay{display:none;}
-        .wl-banner-content{position:absolute;bottom:0;left:0;right:0;padding:32px 20px;z-index:2;}
-        .wl-banner-content .wl-container{display:flex;align-items:flex-end;gap:20px;}
         .wl-banner-placeholder-icon{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:56px;color:rgba(255,255,255,.15);}
 
         /* ===== HEADER STYLES ===== */
-        /* Card style */
         .wl-header-card{margin-top:-48px;position:relative;z-index:3;}
         .wl-header-card .wl-hcard{background:#fff;border-radius:16px;box-shadow:var(--shadow-xl);padding:28px 32px;display:flex;align-items:center;gap:20px;}
         .wl-header-card .wl-logo{width:76px;height:76px;border-radius:14px;object-fit:cover;border:3px solid #fff;box-shadow:var(--shadow-md);flex-shrink:0;}
@@ -59,7 +53,6 @@
         .wl-header-card .wl-hcity{color:var(--g500);font-size:14px;margin-top:3px;display:flex;align-items:center;gap:5px;}
         .wl-header-card .wl-hstars{color:#F59E0B;font-size:13px;margin-top:4px;letter-spacing:2px;}
 
-        /* Overlay style */
         .wl-header-overlay{position:absolute;bottom:24px;left:0;right:0;z-index:3;color:#fff;}
         .wl-header-overlay .wl-logo{width:64px;height:64px;border-radius:12px;object-fit:cover;border:2px solid rgba(255,255,255,.8);flex-shrink:0;}
         .wl-header-overlay .wl-logo-ph{width:64px;height:64px;border-radius:12px;background:rgba(255,255,255,.2);backdrop-filter:blur(8px);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;font-family:var(--wl-title-font);flex-shrink:0;}
@@ -68,7 +61,6 @@
         .wl-header-overlay .wl-hstars{color:#FCD34D;font-size:14px;margin-top:4px;letter-spacing:2px;}
         .wl-header-overlay .wl-hflex{display:flex;align-items:center;gap:18px;}
 
-        /* Minimal style */
         .wl-header-minimal{padding:32px 0 0;text-align:center;}
         .wl-header-minimal .wl-logo{width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid var(--wl-primary-light);margin:0 auto 16px;display:block;}
         .wl-header-minimal .wl-logo-ph{width:72px;height:72px;border-radius:50%;background:var(--wl-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;font-family:var(--wl-title-font);margin:0 auto 16px;}
@@ -76,7 +68,7 @@
         .wl-header-minimal .wl-hcity{color:var(--g500);font-size:14px;margin-top:4px;}
         .wl-header-minimal .wl-hstars{color:#F59E0B;font-size:13px;margin-top:6px;letter-spacing:2px;}
 
-        /* ===== SCHEDULE & WIFI BADGES ===== */
+        /* ===== SCHEDULE & WIFI ===== */
         .wl-badges{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;padding:20px 0 0;}
         .wl-badge{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:50px;background:var(--g50);border:1px solid var(--g200);font-size:13px;color:var(--g600);font-weight:500;}
         .wl-badge i{color:var(--wl-primary);font-size:12px;}
@@ -88,32 +80,49 @@
         .wl-wifi-pwd{color:var(--g500);font-size:13px;margin-top:2px;}
         .wl-wifi-pwd strong{color:var(--g800);font-weight:600;letter-spacing:.5px;}
 
-        /* ===== WELCOME SECTION ===== */
-        .wl-welcome{padding:36px 0 0;}
-        .wl-welcome-inner{display:flex;gap:28px;align-items:flex-start;}
-        .wl-welcome-inner.has-image .wl-welcome-text-wrap{flex:1;}
-        .wl-welcome-image{width:280px;height:200px;border-radius:var(--radius);object-fit:cover;flex-shrink:0;box-shadow:var(--shadow-md);}
-        .wl-welcome-title{font-size:var(--wl-title-size);font-weight:700;font-family:var(--wl-title-font);color:var(--g900);margin-bottom:14px;position:relative;padding-bottom:14px;}
-        .wl-welcome-title::after{content:'';position:absolute;bottom:0;left:0;width:48px;height:3px;background:var(--wl-primary);border-radius:2px;}
-        .wl-welcome-text{color:var(--g600);white-space:pre-line;line-height:1.8;}
+        /* ===== TEXT SECTION ===== */
+        .wl-text-section{padding:36px 0 0;}
+        .wl-text-inner{display:flex;gap:28px;align-items:flex-start;}
+        .wl-text-inner.has-image .wl-text-wrap{flex:1;}
+        .wl-text-inner.align-center{flex-direction:column;align-items:center;text-align:center;}
+        .wl-text-inner.align-center .wl-text-img{width:100%;max-width:500px;}
+        .wl-text-img{width:280px;height:200px;border-radius:var(--radius);object-fit:cover;flex-shrink:0;box-shadow:var(--shadow-md);}
+        .wl-text-title{font-size:var(--wl-title-size);font-weight:700;font-family:var(--wl-title-font);color:var(--g900);margin-bottom:14px;position:relative;padding-bottom:14px;}
+        .wl-text-title::after{content:'';position:absolute;bottom:0;left:0;width:48px;height:3px;background:var(--wl-primary);border-radius:2px;}
+        .wl-text-inner.align-center .wl-text-title::after{left:50%;transform:translateX(-50%);}
+        .wl-text-content{color:var(--g600);white-space:pre-line;line-height:1.8;}
+
+        /* ===== IMAGE SECTION ===== */
+        .wl-image-section{padding:36px 0 0;}
+        .wl-image-full{width:100%;border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-md);}
+        .wl-image-full img{width:100%;display:block;max-height:500px;object-fit:cover;}
+        .wl-image-caption{text-align:center;color:var(--g500);font-size:13px;margin-top:10px;font-style:italic;}
+
+        /* ===== GALLERY ===== */
+        .wl-gallery{padding:36px 0 0;}
+        .wl-gallery-title{font-size:20px;font-weight:700;font-family:var(--wl-title-font);color:var(--g900);margin-bottom:16px;}
+        .wl-gallery-grid{display:grid;gap:10px;}
+        .wl-gallery-grid.cols-2{grid-template-columns:1fr 1fr;}
+        .wl-gallery-grid.cols-3{grid-template-columns:1fr 1fr 1fr;}
+        .wl-gallery-item{border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-sm);}
+        .wl-gallery-item img{width:100%;height:200px;object-fit:cover;display:block;transition:transform .3s;}
+        .wl-gallery-item:hover img{transform:scale(1.03);}
+        .wl-gallery-item-caption{padding:8px 12px;background:var(--g50);font-size:12px;color:var(--g600);text-align:center;}
 
         /* ===== TAB NAVIGATION ===== */
         .wl-tabs-nav{padding:36px 0 0;}
         .wl-tabs-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
         .wl-tabs-scroll::-webkit-scrollbar{display:none;}
 
-        /* Pills */
         .wl-tabs-pills .wl-tab-btn{display:inline-flex;align-items:center;gap:7px;padding:10px 20px;border-radius:50px;border:2px solid var(--g200);background:#fff;color:var(--g600);font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap;transition:all .25s;font-family:var(--wl-font);}
         .wl-tabs-pills .wl-tab-btn:hover{border-color:var(--wl-primary);color:var(--wl-primary);}
         .wl-tabs-pills .wl-tab-btn.active{background:var(--wl-primary);color:#fff;border-color:var(--wl-primary);box-shadow:0 4px 12px color-mix(in srgb, var(--wl-primary) 35%, transparent);}
 
-        /* Underline */
         .wl-tabs-underline{border-bottom:2px solid var(--g200);gap:0;}
         .wl-tabs-underline .wl-tab-btn{display:inline-flex;align-items:center;gap:7px;padding:12px 22px;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;background:none;color:var(--g500);font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap;transition:all .25s;font-family:var(--wl-font);}
         .wl-tabs-underline .wl-tab-btn:hover{color:var(--wl-primary);}
         .wl-tabs-underline .wl-tab-btn.active{color:var(--wl-primary);border-bottom-color:var(--wl-primary);font-weight:600;}
 
-        /* Cards */
         .wl-tabs-cards{gap:10px;}
         .wl-tabs-cards .wl-tab-btn{display:inline-flex;flex-direction:column;align-items:center;gap:6px;padding:14px 20px;border-radius:var(--radius);border:2px solid var(--g200);background:#fff;color:var(--g600);font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;transition:all .25s;font-family:var(--wl-font);min-width:90px;}
         .wl-tabs-cards .wl-tab-btn i{font-size:20px;}
@@ -128,26 +137,22 @@
         .wl-tab-desc{color:var(--g500);font-size:14px;line-height:1.7;margin-bottom:20px;white-space:pre-line;}
 
         /* ===== ITEM LAYOUTS ===== */
-        /* Cards layout */
         .wl-items-cards .wl-item{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px;transition:transform .25s,box-shadow .25s;border:1px solid var(--g100);}
         .wl-items-cards .wl-item:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);}
         .wl-items-cards .wl-item-photo{width:100%;height:200px;object-fit:cover;display:block;}
         .wl-items-cards .wl-item-body{padding:22px 24px;}
 
-        /* List layout */
         .wl-items-list .wl-item{display:flex;gap:18px;align-items:flex-start;padding:18px;background:#fff;border-radius:var(--radius);box-shadow:var(--shadow-sm);margin-bottom:10px;transition:all .25s;border:1px solid var(--g100);}
         .wl-items-list .wl-item:hover{box-shadow:var(--shadow-md);border-color:var(--wl-primary-light);}
         .wl-items-list .wl-item-photo{width:100px;height:80px;object-fit:cover;border-radius:10px;flex-shrink:0;}
         .wl-items-list .wl-item-body{flex:1;min-width:0;padding:0;}
 
-        /* Grid layout */
         .wl-items-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
         .wl-items-grid .wl-item{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;transition:transform .25s,box-shadow .25s;border:1px solid var(--g100);}
         .wl-items-grid .wl-item:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);}
         .wl-items-grid .wl-item-photo{width:100%;height:140px;object-fit:cover;display:block;}
         .wl-items-grid .wl-item-body{padding:16px;}
 
-        /* Shared item styles */
         .wl-item-badge{display:inline-block;padding:3px 10px;border-radius:50px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
         .wl-item-title{font-size:17px;font-weight:600;font-family:var(--wl-title-font);color:var(--g900);}
         .wl-item-subtitle{font-size:13px;color:var(--g500);margin-top:2px;font-weight:500;}
@@ -157,12 +162,6 @@
         .wl-item-price{color:var(--wl-primary);font-weight:600;}
         .wl-item-link{display:inline-flex;align-items:center;gap:5px;margin-top:12px;color:var(--wl-primary);font-size:13px;font-weight:600;text-decoration:none;transition:gap .2s;}
         .wl-item-link:hover{gap:8px;}
-
-        /* Photo placeholder */
-        .wl-item-photo-ph{background:var(--g100);display:flex;align-items:center;justify-content:center;color:var(--g300);font-size:24px;}
-        .wl-items-cards .wl-item-photo-ph{width:100%;height:200px;}
-        .wl-items-list .wl-item-photo-ph{width:100px;height:80px;border-radius:10px;flex-shrink:0;}
-        .wl-items-grid .wl-item-photo-ph{width:100%;height:140px;}
 
         /* ===== INFOS SECTION ===== */
         .wl-infos{padding:40px 0 0;}
@@ -174,7 +173,7 @@
         .wl-info-title{font-weight:600;font-size:14px;color:var(--g800);}
         .wl-info-content{color:var(--g500);font-size:13px;line-height:1.6;margin-top:3px;white-space:pre-line;}
 
-        /* ===== CONTACT FOOTER ===== */
+        /* ===== CONTACT ===== */
         .wl-footer{padding:40px 0 0;}
         .wl-footer-card{background:#fff;border-radius:16px;box-shadow:var(--shadow-lg);padding:32px;border:1px solid var(--g100);}
         .wl-footer-title{font-size:18px;font-weight:700;font-family:var(--wl-title-font);text-align:center;margin-bottom:20px;color:var(--g900);}
@@ -183,24 +182,35 @@
         .wl-contact-item:hover{background:var(--wl-primary-light);border-color:color-mix(in srgb, var(--wl-primary) 20%, white);color:var(--wl-primary-dark);}
         .wl-contact-icon{width:36px;height:36px;border-radius:9px;background:var(--wl-primary-light);color:var(--wl-primary);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;transition:all .2s;}
         .wl-contact-item:hover .wl-contact-icon{background:var(--wl-primary);color:#fff;}
-        .wl-social-links{display:flex;gap:12px;margin-top:20px;justify-content:center;}
+
+        /* ===== SOCIAL ===== */
+        .wl-social-links{display:flex;gap:12px;justify-content:center;padding:24px 0 0;}
         .wl-social-link{width:46px;height:46px;border-radius:50%;background:var(--g50);color:var(--g500);display:flex;align-items:center;justify-content:center;font-size:18px;text-decoration:none;transition:all .25s;border:2px solid var(--g200);}
         .wl-social-link:hover{background:var(--wl-primary);color:#fff;border-color:var(--wl-primary);transform:translateY(-3px);box-shadow:0 4px 12px color-mix(in srgb, var(--wl-primary) 30%, transparent);}
 
-        /* ===== SECTION DIVIDER ===== */
-        .wl-divider{width:48px;height:3px;background:var(--wl-primary);border-radius:2px;margin:0 auto;opacity:.4;}
+        /* ===== SEPARATOR ===== */
+        .wl-separator{padding:28px 0;}
+        .wl-separator-line{height:1px;background:var(--g200);}
+        .wl-separator-dashed{height:0;border-top:2px dashed var(--g200);}
+        .wl-separator-dots{text-align:center;color:var(--g300);letter-spacing:8px;font-size:18px;}
+        .wl-separator-accent{height:3px;width:60px;background:var(--wl-primary);border-radius:2px;margin:0 auto;opacity:.5;}
+
+        /* ===== MAP ===== */
+        .wl-map{padding:36px 0 0;}
+        .wl-map iframe{width:100%;border:none;border-radius:var(--radius);box-shadow:var(--shadow-md);}
+
+        /* ===== SPACER ===== */
+        .wl-spacer{display:block;}
 
         /* ===== POWERED BY ===== */
         .wl-powered{text-align:center;padding:32px 20px 40px;font-size:12px;color:var(--g400);}
         .wl-powered a{color:var(--g500);text-decoration:none;font-weight:500;}
         .wl-powered a:hover{color:var(--wl-primary);}
 
-        /* ===== LOADING ===== */
+        /* ===== LOADING / ERROR ===== */
         .wl-loading{display:flex;align-items:center;justify-content:center;min-height:80vh;flex-direction:column;gap:16px;}
         .wl-spinner{width:40px;height:40px;border:3px solid var(--g200);border-top-color:var(--wl-primary);border-radius:50%;animation:wl-spin .7s linear infinite;}
         @keyframes wl-spin{to{transform:rotate(360deg)}}
-
-        /* ===== ERROR ===== */
         .wl-error{display:flex;align-items:center;justify-content:center;min-height:80vh;flex-direction:column;gap:14px;text-align:center;padding:24px;}
         .wl-error i{font-size:56px;color:var(--g300);}
         .wl-error h2{font-family:var(--wl-title-font);font-size:22px;color:var(--g700);}
@@ -213,14 +223,15 @@
             .wl-header-card .wl-logo,.wl-header-card .wl-logo-ph{width:60px;height:60px;}
             .wl-header-card .wl-hname{font-size:18px;}
             .wl-header-overlay .wl-hname{font-size:22px;}
-            .wl-welcome-inner{flex-direction:column;}
-            .wl-welcome-image{width:100%;height:180px;}
+            .wl-text-inner{flex-direction:column;}
+            .wl-text-img{width:100%;height:180px;}
             .wl-contact-grid{grid-template-columns:1fr;}
             .wl-items-grid{grid-template-columns:1fr;}
             .wl-items-list .wl-item{flex-direction:column;}
             .wl-items-list .wl-item-photo{width:100%;height:160px;border-radius:10px;}
             .wl-footer-card{padding:20px;}
             .wl-tabs-cards .wl-tab-btn{min-width:70px;padding:10px 14px;}
+            .wl-gallery-grid.cols-3{grid-template-columns:1fr 1fr;}
         }
     </style>
 </head>
@@ -269,129 +280,85 @@
         const c = data.config || {};
         const tabs = data.tabs || [];
         const infos = data.infos || [];
+        const sections = data.sections || [];
 
         // Apply theme
         const primary = c.primary_color || '#1a56db';
         const secondary = c.secondary_color || '#f3f4f6';
         const bodyFont = c.font_family || 'Inter';
         const titleFont = c.title_font || bodyFont;
-        const headerStyle = c.header_style || 'card';
-        const tabStyle = c.tab_style || 'pills';
-        const itemLayout = c.item_layout || 'cards';
-        const bannerH = c.banner_height || 320;
-        const bannerOverlay = c.banner_overlay != 0;
         const titleSize = {sm:'20px',md:'24px',lg:'28px',xl:'34px'}[c.title_size||'lg'] || '28px';
         const bodySize = {sm:'13px',md:'15px',lg:'17px'}[c.body_font_size||'md'] || '15px';
 
-        // Section visibility
-        const show = {
-            header: c.show_header != 0,
-            wifi: c.show_wifi != 0,
-            schedule: c.show_schedule != 0,
-            welcome: c.show_welcome != 0,
-            contact: c.show_contact != 0,
-            social: c.show_social != 0,
-            infos: c.show_infos != 0
-        };
-
-        // CSS variables
         const root = document.documentElement;
         root.style.setProperty('--wl-primary', primary);
         root.style.setProperty('--wl-secondary', secondary);
         root.style.setProperty('--wl-font', `'${bodyFont}', sans-serif`);
         root.style.setProperty('--wl-title-font', `'${titleFont}', serif`);
-        root.style.setProperty('--wl-banner-height', bannerH + 'px');
         root.style.setProperty('--wl-title-size', titleSize);
         root.style.setProperty('--wl-body-size', bodySize);
         document.body.style.fontFamily = `'${bodyFont}', sans-serif`;
-
         document.title = (c.welcome_title || c.hotel_name || 'Livret d\'accueil') + ' \u2014 Livret d\'accueil';
 
-        // Inject custom CSS
         if (c.custom_css) {
             const style = document.createElement('style');
             style.textContent = c.custom_css;
             document.head.appendChild(style);
         }
 
-        // Section order
-        const defaultOrder = ['banner','header','schedule','wifi','welcome','tabs','infos','contact','social'];
-        let sectionOrder;
-        try { sectionOrder = c.section_order ? JSON.parse(c.section_order) : defaultOrder; }
-        catch(e) { sectionOrder = defaultOrder; }
-
-        // Build sections map
-        const sections = {};
-
-        // === BANNER ===
-        sections.banner = buildBanner(c, bannerOverlay, headerStyle);
-
-        // === HEADER ===
-        sections.header = show.header ? buildHeader(c, headerStyle) : '';
-
-        // === SCHEDULE ===
-        sections.schedule = (show.schedule && (c.checkin_time || c.checkout_time)) ? `
-            <div class="wl-container wl-anim">
-                <div class="wl-badges">
-                    ${c.checkin_time ? `<span class="wl-badge"><i class="fas fa-sign-in-alt"></i> Check-in : ${esc(c.checkin_time.substring(0,5))}</span>` : ''}
-                    ${c.checkout_time ? `<span class="wl-badge"><i class="fas fa-sign-out-alt"></i> Check-out : ${esc(c.checkout_time.substring(0,5))}</span>` : ''}
-                </div>
-            </div>` : '';
-
-        // === WIFI ===
-        sections.wifi = (show.wifi && c.wifi_name) ? `
-            <div class="wl-container wl-wifi-bar wl-anim">
-                <div class="wl-wifi-card">
-                    <div class="wl-wifi-icon"><i class="fas fa-wifi"></i></div>
-                    <div>
-                        <div class="wl-wifi-label">WiFi : ${esc(c.wifi_name)}</div>
-                        ${c.wifi_password ? `<div class="wl-wifi-pwd">Mot de passe : <strong>${esc(c.wifi_password)}</strong></div>` : ''}
-                    </div>
-                </div>
-            </div>` : '';
-
-        // === WELCOME ===
-        sections.welcome = (show.welcome && (c.welcome_title || c.welcome_text)) ? buildWelcome(c) : '';
-
-        // === TABS ===
-        sections.tabs = tabs.length > 0 ? buildTabs(tabs, tabStyle, itemLayout) : '';
-
-        // === INFOS ===
-        sections.infos = (show.infos && infos.length > 0) ? buildInfos(infos) : '';
-
-        // === CONTACT ===
-        const hasContact = c.phone || c.email || c.address || c.google_maps_url;
-        sections.contact = (show.contact && hasContact) ? buildContact(c) : '';
-
-        // === SOCIAL ===
-        const hasSocial = c.facebook_url || c.instagram_url || c.website_url;
-        sections.social = (show.social && hasSocial) ? buildSocial(c) : '';
-
-        // Assemble HTML
         let html = '';
-        sectionOrder.forEach(s => { if (sections[s]) html += sections[s]; });
-        // Add any missing sections not in order
-        Object.keys(sections).forEach(s => {
-            if (!sectionOrder.includes(s) && sections[s]) html += sections[s];
-        });
+
+        // If sections exist, render them dynamically. Otherwise fallback to legacy rendering.
+        if (sections.length > 0) {
+            sections.forEach(sec => {
+                const cfg = sec.config ? (typeof sec.config === 'string' ? JSON.parse(sec.config) : sec.config) : {};
+                html += renderSection(sec, cfg, c, tabs, infos);
+            });
+        } else {
+            // Legacy fallback: render from config fields
+            html += renderLegacy(c, tabs, infos);
+        }
 
         html += `<div class="wl-powered">Propuls\u00e9 par <a href="#">ACL GESTION</a></div>`;
         app.innerHTML = html;
-
-        // Init animations
         initScrollAnimations();
     }
 
-    function buildBanner(c, overlay, headerStyle) {
-        const bannerClass = overlay ? '' : ' wl-banner-no-overlay';
-        let inner = '';
-        if (c.banner_path) {
-            inner = `<img class="wl-banner-img" src="${esc(c.banner_path)}" alt="">`;
-        } else {
-            inner = `<i class="fas fa-hotel wl-banner-placeholder-icon"></i>`;
+    // ========== DYNAMIC SECTION RENDERER ==========
+    function renderSection(sec, cfg, c, tabs, infos) {
+        switch (sec.type) {
+            case 'banner': return buildBanner(c, cfg);
+            case 'header': return buildHeader(c, cfg);
+            case 'schedule': return buildSchedule(cfg);
+            case 'wifi': return buildWifi(cfg);
+            case 'text': return buildText(sec, cfg);
+            case 'image': return buildImage(sec, cfg);
+            case 'gallery': return buildGallery(sec, cfg);
+            case 'services': return buildTabs(tabs, cfg);
+            case 'infos': return buildInfos(infos, sec.title);
+            case 'contact': return buildContact(cfg, sec.title);
+            case 'social': return buildSocial(cfg);
+            case 'separator': return buildSeparator(cfg);
+            case 'map': return buildMap(cfg);
+            case 'spacer': return buildSpacer(cfg);
+            default: return '';
         }
-        // Overlay header content
+    }
+
+    function buildBanner(c, cfg) {
+        const h = cfg.height || c.banner_height || 320;
+        const overlay = cfg.overlay != null ? cfg.overlay : (c.banner_overlay != 0);
+        const imgPath = cfg.image_path || c.banner_path;
+        const bannerClass = overlay ? '' : ' wl-banner-no-overlay';
+        document.documentElement.style.setProperty('--wl-banner-height', h + 'px');
+
+        let inner = imgPath
+            ? `<img class="wl-banner-img" src="${esc(imgPath)}" alt="">`
+            : `<i class="fas fa-hotel wl-banner-placeholder-icon"></i>`;
+
+        // Overlay header
         let overlayContent = '';
+        const headerStyle = cfg.header_style || c.header_style || 'card';
         if (headerStyle === 'overlay') {
             overlayContent = `
                 <div class="wl-header-overlay">
@@ -407,10 +374,11 @@
                     </div>
                 </div>`;
         }
-        return `<div class="wl-banner-wrap${bannerClass}">${inner}<div class="wl-banner-overlay"></div>${overlayContent}</div>`;
+        return `<div class="wl-banner-wrap${bannerClass}" style="height:${h}px">${inner}<div class="wl-banner-overlay"></div>${overlayContent}</div>`;
     }
 
-    function buildHeader(c, style) {
+    function buildHeader(c, cfg) {
+        const style = cfg.style || c.header_style || 'card';
         if (style === 'overlay') return '';
         if (style === 'minimal') {
             return `
@@ -423,7 +391,6 @@
                     </div>
                 </div>`;
         }
-        // Card style (default)
         return `
             <div class="wl-container wl-header-card wl-anim">
                 <div class="wl-hcard">
@@ -437,21 +404,85 @@
             </div>`;
     }
 
-    function buildWelcome(c) {
-        const hasImg = !!c.welcome_image_path;
+    function buildSchedule(cfg) {
+        const checkin = cfg.checkin || '';
+        const checkout = cfg.checkout || '';
+        if (!checkin && !checkout) return '';
         return `
-            <div class="wl-container wl-welcome wl-anim">
-                <div class="wl-welcome-inner ${hasImg ? 'has-image' : ''}">
-                    <div class="wl-welcome-text-wrap">
-                        ${c.welcome_title ? `<h2 class="wl-welcome-title">${esc(c.welcome_title)}</h2>` : ''}
-                        ${c.welcome_text ? `<div class="wl-welcome-text">${esc(c.welcome_text)}</div>` : ''}
-                    </div>
-                    ${hasImg ? `<img class="wl-welcome-image" src="${esc(c.welcome_image_path)}" alt="">` : ''}
+            <div class="wl-container wl-anim">
+                <div class="wl-badges">
+                    ${checkin ? `<span class="wl-badge"><i class="fas fa-sign-in-alt"></i> Check-in : ${esc(checkin.substring(0,5))}</span>` : ''}
+                    ${checkout ? `<span class="wl-badge"><i class="fas fa-sign-out-alt"></i> Check-out : ${esc(checkout.substring(0,5))}</span>` : ''}
                 </div>
             </div>`;
     }
 
-    function buildTabs(tabs, tabStyle, defaultLayout) {
+    function buildWifi(cfg) {
+        const name = cfg.name || '';
+        if (!name) return '';
+        return `
+            <div class="wl-container wl-wifi-bar wl-anim">
+                <div class="wl-wifi-card">
+                    <div class="wl-wifi-icon"><i class="fas fa-wifi"></i></div>
+                    <div>
+                        <div class="wl-wifi-label">WiFi : ${esc(name)}</div>
+                        ${cfg.password ? `<div class="wl-wifi-pwd">Mot de passe : <strong>${esc(cfg.password)}</strong></div>` : ''}
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    function buildText(sec, cfg) {
+        if (!sec.title && !sec.content) return '';
+        const align = cfg.alignment || 'left';
+        const hasImg = !!sec.image_path;
+        return `
+            <div class="wl-container wl-text-section wl-anim">
+                <div class="wl-text-inner ${hasImg ? 'has-image' : ''} ${align === 'center' ? 'align-center' : ''}">
+                    <div class="wl-text-wrap">
+                        ${sec.title ? `<h2 class="wl-text-title">${esc(sec.title)}</h2>` : ''}
+                        ${sec.content ? `<div class="wl-text-content">${esc(sec.content)}</div>` : ''}
+                    </div>
+                    ${hasImg ? `<img class="wl-text-img" src="${esc(sec.image_path)}" alt="" loading="lazy">` : ''}
+                </div>
+            </div>`;
+    }
+
+    function buildImage(sec, cfg) {
+        if (!sec.image_path) return '';
+        const link = cfg.link || '';
+        const caption = cfg.caption || sec.title || '';
+        let img = `<div class="wl-image-full"><img src="${esc(sec.image_path)}" alt="${esc(caption)}" loading="lazy"></div>`;
+        if (link) img = `<a href="${esc(link)}" target="_blank" rel="noopener">${img}</a>`;
+        return `
+            <div class="wl-container wl-image-section wl-anim">
+                ${img}
+                ${caption ? `<div class="wl-image-caption">${esc(caption)}</div>` : ''}
+            </div>`;
+    }
+
+    function buildGallery(sec, cfg) {
+        const items = cfg.items || [];
+        if (items.length === 0) return '';
+        const cols = cfg.columns || (items.length <= 2 ? 2 : 3);
+        let html = `<div class="wl-container wl-gallery wl-anim">`;
+        if (sec.title) html += `<div class="wl-gallery-title">${esc(sec.title)}</div>`;
+        html += `<div class="wl-gallery-grid cols-${cols}">`;
+        items.forEach(item => {
+            html += `<div class="wl-gallery-item">
+                <img src="${esc(item.image_path || item.url || '')}" alt="${esc(item.caption || '')}" loading="lazy">
+                ${item.caption ? `<div class="wl-gallery-item-caption">${esc(item.caption)}</div>` : ''}
+            </div>`;
+        });
+        html += `</div></div>`;
+        return html;
+    }
+
+    function buildTabs(tabs, cfg) {
+        if (!tabs || tabs.length === 0) return '';
+        const tabStyle = cfg.tab_style || 'pills';
+        const defaultLayout = cfg.item_layout || 'cards';
+
         let html = `<div class="wl-container wl-tabs-nav wl-anim">
             <div class="wl-tabs-scroll wl-tabs-${esc(tabStyle)}">`;
         tabs.forEach((tab, i) => {
@@ -462,17 +493,16 @@
         html += `</div></div>`;
 
         tabs.forEach((tab, i) => {
-            const layout = tab.layout || defaultLayout || 'cards';
+            const layout = tab.layout || defaultLayout;
             html += `<div class="wl-container wl-tab-content ${i===0?'active':''}" id="wl-tab-${i}">`;
             if (tab.banner_path) html += `<img class="wl-tab-banner" src="${esc(tab.banner_path)}" alt="${esc(tab.name)}">`;
             if (tab.description) html += `<p class="wl-tab-desc">${esc(tab.description)}</p>`;
-
             const items = tab.items || [];
             if (items.length === 0) {
                 html += `<p style="text-align:center;color:var(--g400);padding:32px 0;font-style:italic">Aucun contenu pour le moment.</p>`;
             } else {
                 html += `<div class="wl-items-${esc(layout)}">`;
-                items.forEach(item => { html += buildItem(item, layout); });
+                items.forEach(item => { html += buildItem(item); });
                 html += `</div>`;
             }
             html += `</div>`;
@@ -480,13 +510,9 @@
         return html;
     }
 
-    function buildItem(item, layout) {
+    function buildItem(item) {
         const hasPhoto = !!item.photo_path;
-        let photoHtml = '';
-        if (hasPhoto) {
-            photoHtml = `<img class="wl-item-photo" src="${esc(item.photo_path)}" alt="${esc(item.title)}" loading="lazy">`;
-        }
-
+        let photoHtml = hasPhoto ? `<img class="wl-item-photo" src="${esc(item.photo_path)}" alt="${esc(item.title)}" loading="lazy">` : '';
         const badgeHtml = item.badge_text ? `<div class="wl-item-badge" style="background:${esc(item.badge_color||'var(--wl-primary)')};color:#fff">${esc(item.badge_text)}</div>` : '';
         const subtitleHtml = item.subtitle ? `<div class="wl-item-subtitle">${esc(item.subtitle)}</div>` : '';
         const descHtml = item.description ? `<div class="wl-item-desc">${esc(item.description)}</div>` : '';
@@ -498,13 +524,13 @@
             metaHtml += '</div>';
         }
         const linkHtml = item.external_link ? `<a href="${esc(item.external_link)}" target="_blank" rel="noopener" class="wl-item-link">En savoir plus <i class="fas fa-arrow-right"></i></a>` : '';
-
         return `<div class="wl-item">${photoHtml}<div class="wl-item-body">${badgeHtml}<div class="wl-item-title">${esc(item.title)}</div>${subtitleHtml}${descHtml}${metaHtml}${linkHtml}</div></div>`;
     }
 
-    function buildInfos(infos) {
+    function buildInfos(infos, title) {
+        if (!infos || infos.length === 0) return '';
         let html = `<div class="wl-container wl-infos wl-anim">
-            <div class="wl-infos-title"><i class="fas fa-info-circle" style="color:var(--wl-primary)"></i> Informations pratiques</div>`;
+            <div class="wl-infos-title"><i class="fas fa-info-circle" style="color:var(--wl-primary)"></i> ${esc(title || 'Informations pratiques')}</div>`;
         infos.forEach(info => {
             html += `<div class="wl-info-card">
                 <div class="wl-info-icon"><i class="fas fa-${esc(info.icon||'info-circle')}"></i></div>
@@ -515,24 +541,94 @@
         return html;
     }
 
-    function buildContact(c) {
+    function buildContact(cfg, title) {
+        if (!cfg.phone && !cfg.email && !cfg.address && !cfg.maps_url) return '';
         let html = `<div class="wl-container wl-footer wl-anim"><div class="wl-footer-card">
-            <div class="wl-footer-title"><i class="fas fa-concierge-bell" style="color:var(--wl-primary)"></i> Nous contacter</div>
+            <div class="wl-footer-title"><i class="fas fa-concierge-bell" style="color:var(--wl-primary)"></i> ${esc(title || 'Nous contacter')}</div>
             <div class="wl-contact-grid">`;
-        if (c.phone) html += `<a href="tel:${esc(c.phone)}" class="wl-contact-item"><div class="wl-contact-icon"><i class="fas fa-phone-alt"></i></div><span>${esc(c.phone)}</span></a>`;
-        if (c.email) html += `<a href="mailto:${esc(c.email)}" class="wl-contact-item"><div class="wl-contact-icon"><i class="fas fa-envelope"></i></div><span>${esc(c.email)}</span></a>`;
-        if (c.address) html += `<div class="wl-contact-item"><div class="wl-contact-icon"><i class="fas fa-map-marker-alt"></i></div><span>${esc(c.address)}</span></div>`;
-        if (c.google_maps_url) html += `<a href="${esc(c.google_maps_url)}" target="_blank" rel="noopener" class="wl-contact-item"><div class="wl-contact-icon"><i class="fas fa-map"></i></div><span>Voir sur la carte</span></a>`;
+        if (cfg.phone) html += `<a href="tel:${esc(cfg.phone)}" class="wl-contact-item"><div class="wl-contact-icon"><i class="fas fa-phone-alt"></i></div><span>${esc(cfg.phone)}</span></a>`;
+        if (cfg.email) html += `<a href="mailto:${esc(cfg.email)}" class="wl-contact-item"><div class="wl-contact-icon"><i class="fas fa-envelope"></i></div><span>${esc(cfg.email)}</span></a>`;
+        if (cfg.address) html += `<div class="wl-contact-item"><div class="wl-contact-icon"><i class="fas fa-map-marker-alt"></i></div><span>${esc(cfg.address)}</span></div>`;
+        if (cfg.maps_url) html += `<a href="${esc(cfg.maps_url)}" target="_blank" rel="noopener" class="wl-contact-item"><div class="wl-contact-icon"><i class="fas fa-map"></i></div><span>Voir sur la carte</span></a>`;
         html += `</div></div></div>`;
         return html;
     }
 
-    function buildSocial(c) {
-        let html = `<div class="wl-container wl-anim" style="padding-top:24px"><div class="wl-social-links">`;
-        if (c.facebook_url) html += `<a href="${esc(c.facebook_url)}" target="_blank" rel="noopener" class="wl-social-link" title="Facebook"><i class="fab fa-facebook-f"></i></a>`;
-        if (c.instagram_url) html += `<a href="${esc(c.instagram_url)}" target="_blank" rel="noopener" class="wl-social-link" title="Instagram"><i class="fab fa-instagram"></i></a>`;
-        if (c.website_url) html += `<a href="${esc(c.website_url)}" target="_blank" rel="noopener" class="wl-social-link" title="Site web"><i class="fas fa-globe"></i></a>`;
+    function buildSocial(cfg) {
+        if (!cfg.facebook && !cfg.instagram && !cfg.website) return '';
+        let html = `<div class="wl-container wl-anim"><div class="wl-social-links">`;
+        if (cfg.facebook) html += `<a href="${esc(cfg.facebook)}" target="_blank" rel="noopener" class="wl-social-link" title="Facebook"><i class="fab fa-facebook-f"></i></a>`;
+        if (cfg.instagram) html += `<a href="${esc(cfg.instagram)}" target="_blank" rel="noopener" class="wl-social-link" title="Instagram"><i class="fab fa-instagram"></i></a>`;
+        if (cfg.website) html += `<a href="${esc(cfg.website)}" target="_blank" rel="noopener" class="wl-social-link" title="Site web"><i class="fas fa-globe"></i></a>`;
         html += `</div></div>`;
+        return html;
+    }
+
+    function buildSeparator(cfg) {
+        const style = cfg.style || 'line';
+        const map = {
+            line: '<div class="wl-separator-line"></div>',
+            dashed: '<div class="wl-separator-dashed"></div>',
+            dots: '<div class="wl-separator-dots">&bull;&bull;&bull;</div>',
+            accent: '<div class="wl-separator-accent"></div>'
+        };
+        return `<div class="wl-container wl-separator">${map[style] || map.line}</div>`;
+    }
+
+    function buildMap(cfg) {
+        const url = cfg.url || cfg.maps_url || '';
+        if (!url) return '';
+        const h = cfg.height || 350;
+        // Convert Google Maps URL to embed format
+        let embedUrl = url;
+        if (url.includes('google.com/maps') && !url.includes('/embed')) {
+            embedUrl = url.replace('/maps/', '/maps/embed?').replace('?q=', '&q=');
+            if (!embedUrl.includes('embed')) {
+                embedUrl = 'https://www.google.com/maps/embed/v1/place?key=&q=' + encodeURIComponent(url);
+            }
+        }
+        return `
+            <div class="wl-container wl-map wl-anim">
+                <iframe src="${esc(embedUrl)}" height="${h}" loading="lazy" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+            </div>`;
+    }
+
+    function buildSpacer(cfg) {
+        const h = cfg.height || 40;
+        return `<div class="wl-spacer" style="height:${parseInt(h)}px"></div>`;
+    }
+
+    // ========== LEGACY FALLBACK (no sections in DB) ==========
+    function renderLegacy(c, tabs, infos) {
+        const headerStyle = c.header_style || 'card';
+        const tabStyle = c.tab_style || 'pills';
+        const itemLayout = c.item_layout || 'cards';
+        const bannerH = c.banner_height || 320;
+        const bannerOverlay = c.banner_overlay != 0;
+        const show = {
+            header: c.show_header != 0, wifi: c.show_wifi != 0, schedule: c.show_schedule != 0,
+            welcome: c.show_welcome != 0, contact: c.show_contact != 0, social: c.show_social != 0, infos: c.show_infos != 0
+        };
+        const defaultOrder = ['banner','header','schedule','wifi','welcome','tabs','infos','contact','social'];
+        let sectionOrder;
+        try { sectionOrder = c.section_order ? JSON.parse(c.section_order) : defaultOrder; } catch(e) { sectionOrder = defaultOrder; }
+
+        const parts = {};
+        parts.banner = buildBanner(c, {height: bannerH, overlay: bannerOverlay ? 1 : 0});
+        parts.header = show.header ? buildHeader(c, {style: headerStyle}) : '';
+        parts.schedule = (show.schedule && (c.checkin_time || c.checkout_time)) ? buildSchedule({checkin: c.checkin_time, checkout: c.checkout_time}) : '';
+        parts.wifi = (show.wifi && c.wifi_name) ? buildWifi({name: c.wifi_name, password: c.wifi_password}) : '';
+        parts.welcome = (show.welcome && (c.welcome_title || c.welcome_text)) ? buildText({title: c.welcome_title, content: c.welcome_text, image_path: c.welcome_image_path}, {alignment: 'left'}) : '';
+        parts.tabs = tabs.length > 0 ? buildTabs(tabs, {tab_style: tabStyle, item_layout: itemLayout}) : '';
+        parts.infos = (show.infos && infos.length > 0) ? buildInfos(infos, 'Informations pratiques') : '';
+        const hasContact = c.phone || c.email || c.address || c.google_maps_url;
+        parts.contact = (show.contact && hasContact) ? buildContact({phone: c.phone, email: c.email, address: c.address, maps_url: c.google_maps_url}, 'Nous contacter') : '';
+        const hasSocial = c.facebook_url || c.instagram_url || c.website_url;
+        parts.social = (show.social && hasSocial) ? buildSocial({facebook: c.facebook_url, instagram: c.instagram_url, website: c.website_url}) : '';
+
+        let html = '';
+        sectionOrder.forEach(s => { if (parts[s]) html += parts[s]; });
+        Object.keys(parts).forEach(s => { if (!sectionOrder.includes(s) && parts[s]) html += parts[s]; });
         return html;
     }
 
@@ -543,7 +639,6 @@
         document.querySelectorAll('.wl-anim').forEach(el => observer.observe(el));
     }
 
-    // Tab switching
     window.switchWlTab = function(idx) {
         document.querySelectorAll('.wl-tab-btn').forEach(btn => {
             btn.classList.toggle('active', parseInt(btn.dataset.tab) === idx);

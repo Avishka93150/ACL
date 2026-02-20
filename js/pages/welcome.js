@@ -1,12 +1,31 @@
 // ==================== MODULE LIVRET D'ACCUEIL NUMERIQUE ====================
-// Configuration et gestion du livret d'accueil par hotel
+// Configuration et gestion du livret d'accueil par hotel - Page Builder
 
 let _wlHotelId = null;
-let _wlTab = 'design';
+let _wlTab = 'sections';
 let _wlHotels = [];
 let _wlConfig = null;
 let _wlTabs = [];
 let _wlInfos = [];
+let _wlSections = [];
+let _wlExpandedSection = null;
+
+// Section types definition
+const WL_SECTION_TYPES = {
+    banner:    { icon: 'fa-image',          label: 'Banniere',           desc: 'Image d\'en-tete pleine largeur', unique: true },
+    header:    { icon: 'fa-hotel',          label: 'En-tete hotel',      desc: 'Nom, logo et etoiles',            unique: true },
+    text:      { icon: 'fa-align-left',     label: 'Texte',              desc: 'Bloc de texte libre avec image',  unique: false },
+    image:     { icon: 'fa-camera',         label: 'Image',              desc: 'Image pleine largeur avec legende', unique: false },
+    schedule:  { icon: 'fa-clock',          label: 'Horaires',           desc: 'Check-in / Check-out',            unique: true },
+    wifi:      { icon: 'fa-wifi',           label: 'WiFi',               desc: 'Reseau et mot de passe',          unique: true },
+    services:  { icon: 'fa-concierge-bell', label: 'Services',           desc: 'Onglets de services (restaurant, spa...)', unique: true },
+    infos:     { icon: 'fa-info-circle',    label: 'Infos pratiques',    desc: 'Cartes d\'informations utiles',   unique: true },
+    contact:   { icon: 'fa-phone-alt',      label: 'Contact',            desc: 'Telephone, email, adresse, carte', unique: true },
+    social:    { icon: 'fa-share-alt',      label: 'Reseaux sociaux',    desc: 'Facebook, Instagram, site web',   unique: true },
+    separator: { icon: 'fa-minus',          label: 'Separateur',         desc: 'Ligne de separation visuelle',    unique: false },
+    map:       { icon: 'fa-map-marked-alt', label: 'Carte',              desc: 'Google Maps integre',             unique: false },
+    spacer:    { icon: 'fa-arrows-alt-v',   label: 'Espacement',         desc: 'Espace vertical personnalisable', unique: false }
+};
 
 async function loadWelcome(container) {
     showLoading(container);
@@ -36,11 +55,11 @@ async function loadWelcome(container) {
             </div>
 
             <div class="tabs-container" style="display:flex;gap:0;border-bottom:2px solid var(--gray-200);margin-bottom:20px;flex-wrap:wrap">
+                <button class="tab-btn ${_wlTab === 'sections' ? 'active' : ''}" data-tab="sections" onclick="wlSwitchTab('sections')">
+                    <i class="fas fa-th-list"></i> Sections
+                </button>
                 <button class="tab-btn ${_wlTab === 'design' ? 'active' : ''}" data-tab="design" onclick="wlSwitchTab('design')">
                     <i class="fas fa-palette"></i> Design
-                </button>
-                <button class="tab-btn ${_wlTab === 'accueil' ? 'active' : ''}" data-tab="accueil" onclick="wlSwitchTab('accueil')">
-                    <i class="fas fa-home"></i> Accueil
                 </button>
                 <button class="tab-btn ${_wlTab === 'services' ? 'active' : ''}" data-tab="services" onclick="wlSwitchTab('services')">
                     <i class="fas fa-concierge-bell"></i> Services
@@ -67,6 +86,7 @@ async function loadWelcome(container) {
 
 async function wlSwitchHotel(hotelId) {
     _wlHotelId = hotelId;
+    _wlExpandedSection = null;
     await wlLoadData();
     wlRenderTab();
 }
@@ -81,18 +101,21 @@ function wlSwitchTab(tab) {
 
 async function wlLoadData() {
     try {
-        const [configRes, tabsRes, infosRes] = await Promise.all([
+        const [configRes, tabsRes, infosRes, sectionsRes] = await Promise.all([
             API.get(`welcome/config?hotel_id=${_wlHotelId}`),
             API.get(`welcome/tabs?hotel_id=${_wlHotelId}`),
-            API.get(`welcome/infos?hotel_id=${_wlHotelId}`)
+            API.get(`welcome/infos?hotel_id=${_wlHotelId}`),
+            API.get(`welcome/sections?hotel_id=${_wlHotelId}`)
         ]);
         _wlConfig = configRes.config || null;
         _wlTabs = tabsRes.tabs || [];
         _wlInfos = infosRes.infos || [];
+        _wlSections = sectionsRes.sections || [];
     } catch (err) {
         _wlConfig = null;
         _wlTabs = [];
         _wlInfos = [];
+        _wlSections = [];
     }
 }
 
@@ -101,8 +124,8 @@ function wlRenderTab() {
     if (!content) return;
 
     switch (_wlTab) {
+        case 'sections': wlRenderSections(content); break;
         case 'design': wlRenderDesign(content); break;
-        case 'accueil': wlRenderAccueil(content); break;
         case 'services': wlRenderServices(content); break;
         case 'infos': wlRenderInfos(content); break;
         case 'publication': wlRenderPublication(content); break;
@@ -181,6 +204,593 @@ function wlToggle(id, label, checked) {
 }
 
 // ============================================================
+// PAGE BUILDER - SECTIONS TAB
+// ============================================================
+function wlRenderSections(content) {
+    if (_wlSections.length === 0) {
+        content.innerHTML = `
+            <div class="card">
+                <div style="padding:48px 24px;text-align:center">
+                    <i class="fas fa-puzzle-piece" style="font-size:56px;color:var(--gray-300);margin-bottom:20px;display:block"></i>
+                    <h3 style="margin-bottom:8px;color:var(--gray-700)">Construisez votre livret</h3>
+                    <p class="text-muted" style="margin-bottom:28px;max-width:500px;margin-left:auto;margin-right:auto">
+                        Ajoutez des sections pour composer la page de votre livret d'accueil.
+                        Vous pouvez les reorganiser, les masquer ou les supprimer a tout moment.
+                    </p>
+                    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+                        <button class="btn btn-primary" onclick="wlShowAddSection()">
+                            <i class="fas fa-plus"></i> Ajouter une section
+                        </button>
+                        ${_wlConfig ? `
+                        <button class="btn btn-outline" onclick="wlInitSections()">
+                            <i class="fas fa-magic"></i> Generer depuis la config existante
+                        </button>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    content.innerHTML = `
+        <div class="card">
+            <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+                <h3 class="card-title" style="margin:0"><i class="fas fa-th-list"></i> Sections du livret</h3>
+                <button class="btn btn-primary btn-sm" onclick="wlShowAddSection()"><i class="fas fa-plus"></i> Ajouter une section</button>
+            </div>
+            <div style="padding:16px">
+                <p class="text-muted" style="margin-bottom:16px;font-size:13px">
+                    <i class="fas fa-arrows-alt-v"></i> Utilisez les fleches pour reorganiser. Cliquez sur une section pour la configurer.
+                </p>
+                <div id="wl-sections-list" class="wl-sections-list">
+                    ${_wlSections.map((sec, i) => wlRenderSectionCard(sec, i)).join('')}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function wlRenderSectionCard(sec, index) {
+    const type = WL_SECTION_TYPES[sec.type] || { icon: 'fa-puzzle-piece', label: sec.type, desc: '' };
+    const cfg = sec.config ? (typeof sec.config === 'string' ? JSON.parse(sec.config) : sec.config) : {};
+    const isExpanded = _wlExpandedSection == sec.id;
+    const isVisible = sec.is_visible == 1;
+    const isFirst = index === 0;
+    const isLast = index === _wlSections.length - 1;
+
+    // Summary line for collapsed state
+    let summary = '';
+    if (!isExpanded) {
+        summary = wlSectionSummary(sec, cfg);
+    }
+
+    return `
+        <div class="wl-section-card ${isExpanded ? 'expanded' : ''} ${!isVisible ? 'hidden-section' : ''}" data-id="${sec.id}">
+            <div class="wl-section-header" onclick="wlToggleExpand(${sec.id})">
+                <div class="wl-section-arrows" onclick="event.stopPropagation()">
+                    <button class="wl-arrow-btn" ${isFirst ? 'disabled' : ''} onclick="wlMoveSection(${sec.id}, 'up')" title="Monter">
+                        <i class="fas fa-chevron-up"></i>
+                    </button>
+                    <button class="wl-arrow-btn" ${isLast ? 'disabled' : ''} onclick="wlMoveSection(${sec.id}, 'down')" title="Descendre">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
+                <div class="wl-section-type-icon"><i class="fas ${type.icon}"></i></div>
+                <div class="wl-section-info">
+                    <strong>${esc(type.label)}${sec.title ? ' : ' + esc(sec.title) : ''}</strong>
+                    ${summary ? `<small class="text-muted">${summary}</small>` : ''}
+                </div>
+                <div class="wl-section-actions" onclick="event.stopPropagation()">
+                    <label class="wl-toggle" title="${isVisible ? 'Masquer' : 'Afficher'}">
+                        <input type="checkbox" ${isVisible ? 'checked' : ''} onchange="wlToggleSectionVisibility(${sec.id}, this.checked)">
+                        <span class="wl-toggle-slider"></span>
+                    </label>
+                    <button class="btn btn-sm btn-outline" onclick="wlDeleteSection(${sec.id})" title="Supprimer" style="color:var(--danger,#dc2626)">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            ${isExpanded ? `<div class="wl-section-body">${wlSectionEditForm(sec, cfg)}</div>` : ''}
+        </div>
+    `;
+}
+
+function wlSectionSummary(sec, cfg) {
+    switch (sec.type) {
+        case 'banner': return `${cfg.height || 320}px` + (cfg.overlay ? ' + overlay' : '');
+        case 'header': return `Style : ${cfg.style || 'card'}`;
+        case 'text': return sec.content ? esc(sec.content.substring(0, 60)) + '...' : '';
+        case 'image': return sec.image_path ? 'Image configuree' : 'Aucune image';
+        case 'schedule': return `${(cfg.checkin||'15:00').substring(0,5)} - ${(cfg.checkout||'11:00').substring(0,5)}`;
+        case 'wifi': return cfg.name || '';
+        case 'services': return `${_wlTabs.length} onglet(s)`;
+        case 'infos': return `${_wlInfos.length} info(s)`;
+        case 'contact': return [cfg.phone, cfg.email].filter(Boolean).join(', ') || '';
+        case 'social': return [cfg.facebook ? 'FB' : '', cfg.instagram ? 'IG' : '', cfg.website ? 'Web' : ''].filter(Boolean).join(', ');
+        case 'separator': return `Style : ${cfg.style || 'line'}`;
+        case 'map': return cfg.url ? 'URL configuree' : '';
+        case 'spacer': return `${cfg.height || 40}px`;
+        default: return '';
+    }
+}
+
+// ============================================================
+// SECTION EDIT FORMS
+// ============================================================
+function wlSectionEditForm(sec, cfg) {
+    switch (sec.type) {
+        case 'banner': return wlFormBanner(sec, cfg);
+        case 'header': return wlFormHeader(sec, cfg);
+        case 'text': return wlFormText(sec, cfg);
+        case 'image': return wlFormImage(sec, cfg);
+        case 'schedule': return wlFormSchedule(sec, cfg);
+        case 'wifi': return wlFormWifi(sec, cfg);
+        case 'services': return wlFormServices(sec, cfg);
+        case 'infos': return wlFormInfos(sec, cfg);
+        case 'contact': return wlFormContact(sec, cfg);
+        case 'social': return wlFormSocial(sec, cfg);
+        case 'separator': return wlFormSeparator(sec, cfg);
+        case 'map': return wlFormMap(sec, cfg);
+        case 'spacer': return wlFormSpacer(sec, cfg);
+        default: return '<p class="text-muted">Type de section non reconnu.</p>';
+    }
+}
+
+function wlFormBanner(sec, cfg) {
+    return `
+        <div class="form-group">
+            <label class="form-label">Image de banniere</label>
+            ${sec.image_path ? `<div style="margin-bottom:8px"><img src="${esc(sec.image_path)}" style="max-height:80px;border-radius:8px;width:100%;object-fit:cover;border:1px solid var(--gray-200)"></div>` : ''}
+            <input type="file" class="form-control" accept="image/jpeg,image/png,image/webp" onchange="wlUploadSectionImage(${sec.id}, this)" style="font-size:13px">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+            <div class="form-group">
+                <label class="form-label">Hauteur : <strong id="wl-bh-${sec.id}">${cfg.height || 320}px</strong></label>
+                <input type="range" id="wl-cfg-height-${sec.id}" min="180" max="500" step="10" value="${cfg.height || 320}" style="width:100%" oninput="document.getElementById('wl-bh-${sec.id}').textContent=this.value+'px'">
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:12px;padding-top:24px">
+                <label class="wl-toggle" style="flex-shrink:0">
+                    <input type="checkbox" id="wl-cfg-overlay-${sec.id}" ${cfg.overlay != 0 ? 'checked' : ''}>
+                    <span class="wl-toggle-slider"></span>
+                </label>
+                <span>Degradee sombre</span>
+            </div>
+        </div>
+        <div style="margin-top:16px">
+            <button class="btn btn-primary btn-sm" onclick="wlSaveSectionConfig(${sec.id}, {height: parseInt(document.getElementById('wl-cfg-height-${sec.id}').value), overlay: document.getElementById('wl-cfg-overlay-${sec.id}').checked ? 1 : 0})">
+                <i class="fas fa-save"></i> Enregistrer
+            </button>
+        </div>`;
+}
+
+function wlFormHeader(sec, cfg) {
+    const style = cfg.style || 'card';
+    return `
+        <label class="form-label" style="margin-bottom:12px">Style de l'en-tete</label>
+        <div class="wl-style-grid" data-group="header_style_${sec.id}">
+            ${wlStyleOption('header_style_' + sec.id, 'card', style, 'fas fa-id-card', 'Carte', 'Carte flottante')}
+            ${wlStyleOption('header_style_' + sec.id, 'overlay', style, 'fas fa-layer-group', 'Superpose', 'Sur la banniere')}
+            ${wlStyleOption('header_style_' + sec.id, 'minimal', style, 'fas fa-minus', 'Minimal', 'Logo centre')}
+        </div>
+        <div style="margin-top:16px">
+            <button class="btn btn-primary btn-sm" onclick="wlSaveSectionConfig(${sec.id}, {style: document.querySelector('input[name=header_style_${sec.id}]:checked').value})">
+                <i class="fas fa-save"></i> Enregistrer
+            </button>
+        </div>`;
+}
+
+function wlFormText(sec, cfg) {
+    return `
+        <div class="form-group">
+            <label class="form-label">Titre</label>
+            <input type="text" class="form-control" id="wl-sec-title-${sec.id}" value="${esc(sec.title || '')}" placeholder="Ex: Bienvenue dans notre hotel">
+        </div>
+        <div class="form-group" style="margin-top:12px">
+            <label class="form-label">Contenu</label>
+            <textarea class="form-control" id="wl-sec-content-${sec.id}" rows="5" placeholder="Texte de la section...">${esc(sec.content || '')}</textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
+            <div class="form-group">
+                <label class="form-label">Alignement</label>
+                <select class="form-control" id="wl-cfg-alignment-${sec.id}">
+                    <option value="left" ${(cfg.alignment||'left')==='left'?'selected':''}>Gauche</option>
+                    <option value="center" ${cfg.alignment==='center'?'selected':''}>Centre</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Image (optionnelle)</label>
+                ${sec.image_path ? `<div style="margin-bottom:4px"><img src="${esc(sec.image_path)}" style="max-height:50px;border-radius:6px"></div>` : ''}
+                <input type="file" class="form-control" accept="image/jpeg,image/png,image/webp" onchange="wlUploadSectionImage(${sec.id}, this)" style="font-size:12px">
+            </div>
+        </div>
+        <div style="margin-top:16px">
+            <button class="btn btn-primary btn-sm" onclick="wlSaveTextSection(${sec.id})"><i class="fas fa-save"></i> Enregistrer</button>
+        </div>`;
+}
+
+function wlFormImage(sec, cfg) {
+    return `
+        <div class="form-group">
+            <label class="form-label">Image</label>
+            ${sec.image_path ? `<div style="margin-bottom:8px"><img src="${esc(sec.image_path)}" style="max-height:120px;border-radius:8px;width:100%;object-fit:cover;border:1px solid var(--gray-200)"></div>` : '<p class="text-muted" style="margin-bottom:8px">Aucune image uploadee</p>'}
+            <input type="file" class="form-control" accept="image/jpeg,image/png,image/webp" onchange="wlUploadSectionImage(${sec.id}, this)" style="font-size:13px">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
+            <div class="form-group">
+                <label class="form-label">Legende</label>
+                <input type="text" class="form-control" id="wl-sec-title-${sec.id}" value="${esc(sec.title || '')}" placeholder="Description de l'image">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Lien (optionnel)</label>
+                <input type="url" class="form-control" id="wl-cfg-link-${sec.id}" value="${esc(cfg.link || '')}" placeholder="https://...">
+            </div>
+        </div>
+        <div style="margin-top:16px">
+            <button class="btn btn-primary btn-sm" onclick="wlSaveSection(${sec.id}, {title: document.getElementById('wl-sec-title-${sec.id}').value || null}, {link: document.getElementById('wl-cfg-link-${sec.id}').value || null, caption: document.getElementById('wl-sec-title-${sec.id}').value || null})">
+                <i class="fas fa-save"></i> Enregistrer
+            </button>
+        </div>`;
+}
+
+function wlFormSchedule(sec, cfg) {
+    return `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="form-group">
+                <label class="form-label"><i class="fas fa-sign-in-alt"></i> Heure de check-in</label>
+                <input type="time" class="form-control" id="wl-cfg-checkin-${sec.id}" value="${(cfg.checkin||'15:00:00').substring(0,5)}">
+            </div>
+            <div class="form-group">
+                <label class="form-label"><i class="fas fa-sign-out-alt"></i> Heure de check-out</label>
+                <input type="time" class="form-control" id="wl-cfg-checkout-${sec.id}" value="${(cfg.checkout||'11:00:00').substring(0,5)}">
+            </div>
+        </div>
+        <div style="margin-top:16px">
+            <button class="btn btn-primary btn-sm" onclick="wlSaveSectionConfig(${sec.id}, {checkin: document.getElementById('wl-cfg-checkin-${sec.id}').value + ':00', checkout: document.getElementById('wl-cfg-checkout-${sec.id}').value + ':00'})">
+                <i class="fas fa-save"></i> Enregistrer
+            </button>
+        </div>`;
+}
+
+function wlFormWifi(sec, cfg) {
+    return `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="form-group">
+                <label class="form-label"><i class="fas fa-wifi"></i> Nom du reseau</label>
+                <input type="text" class="form-control" id="wl-cfg-name-${sec.id}" value="${esc(cfg.name || '')}" placeholder="Hotel_Guest">
+            </div>
+            <div class="form-group">
+                <label class="form-label"><i class="fas fa-key"></i> Mot de passe</label>
+                <input type="text" class="form-control" id="wl-cfg-password-${sec.id}" value="${esc(cfg.password || '')}" placeholder="bienvenue2026">
+            </div>
+        </div>
+        <div style="margin-top:16px">
+            <button class="btn btn-primary btn-sm" onclick="wlSaveSectionConfig(${sec.id}, {name: document.getElementById('wl-cfg-name-${sec.id}').value, password: document.getElementById('wl-cfg-password-${sec.id}').value})">
+                <i class="fas fa-save"></i> Enregistrer
+            </button>
+        </div>`;
+}
+
+function wlFormServices(sec, cfg) {
+    const tabStyle = cfg.tab_style || 'pills';
+    const itemLayout = cfg.item_layout || 'cards';
+    return `
+        <p class="text-muted" style="margin-bottom:16px">
+            Cette section affiche les onglets de services configures dans l'onglet <strong>"Services"</strong>.
+            Vous avez actuellement <strong>${_wlTabs.length}</strong> onglet(s).
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="form-group">
+                <label class="form-label">Style des onglets</label>
+                <select class="form-control" id="wl-cfg-tab_style-${sec.id}">
+                    <option value="pills" ${tabStyle==='pills'?'selected':''}>Pilules</option>
+                    <option value="underline" ${tabStyle==='underline'?'selected':''}>Souligne</option>
+                    <option value="cards" ${tabStyle==='cards'?'selected':''}>Cartes</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Affichage des elements</label>
+                <select class="form-control" id="wl-cfg-item_layout-${sec.id}">
+                    <option value="cards" ${itemLayout==='cards'?'selected':''}>Cartes</option>
+                    <option value="list" ${itemLayout==='list'?'selected':''}>Liste</option>
+                    <option value="grid" ${itemLayout==='grid'?'selected':''}>Grille</option>
+                </select>
+            </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px">
+            <button class="btn btn-primary btn-sm" onclick="wlSaveSectionConfig(${sec.id}, {tab_style: document.getElementById('wl-cfg-tab_style-${sec.id}').value, item_layout: document.getElementById('wl-cfg-item_layout-${sec.id}').value})">
+                <i class="fas fa-save"></i> Enregistrer
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="wlSwitchTab('services')">
+                <i class="fas fa-external-link-alt"></i> Gerer les services
+            </button>
+        </div>`;
+}
+
+function wlFormInfos(sec, cfg) {
+    return `
+        <p class="text-muted" style="margin-bottom:16px">
+            Cette section affiche les informations pratiques configurees dans l'onglet <strong>"Infos pratiques"</strong>.
+            Vous avez actuellement <strong>${_wlInfos.length}</strong> fiche(s) d'information.
+        </p>
+        <div class="form-group">
+            <label class="form-label">Titre de la section</label>
+            <input type="text" class="form-control" id="wl-sec-title-${sec.id}" value="${esc(sec.title || 'Informations pratiques')}" placeholder="Informations pratiques">
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px">
+            <button class="btn btn-primary btn-sm" onclick="wlSaveSection(${sec.id}, {title: document.getElementById('wl-sec-title-${sec.id}').value})">
+                <i class="fas fa-save"></i> Enregistrer
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="wlSwitchTab('infos')">
+                <i class="fas fa-external-link-alt"></i> Gerer les infos
+            </button>
+        </div>`;
+}
+
+function wlFormContact(sec, cfg) {
+    return `
+        <div class="form-group">
+            <label class="form-label">Titre de la section</label>
+            <input type="text" class="form-control" id="wl-sec-title-${sec.id}" value="${esc(sec.title || 'Nous contacter')}" placeholder="Nous contacter">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
+            <div class="form-group">
+                <label class="form-label"><i class="fas fa-phone-alt"></i> Telephone</label>
+                <input type="tel" class="form-control" id="wl-cfg-phone-${sec.id}" value="${esc(cfg.phone || '')}" placeholder="+33 1 23 45 67 89">
+            </div>
+            <div class="form-group">
+                <label class="form-label"><i class="fas fa-envelope"></i> Email</label>
+                <input type="email" class="form-control" id="wl-cfg-email-${sec.id}" value="${esc(cfg.email || '')}" placeholder="contact@hotel.com">
+            </div>
+        </div>
+        <div class="form-group" style="margin-top:12px">
+            <label class="form-label"><i class="fas fa-map-marker-alt"></i> Adresse</label>
+            <textarea class="form-control" id="wl-cfg-address-${sec.id}" rows="2" placeholder="123 Rue de Paris, 75001 Paris">${esc(cfg.address || '')}</textarea>
+        </div>
+        <div class="form-group" style="margin-top:12px">
+            <label class="form-label"><i class="fas fa-map"></i> Lien Google Maps</label>
+            <input type="url" class="form-control" id="wl-cfg-maps_url-${sec.id}" value="${esc(cfg.maps_url || '')}" placeholder="https://maps.google.com/...">
+        </div>
+        <div style="margin-top:16px">
+            <button class="btn btn-primary btn-sm" onclick="wlSaveSection(${sec.id}, {title: document.getElementById('wl-sec-title-${sec.id}').value}, {phone: document.getElementById('wl-cfg-phone-${sec.id}').value, email: document.getElementById('wl-cfg-email-${sec.id}').value, address: document.getElementById('wl-cfg-address-${sec.id}').value, maps_url: document.getElementById('wl-cfg-maps_url-${sec.id}').value})">
+                <i class="fas fa-save"></i> Enregistrer
+            </button>
+        </div>`;
+}
+
+function wlFormSocial(sec, cfg) {
+    return `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+            <div class="form-group">
+                <label class="form-label"><i class="fab fa-facebook"></i> Facebook</label>
+                <input type="url" class="form-control" id="wl-cfg-facebook-${sec.id}" value="${esc(cfg.facebook || '')}" placeholder="https://facebook.com/...">
+            </div>
+            <div class="form-group">
+                <label class="form-label"><i class="fab fa-instagram"></i> Instagram</label>
+                <input type="url" class="form-control" id="wl-cfg-instagram-${sec.id}" value="${esc(cfg.instagram || '')}" placeholder="https://instagram.com/...">
+            </div>
+            <div class="form-group">
+                <label class="form-label"><i class="fas fa-globe"></i> Site web</label>
+                <input type="url" class="form-control" id="wl-cfg-website-${sec.id}" value="${esc(cfg.website || '')}" placeholder="https://www.hotel.com">
+            </div>
+        </div>
+        <div style="margin-top:16px">
+            <button class="btn btn-primary btn-sm" onclick="wlSaveSectionConfig(${sec.id}, {facebook: document.getElementById('wl-cfg-facebook-${sec.id}').value, instagram: document.getElementById('wl-cfg-instagram-${sec.id}').value, website: document.getElementById('wl-cfg-website-${sec.id}').value})">
+                <i class="fas fa-save"></i> Enregistrer
+            </button>
+        </div>`;
+}
+
+function wlFormSeparator(sec, cfg) {
+    const style = cfg.style || 'line';
+    return `
+        <div class="form-group">
+            <label class="form-label">Style du separateur</label>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+                ${['line','dashed','dots','accent'].map(s => `
+                    <label class="wl-sep-option ${style === s ? 'active' : ''}" onclick="this.parentNode.querySelectorAll('.wl-sep-option').forEach(e=>e.classList.remove('active'));this.classList.add('active')">
+                        <input type="radio" name="sep_style_${sec.id}" value="${s}" ${style===s?'checked':''} style="display:none">
+                        <span>${s === 'line' ? 'Ligne' : s === 'dashed' ? 'Pointilles' : s === 'dots' ? 'Points' : 'Accent'}</span>
+                    </label>
+                `).join('')}
+            </div>
+        </div>
+        <div style="margin-top:16px">
+            <button class="btn btn-primary btn-sm" onclick="wlSaveSectionConfig(${sec.id}, {style: document.querySelector('input[name=sep_style_${sec.id}]:checked').value})">
+                <i class="fas fa-save"></i> Enregistrer
+            </button>
+        </div>`;
+}
+
+function wlFormMap(sec, cfg) {
+    return `
+        <div class="form-group">
+            <label class="form-label">URL Google Maps</label>
+            <input type="url" class="form-control" id="wl-cfg-url-${sec.id}" value="${esc(cfg.url || '')}" placeholder="https://maps.google.com/...">
+            <small class="text-muted">Collez l'URL de la page Google Maps ou un lien d'integration.</small>
+        </div>
+        <div class="form-group" style="margin-top:12px">
+            <label class="form-label">Hauteur : <strong id="wl-map-h-${sec.id}">${cfg.height || 350}px</strong></label>
+            <input type="range" id="wl-cfg-height-${sec.id}" min="200" max="600" step="25" value="${cfg.height || 350}" style="width:100%" oninput="document.getElementById('wl-map-h-${sec.id}').textContent=this.value+'px'">
+        </div>
+        <div style="margin-top:16px">
+            <button class="btn btn-primary btn-sm" onclick="wlSaveSectionConfig(${sec.id}, {url: document.getElementById('wl-cfg-url-${sec.id}').value, height: parseInt(document.getElementById('wl-cfg-height-${sec.id}').value)})">
+                <i class="fas fa-save"></i> Enregistrer
+            </button>
+        </div>`;
+}
+
+function wlFormSpacer(sec, cfg) {
+    return `
+        <div class="form-group">
+            <label class="form-label">Hauteur : <strong id="wl-spacer-h-${sec.id}">${cfg.height || 40}px</strong></label>
+            <input type="range" id="wl-cfg-height-${sec.id}" min="10" max="120" step="5" value="${cfg.height || 40}" style="width:100%" oninput="document.getElementById('wl-spacer-h-${sec.id}').textContent=this.value+'px'">
+        </div>
+        <div style="margin-top:16px">
+            <button class="btn btn-primary btn-sm" onclick="wlSaveSectionConfig(${sec.id}, {height: parseInt(document.getElementById('wl-cfg-height-${sec.id}').value)})">
+                <i class="fas fa-save"></i> Enregistrer
+            </button>
+        </div>`;
+}
+
+// ============================================================
+// SECTION ACTIONS
+// ============================================================
+function wlToggleExpand(sectionId) {
+    _wlExpandedSection = _wlExpandedSection == sectionId ? null : sectionId;
+    wlRenderTab();
+}
+
+async function wlMoveSection(sectionId, direction) {
+    const idx = _wlSections.findIndex(s => s.id == sectionId);
+    if (idx < 0) return;
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= _wlSections.length) return;
+
+    // Swap locally
+    [_wlSections[idx], _wlSections[swapIdx]] = [_wlSections[swapIdx], _wlSections[idx]];
+
+    // Save new order
+    const order = _wlSections.map(s => s.id);
+    try {
+        await API.put('welcome/sections/reorder', { hotel_id: _wlHotelId, order });
+        wlRenderTab();
+    } catch (err) {
+        toast('Erreur : ' + err.message, 'error');
+        await wlLoadData();
+        wlRenderTab();
+    }
+}
+
+async function wlToggleSectionVisibility(sectionId, visible) {
+    try {
+        await API.put(`welcome/sections/${sectionId}`, { is_visible: visible ? 1 : 0 });
+        const sec = _wlSections.find(s => s.id == sectionId);
+        if (sec) sec.is_visible = visible ? 1 : 0;
+        wlRenderTab();
+    } catch (err) {
+        toast('Erreur : ' + err.message, 'error');
+    }
+}
+
+async function wlDeleteSection(sectionId) {
+    if (!confirm('Supprimer cette section ?')) return;
+    try {
+        await API.delete(`welcome/sections/${sectionId}`);
+        toast('Section supprimee', 'success');
+        _wlSections = _wlSections.filter(s => s.id != sectionId);
+        if (_wlExpandedSection == sectionId) _wlExpandedSection = null;
+        wlRenderTab();
+    } catch (err) {
+        toast('Erreur : ' + err.message, 'error');
+    }
+}
+
+async function wlSaveSectionConfig(sectionId, config) {
+    try {
+        await API.put(`welcome/sections/${sectionId}`, { config: config });
+        toast('Section mise a jour', 'success');
+        const sec = _wlSections.find(s => s.id == sectionId);
+        if (sec) sec.config = JSON.stringify(config);
+    } catch (err) {
+        toast('Erreur : ' + err.message, 'error');
+    }
+}
+
+async function wlSaveSection(sectionId, fields, config) {
+    try {
+        const payload = {};
+        if (fields) Object.assign(payload, fields);
+        if (config) payload.config = config;
+        await API.put(`welcome/sections/${sectionId}`, payload);
+        toast('Section mise a jour', 'success');
+        const sec = _wlSections.find(s => s.id == sectionId);
+        if (sec) {
+            if (fields) Object.assign(sec, fields);
+            if (config) sec.config = JSON.stringify(config);
+        }
+    } catch (err) {
+        toast('Erreur : ' + err.message, 'error');
+    }
+}
+
+async function wlSaveTextSection(sectionId) {
+    const title = document.getElementById(`wl-sec-title-${sectionId}`).value || null;
+    const content = document.getElementById(`wl-sec-content-${sectionId}`).value || null;
+    const alignment = document.getElementById(`wl-cfg-alignment-${sectionId}`).value;
+    await wlSaveSection(sectionId, { title, content }, { alignment });
+}
+
+async function wlUploadSectionImage(sectionId, input) {
+    if (!input.files || !input.files[0]) return;
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+
+    try {
+        const res = await API.upload(`welcome/sections/${sectionId}/image`, formData);
+        toast(res.message || 'Image uploadee', 'success');
+        const sec = _wlSections.find(s => s.id == sectionId);
+        if (sec) sec.image_path = res.path;
+        wlRenderTab();
+    } catch (err) {
+        toast('Erreur upload : ' + err.message, 'error');
+    }
+}
+
+// ============================================================
+// ADD SECTION MODAL
+// ============================================================
+function wlShowAddSection() {
+    const existingTypes = _wlSections.map(s => s.type);
+
+    let grid = '<div class="wl-add-section-grid">';
+    for (const [type, info] of Object.entries(WL_SECTION_TYPES)) {
+        const disabled = info.unique && existingTypes.includes(type);
+        grid += `
+            <div class="wl-add-section-item ${disabled ? 'disabled' : ''}" ${disabled ? '' : `onclick="wlAddSection('${type}')"`}>
+                <div class="wl-add-section-icon"><i class="fas ${info.icon}"></i></div>
+                <strong>${esc(info.label)}</strong>
+                <small>${esc(info.desc)}</small>
+                ${disabled ? '<span class="wl-add-badge">Deja ajoute</span>' : ''}
+            </div>`;
+    }
+    grid += '</div>';
+
+    openModal('Ajouter une section', `
+        <p class="text-muted" style="margin-bottom:16px">Choisissez le type de section a ajouter au livret.</p>
+        ${grid}
+    `, 'modal-lg');
+}
+
+async function wlAddSection(type) {
+    try {
+        const res = await API.post('welcome/sections', {
+            hotel_id: _wlHotelId,
+            type: type,
+            title: WL_SECTION_TYPES[type]?.label || null
+        });
+        toast('Section ajoutee', 'success');
+        closeModal();
+        _wlExpandedSection = res.id;
+        await wlLoadData();
+        wlRenderTab();
+    } catch (err) {
+        toast('Erreur : ' + err.message, 'error');
+    }
+}
+
+async function wlInitSections() {
+    if (!confirm('Generer les sections par defaut a partir de votre configuration existante ?')) return;
+    try {
+        await API.put('welcome/sections/init', { hotel_id: _wlHotelId });
+        toast('Sections generees', 'success');
+        await wlLoadData();
+        wlRenderTab();
+    } catch (err) {
+        toast('Erreur : ' + err.message, 'error');
+    }
+}
+
+// ============================================================
 // ONGLET DESIGN
 // ============================================================
 function wlRenderDesign(content) {
@@ -189,7 +799,6 @@ function wlRenderDesign(content) {
     const bodyFonts = ['Inter','Roboto','Open Sans','Lato','Montserrat','Poppins','Raleway'];
 
     content.innerHTML = `
-        <!-- SECTION: Couleurs & Typographie -->
         <div class="card" style="margin-bottom:20px">
             <div class="card-header"><h3 class="card-title"><i class="fas fa-palette"></i> Couleurs et typographie</h3></div>
             <div style="padding:24px">
@@ -252,88 +861,17 @@ function wlRenderDesign(content) {
             </div>
         </div>
 
-        <!-- SECTION: Images -->
         <div class="card" style="margin-bottom:20px">
-            <div class="card-header"><h3 class="card-title"><i class="fas fa-image"></i> Images</h3></div>
+            <div class="card-header"><h3 class="card-title"><i class="fas fa-image"></i> Logo</h3></div>
             <div style="padding:24px">
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px">
-                    <div class="form-group">
-                        <label class="form-label">Logo</label>
-                        ${c.logo_path ? `<div style="margin-bottom:8px"><img src="${esc(c.logo_path)}" style="max-height:70px;border-radius:8px;border:1px solid var(--gray-200)"></div>` : ''}
-                        <input type="file" class="form-control" accept="image/jpeg,image/png,image/webp" onchange="wlUploadImage('logo', this)" style="font-size:13px">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Banniere</label>
-                        ${c.banner_path ? `<div style="margin-bottom:8px"><img src="${esc(c.banner_path)}" style="max-height:70px;border-radius:8px;width:100%;object-fit:cover;border:1px solid var(--gray-200)"></div>` : ''}
-                        <input type="file" class="form-control" accept="image/jpeg,image/png,image/webp" onchange="wlUploadImage('banner', this)" style="font-size:13px">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Image bienvenue</label>
-                        ${c.welcome_image_path ? `<div style="margin-bottom:8px"><img src="${esc(c.welcome_image_path)}" style="max-height:70px;border-radius:8px;width:100%;object-fit:cover;border:1px solid var(--gray-200)"></div>` : ''}
-                        <input type="file" class="form-control" accept="image/jpeg,image/png,image/webp" onchange="wlUploadImage('welcome-image', this)" style="font-size:13px">
-                    </div>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:16px">
-                    <div class="form-group">
-                        <label class="form-label">Hauteur de banniere : <strong id="wl-bh-label">${c.banner_height || 320}px</strong></label>
-                        <input type="range" id="wl-banner-height" min="180" max="500" step="10" value="${c.banner_height || 320}" style="width:100%" oninput="document.getElementById('wl-bh-label').textContent=this.value+'px'">
-                    </div>
-                    <div class="form-group" style="display:flex;align-items:center;gap:12px;padding-top:24px">
-                        <label class="wl-toggle" style="flex-shrink:0">
-                            <input type="checkbox" id="wl-banner-overlay" ${(c.banner_overlay != 0 || c.banner_overlay == null) ? 'checked' : ''}>
-                            <span class="wl-toggle-slider"></span>
-                        </label>
-                        <span>Degradee sombre sur la banniere</span>
-                    </div>
+                <div class="form-group">
+                    <label class="form-label">Logo de l'hotel</label>
+                    ${c.logo_path ? `<div style="margin-bottom:8px"><img src="${esc(c.logo_path)}" style="max-height:70px;border-radius:8px;border:1px solid var(--gray-200)"></div>` : ''}
+                    <input type="file" class="form-control" accept="image/jpeg,image/png,image/webp" onchange="wlUploadImage('logo', this)" style="font-size:13px">
                 </div>
             </div>
         </div>
 
-        <!-- SECTION: Mise en page -->
-        <div class="card" style="margin-bottom:20px">
-            <div class="card-header"><h3 class="card-title"><i class="fas fa-th-large"></i> Mise en page</h3></div>
-            <div style="padding:24px">
-                <label class="form-label" style="margin-bottom:12px">Style de l'en-tete</label>
-                <div class="wl-style-grid" data-group="header_style">
-                    ${wlStyleOption('header_style','card', c.header_style || 'card', 'fas fa-id-card', 'Carte', 'Carte flottante sous la banniere')}
-                    ${wlStyleOption('header_style','overlay', c.header_style || 'card', 'fas fa-layer-group', 'Superpose', 'Nom sur la banniere')}
-                    ${wlStyleOption('header_style','minimal', c.header_style || 'card', 'fas fa-minus', 'Minimal', 'Logo centre, texte simple')}
-                </div>
-
-                <label class="form-label" style="margin-top:24px;margin-bottom:12px">Style des onglets</label>
-                <div class="wl-style-grid" data-group="tab_style">
-                    ${wlStyleOption('tab_style','pills', c.tab_style || 'pills', 'fas fa-capsules', 'Pilules', 'Boutons arrondis colores')}
-                    ${wlStyleOption('tab_style','underline', c.tab_style || 'pills', 'fas fa-underline', 'Souligne', 'Texte avec trait actif')}
-                    ${wlStyleOption('tab_style','cards', c.tab_style || 'pills', 'fas fa-th-large', 'Cartes', 'Icones dans des cartes')}
-                </div>
-
-                <label class="form-label" style="margin-top:24px;margin-bottom:12px">Affichage des elements</label>
-                <div class="wl-style-grid" data-group="item_layout">
-                    ${wlStyleOption('item_layout','cards', c.item_layout || 'cards', 'fas fa-square', 'Cartes', 'Grandes cartes avec image')}
-                    ${wlStyleOption('item_layout','list', c.item_layout || 'cards', 'fas fa-list', 'Liste', 'Liste compacte avec vignette')}
-                    ${wlStyleOption('item_layout','grid', c.item_layout || 'cards', 'fas fa-th', 'Grille', 'Grille 2 colonnes')}
-                </div>
-            </div>
-        </div>
-
-        <!-- SECTION: Sections visibles -->
-        <div class="card" style="margin-bottom:20px">
-            <div class="card-header"><h3 class="card-title"><i class="fas fa-eye"></i> Sections visibles</h3></div>
-            <div style="padding:24px">
-                <p class="text-muted" style="margin-bottom:16px">Activez ou desactivez les sections de votre livret d'accueil.</p>
-                <div class="wl-toggles-grid">
-                    ${wlToggle('wl-show-header', 'En-tete hotel (nom, logo, etoiles)', c.show_header != 0 || c.show_header == null)}
-                    ${wlToggle('wl-show-schedule', 'Horaires check-in / check-out', c.show_schedule != 0 || c.show_schedule == null)}
-                    ${wlToggle('wl-show-wifi', 'Informations WiFi', c.show_wifi != 0 || c.show_wifi == null)}
-                    ${wlToggle('wl-show-welcome', 'Message de bienvenue', c.show_welcome != 0 || c.show_welcome == null)}
-                    ${wlToggle('wl-show-infos', 'Informations pratiques', c.show_infos != 0 || c.show_infos == null)}
-                    ${wlToggle('wl-show-contact', 'Section contact', c.show_contact != 0 || c.show_contact == null)}
-                    ${wlToggle('wl-show-social', 'Reseaux sociaux', c.show_social != 0 || c.show_social == null)}
-                </div>
-            </div>
-        </div>
-
-        <!-- SECTION: CSS personnalise -->
         <div class="card" style="margin-bottom:20px">
             <div class="card-header"><h3 class="card-title"><i class="fas fa-code"></i> CSS personnalise (avance)</h3></div>
             <div style="padding:24px">
@@ -347,7 +885,6 @@ function wlRenderDesign(content) {
         </div>
     `;
 
-    // Synchroniser les color pickers
     const pc = document.getElementById('wl-primary-color');
     const sc = document.getElementById('wl-secondary-color');
     if (pc) pc.addEventListener('input', function() { document.getElementById('wl-primary-color-text').value = this.value; });
@@ -355,8 +892,6 @@ function wlRenderDesign(content) {
 }
 
 async function wlSaveDesign() {
-    const getRadio = (name) => { const el = document.querySelector(`input[name="${name}"]:checked`); return el ? el.value : null; };
-
     const data = wlBuildConfigPayload({
         primary_color: document.getElementById('wl-primary-color').value,
         secondary_color: document.getElementById('wl-secondary-color').value,
@@ -364,18 +899,6 @@ async function wlSaveDesign() {
         title_font: document.getElementById('wl-title-font').value || null,
         title_size: document.getElementById('wl-title-size').value,
         body_font_size: document.getElementById('wl-body-font-size').value,
-        banner_height: parseInt(document.getElementById('wl-banner-height').value),
-        banner_overlay: document.getElementById('wl-banner-overlay').checked ? 1 : 0,
-        header_style: getRadio('header_style') || 'card',
-        tab_style: getRadio('tab_style') || 'pills',
-        item_layout: getRadio('item_layout') || 'cards',
-        show_header: document.getElementById('wl-show-header').checked ? 1 : 0,
-        show_schedule: document.getElementById('wl-show-schedule').checked ? 1 : 0,
-        show_wifi: document.getElementById('wl-show-wifi').checked ? 1 : 0,
-        show_welcome: document.getElementById('wl-show-welcome').checked ? 1 : 0,
-        show_infos: document.getElementById('wl-show-infos').checked ? 1 : 0,
-        show_contact: document.getElementById('wl-show-contact').checked ? 1 : 0,
-        show_social: document.getElementById('wl-show-social').checked ? 1 : 0,
         custom_css: document.getElementById('wl-custom-css').value || null
     });
 
@@ -401,114 +924,6 @@ async function wlUploadImage(type, input) {
         wlRenderTab();
     } catch (err) {
         toast('Erreur upload : ' + err.message, 'error');
-    }
-}
-
-// ============================================================
-// ONGLET ACCUEIL
-// ============================================================
-function wlRenderAccueil(content) {
-    const c = _wlConfig || {};
-    content.innerHTML = `
-        <div class="card">
-            <div class="card-header"><h3 class="card-title"><i class="fas fa-home"></i> Page d'accueil du livret</h3></div>
-            <div style="padding:24px">
-                <div class="form-group">
-                    <label class="form-label">Titre de bienvenue</label>
-                    <input type="text" class="form-control" id="wl-welcome-title" value="${esc(c.welcome_title || '')}" placeholder="Bienvenue dans notre hotel !">
-                </div>
-                <div class="form-group" style="margin-top:16px">
-                    <label class="form-label">Texte d'accueil</label>
-                    <textarea class="form-control" id="wl-welcome-text" rows="5" placeholder="Presentez votre hotel et souhaitez la bienvenue a vos clients...">${esc(c.welcome_text || '')}</textarea>
-                </div>
-
-                <h4 style="margin-top:28px;margin-bottom:16px"><i class="fas fa-phone"></i> Coordonnees</h4>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-                    <div class="form-group">
-                        <label class="form-label">Telephone</label>
-                        <input type="tel" class="form-control" id="wl-phone" value="${esc(c.phone || '')}" placeholder="+33 1 23 45 67 89">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Email</label>
-                        <input type="email" class="form-control" id="wl-email" value="${esc(c.email || '')}" placeholder="contact@hotel.com">
-                    </div>
-                </div>
-                <div class="form-group" style="margin-top:16px">
-                    <label class="form-label">Adresse</label>
-                    <textarea class="form-control" id="wl-address" rows="2" placeholder="123 Rue de Paris, 75001 Paris">${esc(c.address || '')}</textarea>
-                </div>
-                <div class="form-group" style="margin-top:16px">
-                    <label class="form-label">Lien Google Maps</label>
-                    <input type="url" class="form-control" id="wl-google-maps" value="${esc(c.google_maps_url || '')}" placeholder="https://maps.google.com/...">
-                </div>
-
-                <h4 style="margin-top:28px;margin-bottom:16px"><i class="fas fa-share-alt"></i> Reseaux sociaux</h4>
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
-                    <div class="form-group">
-                        <label class="form-label"><i class="fab fa-facebook"></i> Facebook</label>
-                        <input type="url" class="form-control" id="wl-facebook" value="${esc(c.facebook_url || '')}" placeholder="https://facebook.com/...">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label"><i class="fab fa-instagram"></i> Instagram</label>
-                        <input type="url" class="form-control" id="wl-instagram" value="${esc(c.instagram_url || '')}" placeholder="https://instagram.com/...">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label"><i class="fas fa-globe"></i> Site web</label>
-                        <input type="url" class="form-control" id="wl-website" value="${esc(c.website_url || '')}" placeholder="https://www.hotel.com">
-                    </div>
-                </div>
-
-                <h4 style="margin-top:28px;margin-bottom:16px"><i class="fas fa-clock"></i> Horaires et WiFi</h4>
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px">
-                    <div class="form-group">
-                        <label class="form-label">Check-in</label>
-                        <input type="time" class="form-control" id="wl-checkin-time" value="${c.checkin_time ? c.checkin_time.substring(0,5) : '15:00'}">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Check-out</label>
-                        <input type="time" class="form-control" id="wl-checkout-time" value="${c.checkout_time ? c.checkout_time.substring(0,5) : '11:00'}">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label"><i class="fas fa-wifi"></i> Nom WiFi</label>
-                        <input type="text" class="form-control" id="wl-wifi-name" value="${esc(c.wifi_name || '')}" placeholder="Hotel_Guest">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label"><i class="fas fa-key"></i> Mot de passe WiFi</label>
-                        <input type="text" class="form-control" id="wl-wifi-password" value="${esc(c.wifi_password || '')}" placeholder="bienvenue2026">
-                    </div>
-                </div>
-
-                <div style="margin-top:24px">
-                    <button class="btn btn-primary" onclick="wlSaveAccueil()"><i class="fas fa-save"></i> Enregistrer</button>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-async function wlSaveAccueil() {
-    const data = wlBuildConfigPayload({
-        welcome_title: document.getElementById('wl-welcome-title').value || null,
-        welcome_text: document.getElementById('wl-welcome-text').value || null,
-        phone: document.getElementById('wl-phone').value || null,
-        email: document.getElementById('wl-email').value || null,
-        address: document.getElementById('wl-address').value || null,
-        google_maps_url: document.getElementById('wl-google-maps').value || null,
-        facebook_url: document.getElementById('wl-facebook').value || null,
-        instagram_url: document.getElementById('wl-instagram').value || null,
-        website_url: document.getElementById('wl-website').value || null,
-        wifi_name: document.getElementById('wl-wifi-name').value || null,
-        wifi_password: document.getElementById('wl-wifi-password').value || null,
-        checkin_time: document.getElementById('wl-checkin-time').value + ':00',
-        checkout_time: document.getElementById('wl-checkout-time').value + ':00'
-    });
-
-    try {
-        await API.put('welcome/config', data);
-        toast('Informations enregistrees', 'success');
-        await wlLoadData();
-    } catch (err) {
-        toast('Erreur : ' + err.message, 'error');
     }
 }
 
@@ -1154,7 +1569,7 @@ function wlRenderPublication(content) {
 
 async function wlTogglePublish(publish) {
     if (publish && !_wlConfig) {
-        toast('Veuillez d\'abord configurer le design et l\'accueil', 'warning');
+        toast('Veuillez d\'abord configurer le design', 'warning');
         return;
     }
 
@@ -1207,6 +1622,99 @@ function wlInjectStyles() {
     const style = document.createElement('style');
     style.id = 'welcome-module-styles';
     style.textContent = `
+        /* ===== SECTION BUILDER ===== */
+        .wl-sections-list { display:flex; flex-direction:column; gap:6px; }
+
+        .wl-section-card {
+            border:1px solid var(--gray-200); border-radius:10px;
+            background:white; transition:all 0.2s; overflow:hidden;
+        }
+        .wl-section-card:hover { border-color:var(--primary-300, #93c5fd); }
+        .wl-section-card.expanded { border-color:var(--primary, #1a56db); box-shadow:0 2px 12px rgba(0,0,0,0.08); }
+        .wl-section-card.hidden-section { opacity:0.55; }
+        .wl-section-card.hidden-section:hover { opacity:0.8; }
+
+        .wl-section-header {
+            display:flex; align-items:center; gap:10px; padding:12px 14px;
+            cursor:pointer; user-select:none; transition:background 0.15s;
+        }
+        .wl-section-header:hover { background:var(--gray-50, #f9fafb); }
+
+        .wl-section-arrows { display:flex; flex-direction:column; gap:2px; flex-shrink:0; }
+        .wl-arrow-btn {
+            display:flex; align-items:center; justify-content:center;
+            width:24px; height:18px; border:1px solid var(--gray-200);
+            border-radius:4px; background:white; cursor:pointer;
+            font-size:10px; color:var(--gray-500); transition:all 0.15s;
+            padding:0; line-height:1;
+        }
+        .wl-arrow-btn:hover:not(:disabled) { background:var(--primary-50, #eff6ff); border-color:var(--primary, #1a56db); color:var(--primary, #1a56db); }
+        .wl-arrow-btn:disabled { opacity:0.3; cursor:default; }
+
+        .wl-section-type-icon {
+            width:38px; height:38px; border-radius:9px;
+            background:var(--primary-50, #eff6ff); color:var(--primary, #1a56db);
+            display:flex; align-items:center; justify-content:center;
+            font-size:15px; flex-shrink:0;
+        }
+
+        .wl-section-info { flex:1; min-width:0; }
+        .wl-section-info strong { display:block; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .wl-section-info small { display:block; font-size:11px; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+        .wl-section-actions { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+
+        .wl-section-body {
+            padding:16px 20px 20px;
+            border-top:1px solid var(--gray-100);
+            background:var(--gray-50, #f9fafb);
+            animation: wl-slide-down 0.2s ease;
+        }
+        @keyframes wl-slide-down {
+            from { opacity:0; max-height:0; } to { opacity:1; max-height:1000px; }
+        }
+
+        /* ===== ADD SECTION GRID ===== */
+        .wl-add-section-grid {
+            display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;
+        }
+        .wl-add-section-item {
+            padding:16px; border:2px solid var(--gray-200); border-radius:10px;
+            text-align:center; cursor:pointer; transition:all 0.2s; position:relative;
+        }
+        .wl-add-section-item:hover:not(.disabled) {
+            border-color:var(--primary, #1a56db); background:var(--primary-50, #eff6ff); transform:translateY(-2px);
+        }
+        .wl-add-section-item.disabled {
+            opacity:0.4; cursor:not-allowed; background:var(--gray-50, #f9fafb);
+        }
+        .wl-add-section-icon {
+            width:42px; height:42px; border-radius:10px;
+            background:var(--gray-100); color:var(--gray-500);
+            display:flex; align-items:center; justify-content:center;
+            font-size:18px; margin:0 auto 10px;
+        }
+        .wl-add-section-item:hover:not(.disabled) .wl-add-section-icon {
+            background:var(--primary, #1a56db); color:white;
+        }
+        .wl-add-section-item strong { display:block; font-size:13px; margin-bottom:2px; }
+        .wl-add-section-item small { display:block; font-size:10px; color:var(--gray-500); }
+        .wl-add-badge {
+            position:absolute; top:6px; right:6px;
+            background:var(--gray-200); color:var(--gray-500);
+            font-size:9px; padding:2px 6px; border-radius:4px;
+        }
+
+        /* ===== SEPARATOR OPTIONS ===== */
+        .wl-sep-option {
+            display:inline-flex; align-items:center; padding:8px 16px;
+            border:2px solid var(--gray-200); border-radius:8px; cursor:pointer;
+            font-size:13px; transition:all 0.2s;
+        }
+        .wl-sep-option:hover { border-color:var(--primary-300, #93c5fd); }
+        .wl-sep-option.active { border-color:var(--primary, #1a56db); background:var(--primary-50, #eff6ff); }
+
+        /* ===== TABS LIST (services) ===== */
         .wl-tabs-list { display:flex; flex-direction:column; gap:8px; }
         .wl-tab-card {
             display:flex; align-items:center; gap:12px; padding:14px 16px;
@@ -1227,7 +1735,7 @@ function wlInjectStyles() {
         .wl-tab-count { flex-shrink:0; }
         .wl-tab-actions { display:flex; gap:6px; flex-shrink:0; }
 
-        /* Style picker */
+        /* ===== STYLE PICKER ===== */
         .wl-style-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; }
         .wl-style-option {
             border:2px solid var(--gray-200); border-radius:12px; padding:16px;
@@ -1245,7 +1753,7 @@ function wlInjectStyles() {
         .wl-style-option strong { display:block; font-size:13px; margin-bottom:2px; }
         .wl-style-option small { display:block; font-size:11px; color:var(--gray-500); }
 
-        /* Toggle switch */
+        /* ===== TOGGLE SWITCH ===== */
         .wl-toggle { position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0; }
         .wl-toggle input { opacity:0; width:0; height:0; }
         .wl-toggle-slider {
@@ -1273,6 +1781,11 @@ function wlInjectStyles() {
             .wl-tab-card { flex-wrap:wrap; }
             .wl-tab-actions { width:100%; justify-content:flex-end; }
             .wl-style-grid { grid-template-columns:1fr; }
+            .wl-add-section-grid { grid-template-columns:1fr 1fr; }
+            .wl-section-header { flex-wrap:wrap; }
+        }
+        @media (max-width:480px) {
+            .wl-add-section-grid { grid-template-columns:1fr; }
         }
     `;
     document.head.appendChild(style);
