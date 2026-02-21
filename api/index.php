@@ -12382,7 +12382,7 @@ try {
             if ($method === 'GET' && $id === 'categories') {
                 $hotelFilter = isset($_GET['hotel_id']) ? [(int)$_GET['hotel_id']] : $userHotelIds;
                 $ph = implode(',', array_fill(0, count($hotelFilter), '?'));
-                $cats = db()->query("SELECT cc.*, (SELECT COUNT(*) FROM contracts c WHERE c.category_id = cc.id) as contract_count FROM contract_categories cc WHERE cc.hotel_id IN ($ph) ORDER BY cc.name", $hotelFilter);
+                $cats = db()->query("SELECT cc.*, (SELECT COUNT(*) FROM contracts c WHERE c.category_id = cc.id) as contract_count, (SELECT COUNT(*) FROM supplier_invoice_lines sil WHERE sil.category_id = cc.id) as invoice_line_count FROM contract_categories cc WHERE cc.hotel_id IN ($ph) ORDER BY cc.account_number, cc.name", $hotelFilter);
                 json_out(['success' => true, 'categories' => $cats]);
             }
 
@@ -12391,10 +12391,17 @@ try {
                 if (!hasPermission($userRole, 'contracts.manage') && !hasPermission($userRole, 'categories.manage')) json_error('Accès refusé', 403);
                 $data = get_input();
                 if (empty($data['name']) || empty($data['hotel_id'])) json_error('Nom et hôtel requis');
-                $insertId = db()->insert(
-                    "INSERT INTO contract_categories (hotel_id, name, color, created_at) VALUES (?, ?, ?, NOW())",
-                    [(int)$data['hotel_id'], $data['name'], $data['color'] ?? '#6366f1']
-                );
+                $fields = [
+                    'hotel_id' => (int)$data['hotel_id'],
+                    'name' => $data['name'],
+                    'color' => $data['color'] ?? '#6366f1',
+                    'created_at' => date('Y-m-d H:i:s')
+                ];
+                if (isset($data['account_number'])) $fields['account_number'] = $data['account_number'] ?: null;
+                if (isset($data['account_class'])) $fields['account_class'] = in_array($data['account_class'], ['6','7']) ? $data['account_class'] : '6';
+                if (isset($data['parent_id'])) $fields['parent_id'] = $data['parent_id'] ? (int)$data['parent_id'] : null;
+                if (isset($data['description'])) $fields['description'] = $data['description'] ?: null;
+                $insertId = db()->insert('contract_categories', $fields);
                 json_out(['success' => true, 'id' => $insertId], 201);
             }
 
@@ -12405,6 +12412,11 @@ try {
                 $sets = []; $params = [];
                 if (isset($data['name'])) { $sets[] = 'name = ?'; $params[] = $data['name']; }
                 if (isset($data['color'])) { $sets[] = 'color = ?'; $params[] = $data['color']; }
+                if (array_key_exists('account_number', $data)) { $sets[] = 'account_number = ?'; $params[] = $data['account_number'] ?: null; }
+                if (isset($data['account_class'])) { $sets[] = 'account_class = ?'; $params[] = in_array($data['account_class'], ['6','7']) ? $data['account_class'] : '6'; }
+                if (array_key_exists('parent_id', $data)) { $sets[] = 'parent_id = ?'; $params[] = $data['parent_id'] ? (int)$data['parent_id'] : null; }
+                if (array_key_exists('description', $data)) { $sets[] = 'description = ?'; $params[] = $data['description'] ?: null; }
+                if (array_key_exists('is_active', $data)) { $sets[] = 'is_active = ?'; $params[] = $data['is_active'] ? 1 : 0; }
                 if ($sets) {
                     $params[] = (int)$action;
                     db()->execute("UPDATE contract_categories SET " . implode(', ', $sets) . " WHERE id = ?", $params);
@@ -12848,6 +12860,70 @@ try {
                 db()->execute("DELETE FROM contract_documents WHERE contract_id = ?", [(int)$id]);
                 db()->execute("DELETE FROM contract_alerts WHERE contract_id = ?", [(int)$id]);
                 db()->execute("DELETE FROM contracts WHERE id = ?", [(int)$id]);
+                json_out(['success' => true]);
+            }
+
+            // --- GET /contracts/auxiliary-accounts ---
+            if ($method === 'GET' && $id === 'auxiliary-accounts') {
+                $hotelId = isset($_GET['hotel_id']) ? (int)$_GET['hotel_id'] : 0;
+                $hotelFilter = $hotelId ? [$hotelId] : $userHotelIds;
+                $ph = implode(',', array_fill(0, count($hotelFilter), '?'));
+                $accounts = db()->query(
+                    "SELECT aa.*, s.name as supplier_name
+                     FROM accounting_auxiliary_accounts aa
+                     LEFT JOIN suppliers s ON aa.supplier_id = s.id
+                     WHERE aa.hotel_id IN ($ph)
+                     ORDER BY aa.code",
+                    $hotelFilter
+                );
+                json_out(['success' => true, 'accounts' => $accounts]);
+            }
+
+            // --- POST /contracts/auxiliary-accounts ---
+            if ($method === 'POST' && $id === 'auxiliary-accounts') {
+                if (!hasPermission($userRole, 'contracts.manage')) json_error('Accès refusé', 403);
+                $data = get_input();
+                if (empty($data['code']) || empty($data['label']) || empty($data['hotel_id'])) json_error('Code, libellé et hôtel requis');
+                // Vérifier unicité du code par hôtel
+                $exists = db()->queryOne("SELECT id FROM accounting_auxiliary_accounts WHERE hotel_id = ? AND code = ?", [(int)$data['hotel_id'], $data['code']]);
+                if ($exists) json_error('Ce code auxiliaire existe déjà pour cet hôtel');
+                $insertId = db()->insert('accounting_auxiliary_accounts', [
+                    'hotel_id' => (int)$data['hotel_id'],
+                    'code' => $data['code'],
+                    'label' => $data['label'],
+                    'type' => in_array($data['type'] ?? '', ['supplier','other']) ? $data['type'] : 'supplier',
+                    'supplier_id' => !empty($data['supplier_id']) ? (int)$data['supplier_id'] : null,
+                    'notes' => $data['notes'] ?? null,
+                    'is_active' => 1,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]);
+                json_out(['success' => true, 'id' => $insertId], 201);
+            }
+
+            // --- PUT /contracts/auxiliary-accounts/{accountId} ---
+            if ($method === 'PUT' && $id === 'auxiliary-accounts' && $action && is_numeric($action)) {
+                if (!hasPermission($userRole, 'contracts.manage')) json_error('Accès refusé', 403);
+                $data = get_input();
+                $sets = []; $params = [];
+                if (isset($data['code'])) { $sets[] = 'code = ?'; $params[] = $data['code']; }
+                if (isset($data['label'])) { $sets[] = 'label = ?'; $params[] = $data['label']; }
+                if (isset($data['type'])) { $sets[] = 'type = ?'; $params[] = in_array($data['type'], ['supplier','other']) ? $data['type'] : 'supplier'; }
+                if (array_key_exists('supplier_id', $data)) { $sets[] = 'supplier_id = ?'; $params[] = $data['supplier_id'] ? (int)$data['supplier_id'] : null; }
+                if (array_key_exists('notes', $data)) { $sets[] = 'notes = ?'; $params[] = $data['notes'] ?: null; }
+                if (array_key_exists('is_active', $data)) { $sets[] = 'is_active = ?'; $params[] = $data['is_active'] ? 1 : 0; }
+                if ($sets) {
+                    $sets[] = 'updated_at = ?'; $params[] = date('Y-m-d H:i:s');
+                    $params[] = (int)$action;
+                    db()->execute("UPDATE accounting_auxiliary_accounts SET " . implode(', ', $sets) . " WHERE id = ?", $params);
+                }
+                json_out(['success' => true]);
+            }
+
+            // --- DELETE /contracts/auxiliary-accounts/{accountId} ---
+            if ($method === 'DELETE' && $id === 'auxiliary-accounts' && $action && is_numeric($action)) {
+                if (!hasPermission($userRole, 'contracts.manage')) json_error('Accès refusé', 403);
+                db()->execute("DELETE FROM accounting_auxiliary_accounts WHERE id = ?", [(int)$action]);
                 json_out(['success' => true]);
             }
 
@@ -13308,6 +13384,121 @@ try {
                     ];
                 } catch (Exception $e) {}
                 json_out(['stats' => $stats]);
+            }
+
+            // --- GET /invoices/income-statement (compte de résultat des dépenses) ---
+            if ($method === 'GET' && $id === 'income-statement') {
+                if (!hasPermission($userRole, 'invoices.view')) json_error('Accès refusé', 403);
+                $hotelId = (int)($_GET['hotel_id'] ?? 0);
+                $year = (int)($_GET['year'] ?? date('Y'));
+                $hotelFilter = $hotelId && in_array($hotelId, $userHotelIds) ? "AND si.hotel_id = $hotelId" : "AND si.hotel_id IN ($hotelList)";
+
+                // Dépenses par compte comptable et par mois (détaillé)
+                $data = [];
+                $prevYearData = [];
+                try {
+                    // Données par catégorie/compte avec montants HT et TTC par mois
+                    $data = db()->query(
+                        "SELECT cc.id as category_id, cc.name as category_name, cc.color,
+                                cc.account_number, cc.account_class, cc.parent_id,
+                                MONTH(si.invoice_date) as month,
+                                SUM(si.total_ht) as total_ht,
+                                SUM(si.total_tva) as total_tva,
+                                SUM(si.total_ttc) as total_ttc,
+                                COUNT(si.id) as invoice_count
+                         FROM supplier_invoices si
+                         LEFT JOIN suppliers s ON si.supplier_id = s.id
+                         LEFT JOIN contract_categories cc ON s.category_id = cc.id
+                         WHERE YEAR(si.invoice_date) = ? AND si.status IN ('approved','pending_payment','payment_initiated','paid')
+                           $hotelFilter
+                         GROUP BY cc.id, cc.name, cc.color, cc.account_number, cc.account_class, cc.parent_id, MONTH(si.invoice_date)
+                         ORDER BY cc.account_number, cc.name, month",
+                        [$year]
+                    );
+
+                    // Année précédente pour comparaison
+                    $prevYearData = db()->query(
+                        "SELECT cc.id as category_id,
+                                MONTH(si.invoice_date) as month,
+                                SUM(si.total_ht) as total_ht,
+                                SUM(si.total_ttc) as total_ttc
+                         FROM supplier_invoices si
+                         LEFT JOIN suppliers s ON si.supplier_id = s.id
+                         LEFT JOIN contract_categories cc ON s.category_id = cc.id
+                         WHERE YEAR(si.invoice_date) = ? AND si.status IN ('approved','pending_payment','payment_initiated','paid')
+                           $hotelFilter
+                         GROUP BY cc.id, MONTH(si.invoice_date)",
+                        [$year - 1]
+                    );
+
+                    // Totaux annuels de l'année précédente par catégorie
+                    $prevYearTotals = db()->query(
+                        "SELECT cc.id as category_id,
+                                SUM(si.total_ht) as total_ht,
+                                SUM(si.total_ttc) as total_ttc
+                         FROM supplier_invoices si
+                         LEFT JOIN suppliers s ON si.supplier_id = s.id
+                         LEFT JOIN contract_categories cc ON s.category_id = cc.id
+                         WHERE YEAR(si.invoice_date) = ? AND si.status IN ('approved','pending_payment','payment_initiated','paid')
+                           $hotelFilter
+                         GROUP BY cc.id",
+                        [$year - 1]
+                    );
+                } catch (Exception $e) {}
+
+                // Export CSV si demandé
+                if (!empty($_GET['export']) && $_GET['export'] === 'csv') {
+                    $months = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+                    $csv = "\xEF\xBB\xBF";
+                    $csv .= "Compte;Catégorie;" . implode(';', $months) . ";Total HT;Total TTC;N-1 TTC;Variation\n";
+
+                    $categories = [];
+                    foreach ($data as $row) {
+                        $key = $row['category_id'] ?: 'sans';
+                        if (!isset($categories[$key])) {
+                            $categories[$key] = [
+                                'name' => $row['category_name'] ?: 'Non catégorisé',
+                                'account' => $row['account_number'] ?: '',
+                                'months_ht' => array_fill(1, 12, 0),
+                                'months_ttc' => array_fill(1, 12, 0)
+                            ];
+                        }
+                        $categories[$key]['months_ht'][(int)$row['month']] = (float)$row['total_ht'];
+                        $categories[$key]['months_ttc'][(int)$row['month']] = (float)$row['total_ttc'];
+                    }
+
+                    $prevTotalsMap = [];
+                    foreach ($prevYearTotals ?? [] as $pt) {
+                        $prevTotalsMap[$pt['category_id'] ?: 'sans'] = (float)$pt['total_ttc'];
+                    }
+
+                    foreach ($categories as $key => $cat) {
+                        $totalHt = array_sum($cat['months_ht']);
+                        $totalTtc = array_sum($cat['months_ttc']);
+                        $prevTotal = $prevTotalsMap[$key] ?? 0;
+                        $variation = $prevTotal > 0 ? round(($totalTtc - $prevTotal) / $prevTotal * 100, 1) : 0;
+                        $csv .= $cat['account'] . ';' . $cat['name'] . ';';
+                        for ($m = 1; $m <= 12; $m++) {
+                            $csv .= number_format($cat['months_ttc'][$m], 2, ',', ' ') . ';';
+                        }
+                        $csv .= number_format($totalHt, 2, ',', ' ') . ';';
+                        $csv .= number_format($totalTtc, 2, ',', ' ') . ';';
+                        $csv .= number_format($prevTotal, 2, ',', ' ') . ';';
+                        $csv .= ($variation >= 0 ? '+' : '') . $variation . "%\n";
+                    }
+
+                    header('Content-Type: text/csv; charset=utf-8');
+                    header('Content-Disposition: attachment; filename="compte_resultat_' . $year . '.csv"');
+                    echo $csv;
+                    exit;
+                }
+
+                json_out([
+                    'data' => $data,
+                    'previous_year' => $prevYearData,
+                    'previous_year_totals' => $prevYearTotals ?? [],
+                    'year' => $year
+                ]);
             }
 
             // --- GET /invoices/reporting ---
