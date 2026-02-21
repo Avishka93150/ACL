@@ -304,11 +304,12 @@ function invRenderMain(container) {
         </div>
 
         <div class="closure-tabs" style="margin-bottom:var(--space-4)">
-            <div class="closure-tab ${invActiveTab === 'factures' ? 'active' : ''}" onclick="invSwitchTab('factures')"><i class="fas fa-file-invoice-dollar"></i> <span>Factures</span></div>
-            <div class="closure-tab ${invActiveTab === 'fournisseurs' ? 'active' : ''}" onclick="invSwitchTab('fournisseurs')"><i class="fas fa-building"></i> <span>Fournisseurs</span></div>
-            <div class="closure-tab ${invActiveTab === 'reporting' ? 'active' : ''}" onclick="invSwitchTab('reporting')"><i class="fas fa-chart-bar"></i> <span>Reporting</span></div>
-            ${hasPermission('invoices.export') ? `<div class="closure-tab ${invActiveTab === 'export' ? 'active' : ''}" onclick="invSwitchTab('export')"><i class="fas fa-download"></i> <span>Export</span></div>` : ''}
-            ${hasPermission('invoices.configure') ? `<div class="closure-tab ${invActiveTab === 'config' ? 'active' : ''}" onclick="invSwitchTab('config')"><i class="fas fa-cog"></i> <span>Configuration</span></div>` : ''}
+            <div class="closure-tab ${invActiveTab === 'factures' ? 'active' : ''}" data-inv-tab="factures" onclick="invSwitchTab('factures')"><i class="fas fa-file-invoice-dollar"></i> <span>Factures</span></div>
+            <div class="closure-tab ${invActiveTab === 'fournisseurs' ? 'active' : ''}" data-inv-tab="fournisseurs" onclick="invSwitchTab('fournisseurs')"><i class="fas fa-building"></i> <span>Fournisseurs</span></div>
+            <div class="closure-tab ${invActiveTab === 'comptabilite' ? 'active' : ''}" data-inv-tab="comptabilite" onclick="invSwitchTab('comptabilite')"><i class="fas fa-calculator"></i> <span>Plan comptable</span></div>
+            <div class="closure-tab ${invActiveTab === 'reporting' ? 'active' : ''}" data-inv-tab="reporting" onclick="invSwitchTab('reporting')"><i class="fas fa-chart-bar"></i> <span>Reporting</span></div>
+            ${hasPermission('invoices.export') ? `<div class="closure-tab ${invActiveTab === 'export' ? 'active' : ''}" data-inv-tab="export" onclick="invSwitchTab('export')"><i class="fas fa-download"></i> <span>Export</span></div>` : ''}
+            ${hasPermission('invoices.configure') ? `<div class="closure-tab ${invActiveTab === 'config' ? 'active' : ''}" data-inv-tab="config" onclick="invSwitchTab('config')"><i class="fas fa-cog"></i> <span>Configuration</span></div>` : ''}
         </div>
 
         <div id="inv-tab-content"></div>
@@ -340,12 +341,13 @@ async function invChangeHotel(hotelId) {
 function invSwitchTab(tab) {
     invActiveTab = tab;
     if (tab !== 'factures') { invSelectedIds = []; invListInvoicesCache = []; }
-    document.querySelectorAll('.closure-tab').forEach(t => t.classList.toggle('active', t.textContent.trim().toLowerCase().includes(tab.substring(0, 4))));
+    document.querySelectorAll('.closure-tab[data-inv-tab]').forEach(t => t.classList.toggle('active', t.dataset.invTab === tab));
     const content = document.getElementById('inv-tab-content');
     if (!content) return;
     switch (tab) {
         case 'factures': invRenderFactures(content); break;
         case 'fournisseurs': invRenderFournisseurs(content); break;
+        case 'comptabilite': invRenderComptabilite(content); break;
         case 'reporting': invRenderReporting(content); break;
         case 'export': invRenderExport(content); break;
         case 'config': invRenderConfig(content); break;
@@ -2232,33 +2234,428 @@ async function invSaveSupplier(event, supplierId) {
 }
 
 // ============================================================
-// ONGLET REPORTING
+// ONGLET PLAN COMPTABLE
+// ============================================================
+
+let invAcctSubTab = 'categories'; // 'categories' | 'auxiliary'
+
+async function invRenderComptabilite(content) {
+    content.innerHTML = `
+        <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-4)">
+            <button class="btn btn-sm ${invAcctSubTab === 'categories' ? 'btn-primary' : 'btn-outline'}" onclick="invAcctSubTab='categories';invRenderComptabilite(document.getElementById('inv-tab-content'))">
+                <i class="fas fa-sitemap"></i> Comptes de charges
+            </button>
+            <button class="btn btn-sm ${invAcctSubTab === 'auxiliary' ? 'btn-primary' : 'btn-outline'}" onclick="invAcctSubTab='auxiliary';invRenderComptabilite(document.getElementById('inv-tab-content'))">
+                <i class="fas fa-users"></i> Comptes auxiliaires
+            </button>
+        </div>
+        <div id="inv-acct-content"></div>
+    `;
+    const sub = document.getElementById('inv-acct-content');
+    if (invAcctSubTab === 'categories') {
+        await invRenderAccountCategories(sub);
+    } else {
+        await invRenderAuxiliaryAccounts(sub);
+    }
+}
+
+async function invRenderAccountCategories(container) {
+    showLoading(container);
+    try {
+        const res = await API.get(`contracts/categories?hotel_id=${invCurrentHotel}`);
+        const cats = res.categories || [];
+
+        container.innerHTML = `
+            <div class="card">
+                <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+                    <h3><i class="fas fa-sitemap"></i> Plan comptable — Comptes de charges</h3>
+                    ${hasPermission('contracts.manage') ? `<button class="btn btn-primary btn-sm" onclick="invShowAccountModal()"><i class="fas fa-plus"></i> Nouveau compte</button>` : ''}
+                </div>
+                ${cats.length === 0 ? `
+                    <div class="empty-state" style="padding:var(--space-6)">
+                        <i class="fas fa-sitemap" style="font-size:2rem;color:var(--gray-400)"></i>
+                        <h3>Aucun compte comptable</h3>
+                        <p>Creez vos categories comptables pour organiser vos depenses</p>
+                    </div>
+                ` : `
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th style="width:120px">N° Compte</th>
+                                    <th>Categorie</th>
+                                    <th style="width:80px">Classe</th>
+                                    <th style="width:100px">Contrats</th>
+                                    <th style="width:100px">Factures</th>
+                                    <th style="width:80px">Statut</th>
+                                    <th style="width:100px">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${cats.map(c => `
+                                    <tr style="${c.is_active === 0 || c.is_active === '0' ? 'opacity:0.5' : ''}">
+                                        <td><code style="font-size:var(--font-size-sm);background:var(--gray-100);padding:2px 8px;border-radius:var(--radius-sm)">${esc(c.account_number || '-')}</code></td>
+                                        <td>
+                                            <div style="display:flex;align-items:center;gap:var(--space-2)">
+                                                <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:${escAttr(c.color || '#6366f1')}"></span>
+                                                <strong>${esc(c.name)}</strong>
+                                            </div>
+                                            ${c.description ? `<div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:2px">${esc(c.description)}</div>` : ''}
+                                        </td>
+                                        <td><span class="badge badge-${c.account_class === '7' ? 'success' : 'secondary'}">${c.account_class === '7' ? 'Cl.7 Produits' : 'Cl.6 Charges'}</span></td>
+                                        <td style="text-align:center"><span class="badge badge-primary">${c.contract_count || 0}</span></td>
+                                        <td style="text-align:center"><span class="badge badge-info">${c.invoice_line_count || 0}</span></td>
+                                        <td>${c.is_active === 0 || c.is_active === '0' ? '<span class="badge badge-secondary">Inactif</span>' : '<span class="badge badge-success">Actif</span>'}</td>
+                                        <td>
+                                            <div style="display:flex;gap:var(--space-1)">
+                                                ${hasPermission('contracts.manage') ? `<button class="btn btn-sm btn-outline" onclick="invEditAccount(${c.id})" title="Modifier"><i class="fas fa-edit"></i></button>` : ''}
+                                                ${hasPermission('contracts.delete') ? `<button class="btn btn-sm btn-outline text-danger" onclick="invDeleteAccount(${c.id})" title="Supprimer"><i class="fas fa-trash"></i></button>` : ''}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `}
+            </div>
+        `;
+    } catch (err) {
+        container.innerHTML = '<div class="alert alert-danger">Erreur de chargement</div>';
+        console.error(err);
+    }
+}
+
+function invShowAccountModal(existing) {
+    const isEdit = !!existing;
+    openModal(isEdit ? 'Modifier le compte' : 'Nouveau compte comptable', `
+        <form onsubmit="invSaveAccount(event, ${isEdit ? existing.id : 'null'})">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">N° de compte *</label>
+                    <input type="text" id="acct-number" class="form-control" value="${isEdit ? escAttr(existing.account_number || '') : ''}" placeholder="Ex: 601000, 606100..." required>
+                    <small style="color:var(--text-tertiary)">Numero du plan comptable general (classe 6 ou 7)</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Classe</label>
+                    <select id="acct-class" class="form-control">
+                        <option value="6" ${!isEdit || existing.account_class === '6' ? 'selected' : ''}>Classe 6 — Charges</option>
+                        <option value="7" ${isEdit && existing.account_class === '7' ? 'selected' : ''}>Classe 7 — Produits</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Libelle *</label>
+                    <input type="text" id="acct-name" class="form-control" value="${isEdit ? escAttr(existing.name || '') : ''}" placeholder="Ex: Achats alimentaires, Entretien..." required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Couleur</label>
+                    <input type="color" id="acct-color" class="form-control" value="${isEdit ? existing.color || '#6366f1' : '#6366f1'}" style="height:38px;padding:4px">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea id="acct-desc" class="form-control" rows="2" placeholder="Description optionnelle...">${isEdit ? esc(existing.description || '') : ''}</textarea>
+            </div>
+            ${isEdit ? `
+            <div class="form-group">
+                <label class="form-label">Statut</label>
+                <select id="acct-active" class="form-control">
+                    <option value="1" ${existing.is_active != 0 ? 'selected' : ''}>Actif</option>
+                    <option value="0" ${existing.is_active == 0 ? 'selected' : ''}>Inactif</option>
+                </select>
+            </div>` : ''}
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> ${isEdit ? 'Enregistrer' : 'Creer'}</button>
+            </div>
+        </form>
+    `, 'modal-md');
+}
+
+async function invSaveAccount(e, id) {
+    e.preventDefault();
+    const data = {
+        name: document.getElementById('acct-name').value,
+        color: document.getElementById('acct-color').value,
+        account_number: document.getElementById('acct-number').value,
+        account_class: document.getElementById('acct-class').value,
+        description: document.getElementById('acct-desc').value
+    };
+    if (id) {
+        const activeEl = document.getElementById('acct-active');
+        if (activeEl) data.is_active = parseInt(activeEl.value);
+    } else {
+        data.hotel_id = invCurrentHotel;
+    }
+    try {
+        if (id) {
+            await API.put(`contracts/categories/${id}`, data);
+        } else {
+            await API.post('contracts/categories', data);
+        }
+        toast(id ? 'Compte modifie' : 'Compte cree', 'success');
+        closeModal();
+        invRenderComptabilite(document.getElementById('inv-tab-content'));
+        // Refresh categories cache
+        try { const r = await API.get(`contracts/categories?hotel_id=${invCurrentHotel}`); invCategories = r.categories || []; } catch(e) {}
+    } catch (err) {
+        toast(err.message || 'Erreur', 'error');
+    }
+}
+
+async function invEditAccount(id) {
+    try {
+        const res = await API.get(`contracts/categories?hotel_id=${invCurrentHotel}`);
+        const cat = (res.categories || []).find(c => c.id == id);
+        if (!cat) return toast('Compte introuvable', 'error');
+        invShowAccountModal(cat);
+    } catch (err) {
+        toast('Erreur', 'error');
+    }
+}
+
+async function invDeleteAccount(id) {
+    if (!confirm('Supprimer ce compte comptable ? Les contrats et factures associes seront dissocies.')) return;
+    try {
+        await API.delete(`contracts/categories/${id}`);
+        toast('Compte supprime', 'success');
+        invRenderComptabilite(document.getElementById('inv-tab-content'));
+        try { const r = await API.get(`contracts/categories?hotel_id=${invCurrentHotel}`); invCategories = r.categories || []; } catch(e) {}
+    } catch (err) {
+        toast(err.message || 'Erreur', 'error');
+    }
+}
+
+// --- Comptes auxiliaires ---
+
+async function invRenderAuxiliaryAccounts(container) {
+    showLoading(container);
+    try {
+        const res = await API.get(`contracts/auxiliary-accounts?hotel_id=${invCurrentHotel}`);
+        const accounts = res.accounts || [];
+
+        container.innerHTML = `
+            <div class="card">
+                <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+                    <h3><i class="fas fa-users"></i> Comptes auxiliaires</h3>
+                    ${hasPermission('contracts.manage') ? `<button class="btn btn-primary btn-sm" onclick="invShowAuxModal()"><i class="fas fa-plus"></i> Nouveau compte auxiliaire</button>` : ''}
+                </div>
+                <div style="padding:0 var(--space-4) var(--space-3)">
+                    <p style="color:var(--text-tertiary);font-size:var(--font-size-sm);margin:0">
+                        Les comptes auxiliaires permettent de suivre les operations par fournisseur ou par tiers.
+                    </p>
+                </div>
+                ${accounts.length === 0 ? `
+                    <div class="empty-state" style="padding:var(--space-6)">
+                        <i class="fas fa-users" style="font-size:2rem;color:var(--gray-400)"></i>
+                        <h3>Aucun compte auxiliaire</h3>
+                        <p>Creez des comptes auxiliaires pour vos fournisseurs</p>
+                    </div>
+                ` : `
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th style="width:120px">Code</th>
+                                    <th>Libelle</th>
+                                    <th>Type</th>
+                                    <th>Fournisseur lie</th>
+                                    <th>Notes</th>
+                                    <th style="width:80px">Statut</th>
+                                    <th style="width:100px">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${accounts.map(a => `
+                                    <tr style="${a.is_active == 0 ? 'opacity:0.5' : ''}">
+                                        <td><code style="font-size:var(--font-size-sm);background:var(--gray-100);padding:2px 8px;border-radius:var(--radius-sm)">${esc(a.code)}</code></td>
+                                        <td><strong>${esc(a.label)}</strong></td>
+                                        <td><span class="badge badge-${a.type === 'supplier' ? 'primary' : 'secondary'}">${a.type === 'supplier' ? 'Fournisseur' : 'Autre'}</span></td>
+                                        <td>${a.supplier_name ? esc(a.supplier_name) : '<span style="color:var(--text-tertiary)">-</span>'}</td>
+                                        <td style="font-size:var(--font-size-xs);color:var(--text-tertiary)">${esc(a.notes || '')}</td>
+                                        <td>${a.is_active == 0 ? '<span class="badge badge-secondary">Inactif</span>' : '<span class="badge badge-success">Actif</span>'}</td>
+                                        <td>
+                                            <div style="display:flex;gap:var(--space-1)">
+                                                ${hasPermission('contracts.manage') ? `<button class="btn btn-sm btn-outline" onclick="invEditAux(${a.id})" title="Modifier"><i class="fas fa-edit"></i></button>` : ''}
+                                                ${hasPermission('contracts.manage') ? `<button class="btn btn-sm btn-outline text-danger" onclick="invDeleteAux(${a.id})" title="Supprimer"><i class="fas fa-trash"></i></button>` : ''}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `}
+            </div>
+        `;
+    } catch (err) {
+        container.innerHTML = '<div class="alert alert-danger">Erreur de chargement</div>';
+        console.error(err);
+    }
+}
+
+function invShowAuxModal(existing) {
+    const isEdit = !!existing;
+    openModal(isEdit ? 'Modifier le compte auxiliaire' : 'Nouveau compte auxiliaire', `
+        <form onsubmit="invSaveAux(event, ${isEdit ? existing.id : 'null'})">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Code auxiliaire *</label>
+                    <input type="text" id="aux-code" class="form-control" value="${isEdit ? escAttr(existing.code) : ''}" placeholder="Ex: 401001, F-METRO..." required>
+                    <small style="color:var(--text-tertiary)">Code unique identifiant ce compte</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Type</label>
+                    <select id="aux-type" class="form-control">
+                        <option value="supplier" ${!isEdit || existing.type === 'supplier' ? 'selected' : ''}>Fournisseur</option>
+                        <option value="other" ${isEdit && existing.type === 'other' ? 'selected' : ''}>Autre</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Libelle *</label>
+                <input type="text" id="aux-label" class="form-control" value="${isEdit ? escAttr(existing.label) : ''}" placeholder="Ex: METRO Cash & Carry" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Fournisseur lie</label>
+                <select id="aux-supplier" class="form-control">
+                    <option value="">-- Aucun --</option>
+                    ${invSuppliersList.map(s => `<option value="${s.id}" ${isEdit && existing.supplier_id == s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Notes</label>
+                <textarea id="aux-notes" class="form-control" rows="2">${isEdit ? esc(existing.notes || '') : ''}</textarea>
+            </div>
+            ${isEdit ? `
+            <div class="form-group">
+                <label class="form-label">Statut</label>
+                <select id="aux-active" class="form-control">
+                    <option value="1" ${existing.is_active != 0 ? 'selected' : ''}>Actif</option>
+                    <option value="0" ${existing.is_active == 0 ? 'selected' : ''}>Inactif</option>
+                </select>
+            </div>` : ''}
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> ${isEdit ? 'Enregistrer' : 'Creer'}</button>
+            </div>
+        </form>
+    `, 'modal-md');
+
+    // Charger les fournisseurs si pas déjà fait
+    if (invSuppliersList.length === 0) {
+        API.get(`suppliers?hotel_id=${invCurrentHotel}&per_page=500`).then(r => {
+            invSuppliersList = r.suppliers || [];
+            const sel = document.getElementById('aux-supplier');
+            if (sel) {
+                sel.innerHTML = '<option value="">-- Aucun --</option>' + invSuppliersList.map(s =>
+                    `<option value="${s.id}" ${isEdit && existing && existing.supplier_id == s.id ? 'selected' : ''}>${esc(s.name)}</option>`
+                ).join('');
+            }
+        }).catch(() => {});
+    }
+}
+
+async function invSaveAux(e, id) {
+    e.preventDefault();
+    const data = {
+        code: document.getElementById('aux-code').value,
+        label: document.getElementById('aux-label').value,
+        type: document.getElementById('aux-type').value,
+        supplier_id: document.getElementById('aux-supplier').value || null,
+        notes: document.getElementById('aux-notes').value
+    };
+    if (id) {
+        const activeEl = document.getElementById('aux-active');
+        if (activeEl) data.is_active = parseInt(activeEl.value);
+    } else {
+        data.hotel_id = invCurrentHotel;
+    }
+    try {
+        if (id) {
+            await API.put(`contracts/auxiliary-accounts/${id}`, data);
+        } else {
+            await API.post('contracts/auxiliary-accounts', data);
+        }
+        toast(id ? 'Compte auxiliaire modifie' : 'Compte auxiliaire cree', 'success');
+        closeModal();
+        invRenderComptabilite(document.getElementById('inv-tab-content'));
+    } catch (err) {
+        toast(err.message || 'Erreur', 'error');
+    }
+}
+
+async function invEditAux(id) {
+    try {
+        const res = await API.get(`contracts/auxiliary-accounts?hotel_id=${invCurrentHotel}`);
+        const acct = (res.accounts || []).find(a => a.id == id);
+        if (!acct) return toast('Compte introuvable', 'error');
+        invShowAuxModal(acct);
+    } catch (err) {
+        toast('Erreur', 'error');
+    }
+}
+
+async function invDeleteAux(id) {
+    if (!confirm('Supprimer ce compte auxiliaire ?')) return;
+    try {
+        await API.delete(`contracts/auxiliary-accounts/${id}`);
+        toast('Compte auxiliaire supprime', 'success');
+        invRenderComptabilite(document.getElementById('inv-tab-content'));
+    } catch (err) {
+        toast(err.message || 'Erreur', 'error');
+    }
+}
+
+// ============================================================
+// ONGLET REPORTING (avec compte de résultat)
 // ============================================================
 
 let invReportYear = new Date().getFullYear();
+let invReportView = 'categories'; // 'categories' | 'income_statement'
 
 async function invRenderReporting(content) {
+    content.innerHTML = `
+        <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-4)">
+            <button class="btn btn-sm ${invReportView === 'categories' ? 'btn-primary' : 'btn-outline'}" onclick="invReportView='categories';invRenderReporting(document.getElementById('inv-tab-content'))">
+                <i class="fas fa-chart-bar"></i> Par categorie
+            </button>
+            <button class="btn btn-sm ${invReportView === 'income_statement' ? 'btn-primary' : 'btn-outline'}" onclick="invReportView='income_statement';invRenderReporting(document.getElementById('inv-tab-content'))">
+                <i class="fas fa-file-invoice-dollar"></i> Compte de resultat
+            </button>
+        </div>
+        <div id="inv-report-content"></div>
+    `;
+    const sub = document.getElementById('inv-report-content');
+    if (invReportView === 'income_statement') {
+        await invRenderIncomeStatement(sub);
+    } else {
+        await invRenderCategoryReport(sub);
+    }
+}
+
+async function invRenderCategoryReport(content) {
     showLoading(content);
     try {
         const res = await API.get(`invoices/reporting?hotel_id=${invCurrentHotel}&year=${invReportYear}`);
         const data = res.reporting || [];
-        const prevYear = res.previous_year || [];
 
-        // Organiser par catégorie et mois
         const categories = {};
         data.forEach(r => {
             const key = r.category_id || 'sans';
-            if (!categories[key]) categories[key] = { name: r.category_name || 'Sans catégorie', color: r.color, months: {} };
+            if (!categories[key]) categories[key] = { name: r.category_name || 'Sans categorie', color: r.color, months: {} };
             categories[key].months[r.month] = parseFloat(r.total);
         });
 
-        const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+        const months = ['Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aou', 'Sep', 'Oct', 'Nov', 'Dec'];
         const catKeys = Object.keys(categories);
 
         content.innerHTML = `
-            <div class="card" style="margin-bottom:var(--space-4)">
+            <div class="card">
                 <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-                    <h3><i class="fas fa-chart-bar"></i> Dépenses par catégorie — ${invReportYear}</h3>
+                    <h3><i class="fas fa-chart-bar"></i> Depenses par categorie — ${invReportYear}</h3>
                     <div style="display:flex;gap:var(--space-2);align-items:center">
                         <button class="btn btn-sm btn-outline" onclick="invReportYear--;invRenderReporting(document.getElementById('inv-tab-content'))"><i class="fas fa-chevron-left"></i></button>
                         <span style="font-weight:var(--font-semibold);min-width:50px;text-align:center">${invReportYear}</span>
@@ -2266,12 +2663,12 @@ async function invRenderReporting(content) {
                         ${hasPermission('invoices.export') ? `<button class="btn btn-sm btn-outline" onclick="window.open(CONFIG.API_URL+'/invoices/reporting/export?hotel_id=${invCurrentHotel}&year=${invReportYear}&token='+API.token,'_blank')"><i class="fas fa-download"></i> CSV</button>` : ''}
                     </div>
                 </div>
-                ${catKeys.length === 0 ? `<div class="empty-state" style="padding:var(--space-6)"><h3>Aucune donnée pour ${invReportYear}</h3></div>` : `
+                ${catKeys.length === 0 ? `<div class="empty-state" style="padding:var(--space-6)"><h3>Aucune donnee pour ${invReportYear}</h3></div>` : `
                     <div class="table-responsive">
                         <table class="table">
                             <thead>
                                 <tr>
-                                    <th>Catégorie</th>
+                                    <th>Categorie</th>
                                     ${months.map(m => `<th style="text-align:right;font-size:var(--font-size-xs)">${m}</th>`).join('')}
                                     <th style="text-align:right"><strong>Total</strong></th>
                                 </tr>
@@ -2311,6 +2708,162 @@ async function invRenderReporting(content) {
         `;
     } catch (err) {
         content.innerHTML = '<div class="alert alert-danger">Erreur de chargement du reporting</div>';
+    }
+}
+
+async function invRenderIncomeStatement(content) {
+    showLoading(content);
+    try {
+        const res = await API.get(`invoices/income-statement?hotel_id=${invCurrentHotel}&year=${invReportYear}`);
+        const data = res.data || [];
+        const prevYearTotals = res.previous_year_totals || [];
+
+        // Organiser par catégorie avec HT/TTC/count par mois
+        const accounts = {};
+        data.forEach(r => {
+            const key = r.category_id || 'sans';
+            if (!accounts[key]) {
+                accounts[key] = {
+                    name: r.category_name || 'Non categorise',
+                    account_number: r.account_number || '',
+                    account_class: r.account_class || '6',
+                    color: r.color,
+                    months_ht: {},
+                    months_ttc: {},
+                    months_count: {}
+                };
+            }
+            accounts[key].months_ht[r.month] = parseFloat(r.total_ht || 0);
+            accounts[key].months_ttc[r.month] = parseFloat(r.total_ttc || 0);
+            accounts[key].months_count[r.month] = parseInt(r.invoice_count || 0);
+        });
+
+        // Map N-1 totaux
+        const prevMap = {};
+        prevYearTotals.forEach(p => { prevMap[p.category_id || 'sans'] = parseFloat(p.total_ttc || 0); });
+
+        const months = ['Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aou', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const keys = Object.keys(accounts).sort((a, b) => {
+            const na = accounts[a].account_number || 'zzz';
+            const nb = accounts[b].account_number || 'zzz';
+            return na.localeCompare(nb);
+        });
+
+        // Totaux globaux
+        let grandTotalHt = 0, grandTotalTtc = 0, grandPrev = 0;
+        const monthTotals = Array.from({length: 12}, () => ({ht: 0, ttc: 0}));
+        keys.forEach(key => {
+            for (let m = 1; m <= 12; m++) {
+                monthTotals[m-1].ht += accounts[key].months_ht[m] || 0;
+                monthTotals[m-1].ttc += accounts[key].months_ttc[m] || 0;
+            }
+            const rowHt = Object.values(accounts[key].months_ht).reduce((s, v) => s + v, 0);
+            const rowTtc = Object.values(accounts[key].months_ttc).reduce((s, v) => s + v, 0);
+            grandTotalHt += rowHt;
+            grandTotalTtc += rowTtc;
+            grandPrev += prevMap[key] || 0;
+        });
+
+        content.innerHTML = `
+            <div class="card">
+                <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+                    <h3><i class="fas fa-file-invoice-dollar"></i> Compte de resultat des depenses — ${invReportYear}</h3>
+                    <div style="display:flex;gap:var(--space-2);align-items:center">
+                        <button class="btn btn-sm btn-outline" onclick="invReportYear--;invRenderReporting(document.getElementById('inv-tab-content'))"><i class="fas fa-chevron-left"></i></button>
+                        <span style="font-weight:var(--font-semibold);min-width:50px;text-align:center">${invReportYear}</span>
+                        <button class="btn btn-sm btn-outline" onclick="invReportYear++;invRenderReporting(document.getElementById('inv-tab-content'))"><i class="fas fa-chevron-right"></i></button>
+                        ${hasPermission('invoices.export') ? `<button class="btn btn-sm btn-outline" onclick="window.open(CONFIG.API_URL+'/invoices/income-statement?hotel_id=${invCurrentHotel}&year=${invReportYear}&export=csv&token='+API.token,'_blank')"><i class="fas fa-download"></i> CSV</button>` : ''}
+                    </div>
+                </div>
+
+                <!-- KPIs -->
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:var(--space-3);padding:var(--space-4)">
+                    <div style="text-align:center;padding:var(--space-3);background:var(--gray-50);border-radius:var(--radius-md)">
+                        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-transform:uppercase">Total HT ${invReportYear}</div>
+                        <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--text-primary)">${invFormatCurrency(grandTotalHt)}</div>
+                    </div>
+                    <div style="text-align:center;padding:var(--space-3);background:var(--gray-50);border-radius:var(--radius-md)">
+                        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-transform:uppercase">Total TTC ${invReportYear}</div>
+                        <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--brand-secondary)">${invFormatCurrency(grandTotalTtc)}</div>
+                    </div>
+                    <div style="text-align:center;padding:var(--space-3);background:var(--gray-50);border-radius:var(--radius-md)">
+                        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-transform:uppercase">Total TTC N-1</div>
+                        <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--text-secondary)">${invFormatCurrency(grandPrev)}</div>
+                    </div>
+                    <div style="text-align:center;padding:var(--space-3);background:${grandPrev > 0 ? (grandTotalTtc > grandPrev ? 'var(--danger-50, #fef2f2)' : 'var(--success-50, #f0fdf4)') : 'var(--gray-50)'};border-radius:var(--radius-md)">
+                        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-transform:uppercase">Variation N/N-1</div>
+                        <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:${grandPrev > 0 ? (grandTotalTtc > grandPrev ? 'var(--danger-500)' : 'var(--success-500)') : 'var(--text-secondary)'}">
+                            ${grandPrev > 0 ? ((grandTotalTtc - grandPrev) / grandPrev * 100 >= 0 ? '+' : '') + ((grandTotalTtc - grandPrev) / grandPrev * 100).toFixed(1) + '%' : '-'}
+                        </div>
+                    </div>
+                </div>
+
+                ${keys.length === 0 ? `<div class="empty-state" style="padding:var(--space-6)"><h3>Aucune donnee pour ${invReportYear}</h3><p>Les factures validees apparaitront ici</p></div>` : `
+                    <div class="table-responsive">
+                        <table class="table" style="font-size:var(--font-size-sm)">
+                            <thead>
+                                <tr style="background:var(--gray-100)">
+                                    <th style="min-width:60px">Compte</th>
+                                    <th style="min-width:140px">Libelle</th>
+                                    ${months.map(m => `<th style="text-align:right;font-size:var(--font-size-xs);min-width:75px">${m}</th>`).join('')}
+                                    <th style="text-align:right;min-width:90px">Total HT</th>
+                                    <th style="text-align:right;min-width:90px">Total TTC</th>
+                                    <th style="text-align:right;min-width:80px">N-1</th>
+                                    <th style="text-align:right;min-width:60px">Var.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${keys.map(key => {
+                                    const acct = accounts[key];
+                                    let rowTotalHt = 0, rowTotalTtc = 0;
+                                    const prevTotal = prevMap[key] || 0;
+                                    return `<tr>
+                                        <td><code style="font-size:var(--font-size-xs);background:var(--gray-100);padding:1px 6px;border-radius:var(--radius-sm)">${esc(acct.account_number || '-')}</code></td>
+                                        <td>
+                                            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${acct.color || 'var(--gray-400)'};margin-right:4px"></span>
+                                            ${esc(acct.name)}
+                                        </td>
+                                        ${Array.from({length: 12}, (_, m) => {
+                                            const val = acct.months_ttc[m + 1] || 0;
+                                            rowTotalHt += acct.months_ht[m + 1] || 0;
+                                            rowTotalTtc += val;
+                                            return `<td style="text-align:right;font-size:var(--font-size-xs)">${val ? invFormatCurrency(val) : '<span style="color:var(--gray-300)">-</span>'}</td>`;
+                                        }).join('')}
+                                        <td style="text-align:right"><strong>${invFormatCurrency(rowTotalHt)}</strong></td>
+                                        <td style="text-align:right"><strong style="color:var(--brand-secondary)">${invFormatCurrency(rowTotalTtc)}</strong></td>
+                                        <td style="text-align:right;color:var(--text-tertiary)">${prevTotal ? invFormatCurrency(prevTotal) : '-'}</td>
+                                        <td style="text-align:right">
+                                            ${prevTotal > 0 ? `<span style="color:${rowTotalTtc > prevTotal ? 'var(--danger-500)' : 'var(--success-500)'};font-weight:var(--font-semibold);font-size:var(--font-size-xs)">
+                                                ${((rowTotalTtc - prevTotal) / prevTotal * 100 >= 0 ? '+' : '') + ((rowTotalTtc - prevTotal) / prevTotal * 100).toFixed(1)}%
+                                            </span>` : '-'}
+                                        </td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                            <tfoot>
+                                <tr style="font-weight:var(--font-bold);background:var(--gray-100);border-top:2px solid var(--gray-300)">
+                                    <td colspan="2">TOTAL CHARGES</td>
+                                    ${Array.from({length: 12}, (_, m) => {
+                                        return `<td style="text-align:right;font-size:var(--font-size-xs)">${monthTotals[m].ttc ? invFormatCurrency(monthTotals[m].ttc) : '-'}</td>`;
+                                    }).join('')}
+                                    <td style="text-align:right">${invFormatCurrency(grandTotalHt)}</td>
+                                    <td style="text-align:right;color:var(--brand-secondary)">${invFormatCurrency(grandTotalTtc)}</td>
+                                    <td style="text-align:right;color:var(--text-tertiary)">${grandPrev ? invFormatCurrency(grandPrev) : '-'}</td>
+                                    <td style="text-align:right">
+                                        ${grandPrev > 0 ? `<span style="color:${grandTotalTtc > grandPrev ? 'var(--danger-500)' : 'var(--success-500)'}">
+                                            ${((grandTotalTtc - grandPrev) / grandPrev * 100 >= 0 ? '+' : '') + ((grandTotalTtc - grandPrev) / grandPrev * 100).toFixed(1)}%
+                                        </span>` : '-'}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                `}
+            </div>
+        `;
+    } catch (err) {
+        content.innerHTML = '<div class="alert alert-danger">Erreur de chargement du compte de resultat</div>';
+        console.error(err);
     }
 }
 
