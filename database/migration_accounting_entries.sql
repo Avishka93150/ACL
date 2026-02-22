@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS accounting_import_templates (
     hotel_id INT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT DEFAULT NULL,
-    delimiter VARCHAR(5) NOT NULL,
+    csv_delimiter VARCHAR(5) NOT NULL,
     encoding VARCHAR(20) DEFAULT 'UTF-8',
     skip_rows INT DEFAULT 0,
     date_format VARCHAR(20) DEFAULT 'd/m/Y',

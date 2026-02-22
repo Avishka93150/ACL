@@ -3224,9 +3224,9 @@ function invShowTemplateForm(tplId) {
             <div class="form-row" style="display:flex;gap:var(--space-3);flex-wrap:wrap">
                 <div class="form-group" style="flex:1"><label class="form-label">Delimiteur</label>
                     <select id="tpl-delimiter" class="form-control">
-                        <option value=";" ${(tpl?.delimiter || ';') === ';' ? 'selected' : ''}>Point-virgule (;)</option>
-                        <option value="," ${tpl?.delimiter === ',' ? 'selected' : ''}>Virgule (,)</option>
-                        <option value="\\t" ${tpl?.delimiter === '\\t' ? 'selected' : ''}>Tabulation</option>
+                        <option value=";" ${(tpl?.csv_delimiter || ';') === ';' ? 'selected' : ''}>Point-virgule (;)</option>
+                        <option value="," ${tpl?.csv_delimiter === ',' ? 'selected' : ''}>Virgule (,)</option>
+                        <option value="\\t" ${tpl?.csv_delimiter === '\\t' ? 'selected' : ''}>Tabulation</option>
                     </select></div>
                 <div class="form-group" style="flex:1"><label class="form-label">Encodage</label>
                     <select id="tpl-encoding" class="form-control">
@@ -3263,7 +3263,7 @@ async function invSaveTemplate(event, tplId) {
     const data = {
         hotel_id: invCurrentHotel,
         name: document.getElementById('tpl-name').value,
-        delimiter: document.getElementById('tpl-delimiter').value,
+        csv_delimiter: document.getElementById('tpl-delimiter').value,
         encoding: document.getElementById('tpl-encoding').value,
         skip_rows: parseInt(document.getElementById('tpl-skip').value) || 0,
         column_mapping: JSON.stringify({
