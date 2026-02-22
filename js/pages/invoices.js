@@ -2990,7 +2990,11 @@ async function invRenderImport(content) {
                             <button class="btn btn-sm btn-outline" onclick="navigator.clipboard.writeText('${esc(invImportEmailConfig.email_address)}');toast('Copie !','success')"><i class="fas fa-copy"></i></button>
                             <span class="badge badge-${invImportEmailConfig.is_active ? 'success' : 'secondary'}">${invImportEmailConfig.is_active ? 'Actif' : 'Inactif'}</span>
                         </div>
-                    ` : '<p class="text-muted">Aucune adresse email configuree pour cet hotel.</p>'}
+                    ` : `<p class="text-muted">Aucune adresse email configuree pour cet hotel.</p>
+                        ${API.user.role === 'admin' || API.user.role === 'groupe_manager' ? `
+                            <button class="btn btn-primary" onclick="invGenerateImportEmail()" id="btn-gen-email"><i class="fas fa-magic"></i> Generer l'adresse email</button>
+                        ` : '<p class="text-muted" style="font-size:var(--font-size-sm)"><i class="fas fa-info-circle"></i> Contactez un administrateur pour generer l\'email d\'import.</p>'}
+                    `}
                 </div>
             </div>
 
@@ -3062,6 +3066,19 @@ async function invRenderImport(content) {
     } catch (err) {
         content.innerHTML = '<div class="alert alert-danger">Erreur de chargement</div>';
         console.error(err);
+    }
+}
+
+async function invGenerateImportEmail() {
+    const btn = document.getElementById('btn-gen-email');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:16px;height:16px"></span> Generation...'; }
+    try {
+        const res = await API.post('accounting/email-config/generate', { hotel_id: invCurrentHotel });
+        toast('Email genere : ' + res.email, 'success');
+        invRenderImport(document.getElementById('inv-tab-content'));
+    } catch (err) {
+        toast(err.message || 'Erreur', 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-magic"></i> Generer l\'adresse email'; }
     }
 }
 
