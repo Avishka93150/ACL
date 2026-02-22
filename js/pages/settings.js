@@ -98,6 +98,10 @@ const PERMISSION_LABELS = {
     'invoices.delete': 'Supprimer une facture',
     'invoices.export': 'Exporter les factures',
     'invoices.configure': 'Configurer le workflow factures',
+    'accounting.view': 'Voir le compte de résultat',
+    'accounting.import': 'Importer des écritures CSV',
+    'accounting.manage': 'Gérer les écritures et templates',
+    'accounting.delete': 'Supprimer des imports/écritures',
     'permissions.manage': 'Gérer les permissions'
 };
 
@@ -118,6 +122,7 @@ const PERMISSION_CATEGORIES = {
     'Self Check-in': ['selfcheckin.view', 'selfcheckin.manage'],
     'Contrats Fournisseurs': ['contracts.view', 'contracts.create', 'contracts.manage', 'contracts.delete', 'contracts.analyze', 'contracts.export'],
     'Factures Fournisseurs': ['suppliers.manage', 'categories.manage', 'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.review', 'invoices.approve', 'invoices.pay', 'invoices.delete', 'invoices.export', 'invoices.configure'],
+    'Comptabilité & Import CSV': ['accounting.view', 'accounting.import', 'accounting.manage', 'accounting.delete'],
     'Dashboard & Rapports': ['dashboard.view', 'dashboard.global', 'reports.access', 'reports.export'],
     'Administration': ['permissions.manage']
 };
@@ -170,6 +175,7 @@ const DEFAULT_PERMISSIONS = {
         'contracts.view': true, 'contracts.create': true, 'contracts.manage': true, 'contracts.delete': true, 'contracts.analyze': true, 'contracts.export': true,
         'suppliers.manage': true, 'categories.manage': true,
         'invoices.view': true, 'invoices.create': true, 'invoices.edit': true, 'invoices.review': true, 'invoices.approve': true, 'invoices.pay': true, 'invoices.delete': true, 'invoices.export': true, 'invoices.configure': true,
+        'accounting.view': true, 'accounting.import': true, 'accounting.manage': true, 'accounting.delete': true,
         'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': true,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -190,6 +196,7 @@ const DEFAULT_PERMISSIONS = {
         'contracts.view': true, 'contracts.create': true, 'contracts.manage': true, 'contracts.delete': false, 'contracts.analyze': true, 'contracts.export': true,
         'suppliers.manage': true, 'categories.manage': true,
         'invoices.view': true, 'invoices.create': true, 'invoices.edit': true, 'invoices.review': true, 'invoices.approve': true, 'invoices.pay': true, 'invoices.delete': false, 'invoices.export': true, 'invoices.configure': true,
+        'accounting.view': true, 'accounting.import': true, 'accounting.manage': true, 'accounting.delete': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': true,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -210,6 +217,7 @@ const DEFAULT_PERMISSIONS = {
         'contracts.view': true, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': true,
         'suppliers.manage': false, 'categories.manage': true,
         'invoices.view': true, 'invoices.create': true, 'invoices.edit': true, 'invoices.review': true, 'invoices.approve': true, 'invoices.pay': true, 'invoices.delete': false, 'invoices.export': true, 'invoices.configure': false,
+        'accounting.view': true, 'accounting.import': true, 'accounting.manage': true, 'accounting.delete': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -230,6 +238,7 @@ const DEFAULT_PERMISSIONS = {
         'contracts.view': false, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': false,
         'suppliers.manage': false, 'categories.manage': false,
         'invoices.view': false, 'invoices.create': false, 'invoices.edit': false, 'invoices.review': false, 'invoices.approve': false, 'invoices.pay': false, 'invoices.delete': false, 'invoices.export': false, 'invoices.configure': false,
+        'accounting.view': false, 'accounting.import': false, 'accounting.manage': false, 'accounting.delete': false,
         'messages.access': true, 'messages.broadcast': true, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': true, 'reports.access': true, 'reports.export': true,
         'permissions.manage': false
@@ -250,6 +259,7 @@ const DEFAULT_PERMISSIONS = {
         'contracts.view': false, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': false,
         'suppliers.manage': false, 'categories.manage': false,
         'invoices.view': false, 'invoices.create': false, 'invoices.edit': false, 'invoices.review': false, 'invoices.approve': false, 'invoices.pay': false, 'invoices.delete': false, 'invoices.export': false, 'invoices.configure': false,
+        'accounting.view': false, 'accounting.import': false, 'accounting.manage': false, 'accounting.delete': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
         'permissions.manage': false
@@ -270,6 +280,7 @@ const DEFAULT_PERMISSIONS = {
         'contracts.view': false, 'contracts.create': false, 'contracts.manage': false, 'contracts.delete': false, 'contracts.analyze': false, 'contracts.export': false,
         'suppliers.manage': false, 'categories.manage': false,
         'invoices.view': false, 'invoices.create': false, 'invoices.edit': false, 'invoices.review': false, 'invoices.approve': false, 'invoices.pay': false, 'invoices.delete': false, 'invoices.export': false, 'invoices.configure': false,
+        'accounting.view': false, 'accounting.import': false, 'accounting.manage': false, 'accounting.delete': false,
         'messages.access': true, 'messages.broadcast': false, 'notifications.receive': true, 'notifications.manage': false,
         'dashboard.view': true, 'dashboard.global': false, 'reports.access': false, 'reports.export': false,
         'permissions.manage': false
@@ -943,6 +954,7 @@ function getCategoryIcon(cat) {
         'Livret d\'accueil': 'fa-book-open',
         'Self Check-in': 'fa-qrcode',
         'Communication': 'fa-envelope',
+        'Comptabilité & Import CSV': 'fa-file-csv',
         'Dashboard & Rapports': 'fa-chart-bar',
         'Administration': 'fa-cog'
     };

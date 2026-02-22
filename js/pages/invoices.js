@@ -307,6 +307,7 @@ function invRenderMain(container) {
             <div class="closure-tab ${invActiveTab === 'factures' ? 'active' : ''}" data-inv-tab="factures" onclick="invSwitchTab('factures')"><i class="fas fa-file-invoice-dollar"></i> <span>Factures</span></div>
             <div class="closure-tab ${invActiveTab === 'fournisseurs' ? 'active' : ''}" data-inv-tab="fournisseurs" onclick="invSwitchTab('fournisseurs')"><i class="fas fa-building"></i> <span>Fournisseurs</span></div>
             <div class="closure-tab ${invActiveTab === 'comptabilite' ? 'active' : ''}" data-inv-tab="comptabilite" onclick="invSwitchTab('comptabilite')"><i class="fas fa-calculator"></i> <span>Plan comptable</span></div>
+            <div class="closure-tab ${invActiveTab === 'import' ? 'active' : ''}" data-inv-tab="import" onclick="invSwitchTab('import')"><i class="fas fa-file-csv"></i> <span>Import CSV</span></div>
             <div class="closure-tab ${invActiveTab === 'reporting' ? 'active' : ''}" data-inv-tab="reporting" onclick="invSwitchTab('reporting')"><i class="fas fa-chart-bar"></i> <span>Reporting</span></div>
             ${hasPermission('invoices.export') ? `<div class="closure-tab ${invActiveTab === 'export' ? 'active' : ''}" data-inv-tab="export" onclick="invSwitchTab('export')"><i class="fas fa-download"></i> <span>Export</span></div>` : ''}
             ${hasPermission('invoices.configure') ? `<div class="closure-tab ${invActiveTab === 'config' ? 'active' : ''}" data-inv-tab="config" onclick="invSwitchTab('config')"><i class="fas fa-cog"></i> <span>Configuration</span></div>` : ''}
@@ -348,6 +349,7 @@ function invSwitchTab(tab) {
         case 'factures': invRenderFactures(content); break;
         case 'fournisseurs': invRenderFournisseurs(content); break;
         case 'comptabilite': invRenderComptabilite(content); break;
+        case 'import': invRenderImport(content); break;
         case 'reporting': invRenderReporting(content); break;
         case 'export': invRenderExport(content); break;
         case 'config': invRenderConfig(content); break;
@@ -2727,47 +2729,103 @@ async function invRenderIncomeStatement(content) {
                     name: r.category_name || 'Non categorise',
                     account_number: r.account_number || '',
                     account_class: r.account_class || '6',
+                    group_label: r.group_label || '',
+                    sort_order: parseInt(r.sort_order || 999),
                     color: r.color,
                     months_ht: {},
                     months_ttc: {},
                     months_count: {}
                 };
             }
-            accounts[key].months_ht[r.month] = parseFloat(r.total_ht || 0);
-            accounts[key].months_ttc[r.month] = parseFloat(r.total_ttc || 0);
-            accounts[key].months_count[r.month] = parseInt(r.invoice_count || 0);
+            accounts[key].months_ht[r.month] = (accounts[key].months_ht[r.month] || 0) + parseFloat(r.total_ht || 0);
+            accounts[key].months_ttc[r.month] = (accounts[key].months_ttc[r.month] || 0) + parseFloat(r.total_ttc || 0);
+            accounts[key].months_count[r.month] = (accounts[key].months_count[r.month] || 0) + parseInt(r.invoice_count || 0);
         });
 
         // Map N-1 totaux
         const prevMap = {};
-        prevYearTotals.forEach(p => { prevMap[p.category_id || 'sans'] = parseFloat(p.total_ttc || 0); });
+        prevYearTotals.forEach(p => {
+            const k = p.category_id || 'sans';
+            prevMap[k] = (prevMap[k] || 0) + parseFloat(p.total_ttc || 0);
+        });
 
         const months = ['Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aou', 'Sep', 'Oct', 'Nov', 'Dec'];
         const keys = Object.keys(accounts).sort((a, b) => {
+            const sa = accounts[a].sort_order; const sb = accounts[b].sort_order;
+            if (sa !== sb) return sa - sb;
             const na = accounts[a].account_number || 'zzz';
             const nb = accounts[b].account_number || 'zzz';
             return na.localeCompare(nb);
         });
 
-        // Totaux globaux
-        let grandTotalHt = 0, grandTotalTtc = 0, grandPrev = 0;
-        const monthTotals = Array.from({length: 12}, () => ({ht: 0, ttc: 0}));
-        keys.forEach(key => {
-            for (let m = 1; m <= 12; m++) {
-                monthTotals[m-1].ht += accounts[key].months_ht[m] || 0;
-                monthTotals[m-1].ttc += accounts[key].months_ttc[m] || 0;
-            }
-            const rowHt = Object.values(accounts[key].months_ht).reduce((s, v) => s + v, 0);
-            const rowTtc = Object.values(accounts[key].months_ttc).reduce((s, v) => s + v, 0);
-            grandTotalHt += rowHt;
-            grandTotalTtc += rowTtc;
-            grandPrev += prevMap[key] || 0;
-        });
+        // Séparer Produits (Classe 7) et Charges (Classe 6)
+        const chargesKeys = keys.filter(k => accounts[k].account_class !== '7');
+        const produitsKeys = keys.filter(k => accounts[k].account_class === '7');
+
+        // Totaux par section
+        function calcSection(sKeys) {
+            let totalHt = 0, totalTtc = 0, totalPrev = 0;
+            const mTotals = Array.from({length: 12}, () => ({ht: 0, ttc: 0}));
+            sKeys.forEach(key => {
+                for (let m = 1; m <= 12; m++) {
+                    mTotals[m-1].ht += accounts[key].months_ht[m] || 0;
+                    mTotals[m-1].ttc += accounts[key].months_ttc[m] || 0;
+                }
+                totalHt += Object.values(accounts[key].months_ht).reduce((s, v) => s + v, 0);
+                totalTtc += Object.values(accounts[key].months_ttc).reduce((s, v) => s + v, 0);
+                totalPrev += prevMap[key] || 0;
+            });
+            return { totalHt, totalTtc, totalPrev, mTotals };
+        }
+        const chSec = calcSection(chargesKeys);
+        const prSec = calcSection(produitsKeys);
+        const resultatNet = prSec.totalTtc - chSec.totalTtc;
+        const resultatPrev = prSec.totalPrev - chSec.totalPrev;
+        const marge = prSec.totalTtc > 0 ? (resultatNet / prSec.totalTtc * 100) : 0;
+
+        // Helper pour rendre une section (Produits ou Charges)
+        function renderSection(sectionKeys, sectionData, label, colorClass) {
+            if (sectionKeys.length === 0) return '';
+            let lastGroup = '';
+            let rows = '';
+            sectionKeys.forEach(key => {
+                const acct = accounts[key];
+                if (acct.group_label && acct.group_label !== lastGroup) {
+                    lastGroup = acct.group_label;
+                    rows += `<tr style="background:var(--gray-50)"><td colspan="${16}"><strong style="font-size:var(--font-size-xs);text-transform:uppercase;color:var(--text-tertiary);letter-spacing:0.5px"><i class="fas fa-folder" style="margin-right:4px"></i>${esc(lastGroup)}</strong></td></tr>`;
+                }
+                let rowTotalHt = 0, rowTotalTtc = 0;
+                const prevTotal = prevMap[key] || 0;
+                rows += `<tr style="cursor:pointer" onclick="invShowDrillDown(${key === 'sans' ? 'null' : key}, '${esc(acct.name)}')">
+                    <td><code style="font-size:var(--font-size-xs);background:var(--gray-100);padding:1px 6px;border-radius:var(--radius-sm)">${esc(acct.account_number || '-')}</code></td>
+                    <td>
+                        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${acct.color || 'var(--gray-400)'};margin-right:4px"></span>
+                        ${esc(acct.name)}
+                    </td>
+                    ${Array.from({length: 12}, (_, m) => {
+                        const val = acct.months_ttc[m + 1] || 0;
+                        rowTotalHt += acct.months_ht[m + 1] || 0;
+                        rowTotalTtc += val;
+                        return '<td style="text-align:right;font-size:var(--font-size-xs)">' + (val ? invFormatCurrency(val) : '<span style="color:var(--gray-300)">-</span>') + '</td>';
+                    }).join('')}
+                    <td style="text-align:right"><strong>${invFormatCurrency(rowTotalTtc)}</strong></td>
+                    <td style="text-align:right;color:var(--text-tertiary)">${prevTotal ? invFormatCurrency(prevTotal) : '-'}</td>
+                </tr>`;
+            });
+            // Sub-total row
+            rows += `<tr style="font-weight:var(--font-bold);background:${colorClass === 'success' ? 'var(--success-50, #f0fdf4)' : 'var(--danger-50, #fef2f2)'};border-top:2px solid var(--gray-300)">
+                <td colspan="2">TOTAL ${label}</td>
+                ${Array.from({length: 12}, (_, m) => '<td style="text-align:right;font-size:var(--font-size-xs)">' + (sectionData.mTotals[m].ttc ? invFormatCurrency(sectionData.mTotals[m].ttc) : '-') + '</td>').join('')}
+                <td style="text-align:right;color:var(--${colorClass}-600, var(--text-primary))">${invFormatCurrency(sectionData.totalTtc)}</td>
+                <td style="text-align:right;color:var(--text-tertiary)">${sectionData.totalPrev ? invFormatCurrency(sectionData.totalPrev) : '-'}</td>
+            </tr>`;
+            return rows;
+        }
 
         content.innerHTML = `
             <div class="card">
                 <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-                    <h3><i class="fas fa-file-invoice-dollar"></i> Compte de resultat des depenses — ${invReportYear}</h3>
+                    <h3><i class="fas fa-file-invoice-dollar"></i> Compte de resultat — ${invReportYear}</h3>
                     <div style="display:flex;gap:var(--space-2);align-items:center">
                         <button class="btn btn-sm btn-outline" onclick="invReportYear--;invRenderReporting(document.getElementById('inv-tab-content'))"><i class="fas fa-chevron-left"></i></button>
                         <span style="font-weight:var(--font-semibold);min-width:50px;text-align:center">${invReportYear}</span>
@@ -2777,83 +2835,58 @@ async function invRenderIncomeStatement(content) {
                 </div>
 
                 <!-- KPIs -->
-                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:var(--space-3);padding:var(--space-4)">
-                    <div style="text-align:center;padding:var(--space-3);background:var(--gray-50);border-radius:var(--radius-md)">
-                        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-transform:uppercase">Total HT ${invReportYear}</div>
-                        <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--text-primary)">${invFormatCurrency(grandTotalHt)}</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));gap:var(--space-3);padding:var(--space-4)">
+                    <div style="text-align:center;padding:var(--space-3);background:var(--success-50, #f0fdf4);border-radius:var(--radius-md);border-left:3px solid var(--success-500, #22c55e)">
+                        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-transform:uppercase">Total Produits</div>
+                        <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--success-600, #16a34a)">${invFormatCurrency(prSec.totalTtc)}</div>
+                    </div>
+                    <div style="text-align:center;padding:var(--space-3);background:var(--danger-50, #fef2f2);border-radius:var(--radius-md);border-left:3px solid var(--danger-500, #ef4444)">
+                        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-transform:uppercase">Total Charges</div>
+                        <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--danger-600, #dc2626)">${invFormatCurrency(chSec.totalTtc)}</div>
+                    </div>
+                    <div style="text-align:center;padding:var(--space-3);background:${resultatNet >= 0 ? 'var(--success-50, #f0fdf4)' : 'var(--danger-50, #fef2f2)'};border-radius:var(--radius-md);border-left:3px solid ${resultatNet >= 0 ? 'var(--success-500)' : 'var(--danger-500)'}">
+                        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-transform:uppercase">Resultat Net</div>
+                        <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:${resultatNet >= 0 ? 'var(--success-600, #16a34a)' : 'var(--danger-600, #dc2626)'}">${invFormatCurrency(resultatNet)}</div>
                     </div>
                     <div style="text-align:center;padding:var(--space-3);background:var(--gray-50);border-radius:var(--radius-md)">
-                        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-transform:uppercase">Total TTC ${invReportYear}</div>
-                        <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--brand-secondary)">${invFormatCurrency(grandTotalTtc)}</div>
+                        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-transform:uppercase">Marge</div>
+                        <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:${marge >= 0 ? 'var(--success-600, #16a34a)' : 'var(--danger-600, #dc2626)'}">${marge.toFixed(1)}%</div>
                     </div>
                     <div style="text-align:center;padding:var(--space-3);background:var(--gray-50);border-radius:var(--radius-md)">
-                        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-transform:uppercase">Total TTC N-1</div>
-                        <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--text-secondary)">${invFormatCurrency(grandPrev)}</div>
-                    </div>
-                    <div style="text-align:center;padding:var(--space-3);background:${grandPrev > 0 ? (grandTotalTtc > grandPrev ? 'var(--danger-50, #fef2f2)' : 'var(--success-50, #f0fdf4)') : 'var(--gray-50)'};border-radius:var(--radius-md)">
-                        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-transform:uppercase">Variation N/N-1</div>
-                        <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:${grandPrev > 0 ? (grandTotalTtc > grandPrev ? 'var(--danger-500)' : 'var(--success-500)') : 'var(--text-secondary)'}">
-                            ${grandPrev > 0 ? ((grandTotalTtc - grandPrev) / grandPrev * 100 >= 0 ? '+' : '') + ((grandTotalTtc - grandPrev) / grandPrev * 100).toFixed(1) + '%' : '-'}
-                        </div>
+                        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-transform:uppercase">Resultat N-1</div>
+                        <div style="font-size:var(--font-size-xl);font-weight:var(--font-bold);color:var(--text-secondary)">${invFormatCurrency(resultatPrev)}</div>
                     </div>
                 </div>
 
-                ${keys.length === 0 ? `<div class="empty-state" style="padding:var(--space-6)"><h3>Aucune donnee pour ${invReportYear}</h3><p>Les factures validees apparaitront ici</p></div>` : `
+                ${keys.length === 0 ? `<div class="empty-state" style="padding:var(--space-6)"><h3>Aucune donnee pour ${invReportYear}</h3><p>Les factures validees et ecritures comptables apparaitront ici</p></div>` : `
                     <div class="table-responsive">
                         <table class="table" style="font-size:var(--font-size-sm)">
                             <thead>
                                 <tr style="background:var(--gray-100)">
                                     <th style="min-width:60px">Compte</th>
                                     <th style="min-width:140px">Libelle</th>
-                                    ${months.map(m => `<th style="text-align:right;font-size:var(--font-size-xs);min-width:75px">${m}</th>`).join('')}
-                                    <th style="text-align:right;min-width:90px">Total HT</th>
+                                    ${months.map(m => '<th style="text-align:right;font-size:var(--font-size-xs);min-width:70px">' + m + '</th>').join('')}
                                     <th style="text-align:right;min-width:90px">Total TTC</th>
                                     <th style="text-align:right;min-width:80px">N-1</th>
-                                    <th style="text-align:right;min-width:60px">Var.</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                ${keys.map(key => {
-                                    const acct = accounts[key];
-                                    let rowTotalHt = 0, rowTotalTtc = 0;
-                                    const prevTotal = prevMap[key] || 0;
-                                    return `<tr>
-                                        <td><code style="font-size:var(--font-size-xs);background:var(--gray-100);padding:1px 6px;border-radius:var(--radius-sm)">${esc(acct.account_number || '-')}</code></td>
-                                        <td>
-                                            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${acct.color || 'var(--gray-400)'};margin-right:4px"></span>
-                                            ${esc(acct.name)}
-                                        </td>
-                                        ${Array.from({length: 12}, (_, m) => {
-                                            const val = acct.months_ttc[m + 1] || 0;
-                                            rowTotalHt += acct.months_ht[m + 1] || 0;
-                                            rowTotalTtc += val;
-                                            return `<td style="text-align:right;font-size:var(--font-size-xs)">${val ? invFormatCurrency(val) : '<span style="color:var(--gray-300)">-</span>'}</td>`;
-                                        }).join('')}
-                                        <td style="text-align:right"><strong>${invFormatCurrency(rowTotalHt)}</strong></td>
-                                        <td style="text-align:right"><strong style="color:var(--brand-secondary)">${invFormatCurrency(rowTotalTtc)}</strong></td>
-                                        <td style="text-align:right;color:var(--text-tertiary)">${prevTotal ? invFormatCurrency(prevTotal) : '-'}</td>
-                                        <td style="text-align:right">
-                                            ${prevTotal > 0 ? `<span style="color:${rowTotalTtc > prevTotal ? 'var(--danger-500)' : 'var(--success-500)'};font-weight:var(--font-semibold);font-size:var(--font-size-xs)">
-                                                ${((rowTotalTtc - prevTotal) / prevTotal * 100 >= 0 ? '+' : '') + ((rowTotalTtc - prevTotal) / prevTotal * 100).toFixed(1)}%
-                                            </span>` : '-'}
-                                        </td>
-                                    </tr>`;
-                                }).join('')}
+                                ${produitsKeys.length > 0 ? '<tr style="background:var(--success-50, #f0fdf4)"><td colspan="16"><strong style="color:var(--success-700, #15803d)"><i class="fas fa-arrow-up"></i> PRODUITS (Classe 7)</strong></td></tr>' : ''}
+                                ${renderSection(produitsKeys, prSec, 'PRODUITS', 'success')}
+                                ${chargesKeys.length > 0 ? '<tr style="background:var(--danger-50, #fef2f2)"><td colspan="16"><strong style="color:var(--danger-700, #b91c1c)"><i class="fas fa-arrow-down"></i> CHARGES (Classe 6)</strong></td></tr>' : ''}
+                                ${renderSection(chargesKeys, chSec, 'CHARGES', 'danger')}
                             </tbody>
                             <tfoot>
-                                <tr style="font-weight:var(--font-bold);background:var(--gray-100);border-top:2px solid var(--gray-300)">
-                                    <td colspan="2">TOTAL CHARGES</td>
+                                <tr style="font-weight:var(--font-bold);background:${resultatNet >= 0 ? 'var(--success-50, #f0fdf4)' : 'var(--danger-50, #fef2f2)'};border-top:3px solid var(--gray-400)">
+                                    <td colspan="2" style="font-size:var(--font-size-base)">RESULTAT NET</td>
                                     ${Array.from({length: 12}, (_, m) => {
-                                        return `<td style="text-align:right;font-size:var(--font-size-xs)">${monthTotals[m].ttc ? invFormatCurrency(monthTotals[m].ttc) : '-'}</td>`;
+                                        const mProd = prSec.mTotals[m].ttc;
+                                        const mCh = chSec.mTotals[m].ttc;
+                                        const mNet = mProd - mCh;
+                                        return '<td style="text-align:right;font-size:var(--font-size-xs);color:' + (mNet >= 0 ? 'var(--success-600)' : 'var(--danger-600)') + '">' + (mProd || mCh ? invFormatCurrency(mNet) : '-') + '</td>';
                                     }).join('')}
-                                    <td style="text-align:right">${invFormatCurrency(grandTotalHt)}</td>
-                                    <td style="text-align:right;color:var(--brand-secondary)">${invFormatCurrency(grandTotalTtc)}</td>
-                                    <td style="text-align:right;color:var(--text-tertiary)">${grandPrev ? invFormatCurrency(grandPrev) : '-'}</td>
-                                    <td style="text-align:right">
-                                        ${grandPrev > 0 ? `<span style="color:${grandTotalTtc > grandPrev ? 'var(--danger-500)' : 'var(--success-500)'}">
-                                            ${((grandTotalTtc - grandPrev) / grandPrev * 100 >= 0 ? '+' : '') + ((grandTotalTtc - grandPrev) / grandPrev * 100).toFixed(1)}%
-                                        </span>` : '-'}
-                                    </td>
+                                    <td style="text-align:right;font-size:var(--font-size-base);color:${resultatNet >= 0 ? 'var(--success-600, #16a34a)' : 'var(--danger-600, #dc2626)'}">${invFormatCurrency(resultatNet)}</td>
+                                    <td style="text-align:right;color:var(--text-tertiary)">${resultatPrev ? invFormatCurrency(resultatPrev) : '-'}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -2865,6 +2898,372 @@ async function invRenderIncomeStatement(content) {
         content.innerHTML = '<div class="alert alert-danger">Erreur de chargement du compte de resultat</div>';
         console.error(err);
     }
+}
+
+// Drill-down : clic sur une catégorie du P&L → voir les factures/écritures
+async function invShowDrillDown(categoryId, categoryName) {
+    const catParam = categoryId ? `&category_id=${categoryId}` : '';
+    openModal(`Detail : ${categoryName} (${invReportYear})`, '<div style="text-align:center;padding:24px"><span class="spinner"></span> Chargement...</div>', 'modal-xl');
+
+    try {
+        const res = await API.get(`accounting/category-invoices?hotel_id=${invCurrentHotel}${catParam}&year=${invReportYear}`);
+        const invoices = res.invoices || [];
+        const entries = res.entries || [];
+
+        let html = '';
+        if (invoices.length > 0) {
+            let invTotal = 0;
+            html += `<h4 style="margin-bottom:var(--space-2)"><i class="fas fa-file-invoice-dollar"></i> Factures fournisseurs (${invoices.length})</h4>
+                <div class="table-responsive"><table class="table table-sm">
+                <thead><tr><th>Date</th><th>Fournisseur</th><th>N° Facture</th><th style="text-align:right">HT</th><th style="text-align:right">TTC</th><th>Statut</th></tr></thead><tbody>`;
+            invoices.forEach(inv => {
+                invTotal += parseFloat(inv.total_ttc || 0);
+                html += `<tr>
+                    <td>${inv.invoice_date ? formatDate(inv.invoice_date) : '-'}</td>
+                    <td>${esc(inv.supplier_name || '-')}</td>
+                    <td>${esc(inv.invoice_number || '-')}</td>
+                    <td style="text-align:right">${invFormatCurrency(inv.total_ht)}</td>
+                    <td style="text-align:right"><strong>${invFormatCurrency(inv.total_ttc)}</strong></td>
+                    <td>${invStatusBadge(inv.status)}</td>
+                </tr>`;
+            });
+            html += `</tbody><tfoot><tr style="font-weight:bold"><td colspan="4">Total Factures</td><td style="text-align:right">${invFormatCurrency(invTotal)}</td><td></td></tr></tfoot></table></div>`;
+        }
+
+        if (entries.length > 0) {
+            let entTotal = 0;
+            html += `<h4 style="margin:var(--space-4) 0 var(--space-2)"><i class="fas fa-file-csv"></i> Ecritures comptables importees (${entries.length})</h4>
+                <div class="table-responsive"><table class="table table-sm">
+                <thead><tr><th>Date</th><th>Libelle</th><th>Source</th><th style="text-align:right">Montant</th></tr></thead><tbody>`;
+            entries.forEach(e => {
+                entTotal += parseFloat(e.amount || 0);
+                html += `<tr>
+                    <td>${e.entry_date ? formatDate(e.entry_date) : '-'}</td>
+                    <td>${esc(e.label || '-')}</td>
+                    <td><span class="badge badge-${e.source === 'csv_import' ? 'info' : 'secondary'}">${e.source === 'csv_import' ? 'CSV' : 'Manuel'}</span></td>
+                    <td style="text-align:right"><strong>${invFormatCurrency(e.amount)}</strong></td>
+                </tr>`;
+            });
+            html += `</tbody><tfoot><tr style="font-weight:bold"><td colspan="3">Total Ecritures</td><td style="text-align:right">${invFormatCurrency(entTotal)}</td></tr></tfoot></table></div>`;
+        }
+
+        if (invoices.length === 0 && entries.length === 0) {
+            html = '<div class="empty-state" style="padding:var(--space-4)"><h3>Aucune donnee</h3><p>Pas de factures ni d\'ecritures pour cette categorie en ' + invReportYear + '</p></div>';
+        }
+
+        document.querySelector('.modal-body').innerHTML = html;
+    } catch (err) {
+        document.querySelector('.modal-body').innerHTML = '<div class="alert alert-danger">Erreur de chargement</div>';
+        console.error(err);
+    }
+}
+
+// ============================================================
+// ONGLET IMPORT CSV
+// ============================================================
+
+let invImportTemplates = [];
+let invImportBatches = [];
+let invImportEmailConfig = null;
+
+async function invRenderImport(content) {
+    showLoading(content);
+    try {
+        const [tplRes, batchRes, emailRes] = await Promise.allSettled([
+            API.get(`accounting/templates?hotel_id=${invCurrentHotel}`),
+            API.get(`accounting/batches?hotel_id=${invCurrentHotel}`),
+            API.get(`accounting/email-config?hotel_id=${invCurrentHotel}`)
+        ]);
+        invImportTemplates = tplRes.status === 'fulfilled' ? (tplRes.value.templates || []) : [];
+        invImportBatches = batchRes.status === 'fulfilled' ? (batchRes.value.batches || []) : [];
+        invImportEmailConfig = emailRes.status === 'fulfilled' ? (emailRes.value.config || null) : null;
+
+        content.innerHTML = `
+            <!-- Email dédié -->
+            <div class="card" style="margin-bottom:var(--space-4)">
+                <div class="card-header"><h3><i class="fas fa-envelope"></i> Adresse email d'import</h3></div>
+                <div class="card-body" style="padding:var(--space-4)">
+                    ${invImportEmailConfig ? `
+                        <p>Les fichiers CSV envoyes a cette adresse seront automatiquement importes :</p>
+                        <div style="display:flex;align-items:center;gap:var(--space-3);margin:var(--space-3) 0;padding:var(--space-3);background:var(--gray-50);border-radius:var(--radius-md);border:1px dashed var(--gray-300)">
+                            <code style="font-size:var(--font-size-lg);font-weight:var(--font-bold)">${esc(invImportEmailConfig.email_address)}</code>
+                            <button class="btn btn-sm btn-outline" onclick="navigator.clipboard.writeText('${esc(invImportEmailConfig.email_address)}');toast('Copie !','success')"><i class="fas fa-copy"></i></button>
+                            <span class="badge badge-${invImportEmailConfig.is_active ? 'success' : 'secondary'}">${invImportEmailConfig.is_active ? 'Actif' : 'Inactif'}</span>
+                        </div>
+                    ` : '<p class="text-muted">Aucune adresse email configuree pour cet hotel.</p>'}
+                </div>
+            </div>
+
+            <!-- Upload CSV -->
+            <div class="card" style="margin-bottom:var(--space-4)">
+                <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+                    <h3><i class="fas fa-file-csv"></i> Import CSV manuel</h3>
+                    <button class="btn btn-sm btn-outline" onclick="invShowTemplateForm()"><i class="fas fa-cog"></i> Templates</button>
+                </div>
+                <div class="card-body" style="padding:var(--space-4)">
+                    <div class="form-row" style="display:flex;gap:var(--space-3);flex-wrap:wrap;align-items:flex-end">
+                        <div class="form-group" style="flex:1;min-width:200px;margin:0">
+                            <label class="form-label">Template de mapping</label>
+                            <select id="inv-import-template" class="form-control">
+                                <option value="">-- Auto-detection --</option>
+                                ${invImportTemplates.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:200px;margin:0">
+                            <label class="form-label">Fichier CSV</label>
+                            <input type="file" id="inv-import-file" class="form-control" accept=".csv,.txt">
+                        </div>
+                        <button class="btn btn-primary" onclick="invUploadCsv()" style="height:42px"><i class="fas fa-upload"></i> Importer</button>
+                    </div>
+                    <div id="inv-import-preview" style="margin-top:var(--space-4)"></div>
+                </div>
+            </div>
+
+            <!-- Saisie manuelle -->
+            <div class="card" style="margin-bottom:var(--space-4)">
+                <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+                    <h3><i class="fas fa-pen"></i> Saisie manuelle</h3>
+                    <button class="btn btn-sm btn-primary" onclick="invShowManualEntryForm()"><i class="fas fa-plus"></i> Nouvelle ecriture</button>
+                </div>
+            </div>
+
+            <!-- Historique des imports -->
+            <div class="card">
+                <div class="card-header"><h3><i class="fas fa-history"></i> Historique des imports</h3></div>
+                ${invImportBatches.length === 0 ? '<div style="padding:var(--space-4);text-align:center;color:var(--text-secondary)">Aucun import pour le moment</div>' : `
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead><tr><th>Date</th><th>Fichier</th><th>Template</th><th>Lignes</th><th>Total</th><th>Statut</th><th>Actions</th></tr></thead>
+                            <tbody>
+                                ${invImportBatches.map(b => `
+                                    <tr>
+                                        <td>${b.created_at ? formatDateTime(b.created_at) : '-'}</td>
+                                        <td>${esc(b.original_filename || '-')}</td>
+                                        <td>${esc(b.template_name || 'Auto')}</td>
+                                        <td>${b.row_count || 0}</td>
+                                        <td><strong>${invFormatCurrency(b.total_amount || 0)}</strong></td>
+                                        <td><span class="badge badge-${b.status === 'confirmed' ? 'success' : b.status === 'pending' ? 'warning' : 'secondary'}">${b.status === 'confirmed' ? 'Confirme' : b.status === 'pending' ? 'En attente' : b.status}</span></td>
+                                        <td>
+                                            ${b.status === 'pending' ? `
+                                                <button class="btn btn-sm btn-primary" onclick="invConfirmBatch(${b.id})"><i class="fas fa-check"></i></button>
+                                                <button class="btn btn-sm btn-outline text-danger" onclick="invCancelBatch(${b.id})"><i class="fas fa-times"></i></button>
+                                            ` : `
+                                                <button class="btn btn-sm btn-outline text-danger" onclick="invDeleteBatch(${b.id})"><i class="fas fa-trash"></i></button>
+                                            `}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `}
+            </div>
+        `;
+    } catch (err) {
+        content.innerHTML = '<div class="alert alert-danger">Erreur de chargement</div>';
+        console.error(err);
+    }
+}
+
+async function invUploadCsv() {
+    const fileInput = document.getElementById('inv-import-file');
+    const templateId = document.getElementById('inv-import-template')?.value || '';
+    if (!fileInput || !fileInput.files.length) { toast('Selectionnez un fichier CSV', 'warning'); return; }
+
+    const preview = document.getElementById('inv-import-preview');
+    if (preview) preview.innerHTML = '<div style="text-align:center;padding:var(--space-3)"><span class="spinner"></span> Analyse du fichier...</div>';
+
+    try {
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('hotel_id', invCurrentHotel);
+        if (templateId) formData.append('template_id', templateId);
+
+        const res = await API.upload('accounting/upload', formData);
+        const rows = res.preview || [];
+        const batchId = res.batch_id;
+
+        if (!preview) return;
+        if (rows.length === 0) {
+            preview.innerHTML = '<div class="alert alert-warning">Aucune ligne extraite du fichier</div>';
+            return;
+        }
+
+        let totalAmount = 0;
+        rows.forEach(r => totalAmount += parseFloat(r.amount || 0));
+
+        preview.innerHTML = `
+            <div class="card" style="border:2px solid var(--warning-400, #facc15)">
+                <div class="card-header" style="background:var(--warning-50, #fefce8)">
+                    <h4><i class="fas fa-eye"></i> Apercu de l'import — ${rows.length} lignes — Total: ${invFormatCurrency(totalAmount)}</h4>
+                </div>
+                <div class="table-responsive" style="max-height:400px;overflow-y:auto">
+                    <table class="table table-sm">
+                        <thead><tr><th>Date</th><th>Libelle</th><th>Categorie</th><th style="text-align:right">Montant</th></tr></thead>
+                        <tbody>
+                            ${rows.slice(0, 50).map(r => `
+                                <tr>
+                                    <td>${esc(r.date || '-')}</td>
+                                    <td>${esc(r.label || '-')}</td>
+                                    <td>${esc(r.category_name || r.category_id || '-')}</td>
+                                    <td style="text-align:right">${invFormatCurrency(r.amount)}</td>
+                                </tr>
+                            `).join('')}
+                            ${rows.length > 50 ? `<tr><td colspan="4" style="text-align:center;color:var(--text-tertiary)">... et ${rows.length - 50} autres lignes</td></tr>` : ''}
+                        </tbody>
+                    </table>
+                </div>
+                <div style="padding:var(--space-3);display:flex;gap:var(--space-2);justify-content:flex-end">
+                    <button class="btn btn-outline" onclick="invCancelBatch(${batchId})"><i class="fas fa-times"></i> Annuler</button>
+                    <button class="btn btn-primary" onclick="invConfirmBatch(${batchId})"><i class="fas fa-check"></i> Confirmer l'import</button>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        if (preview) preview.innerHTML = `<div class="alert alert-danger">${esc(err.message || 'Erreur d\'upload')}</div>`;
+    }
+}
+
+async function invConfirmBatch(batchId) {
+    try {
+        await API.put(`accounting/upload/${batchId}/confirm`);
+        toast('Import confirme avec succes', 'success');
+        invRenderImport(document.getElementById('inv-tab-content'));
+    } catch (err) { toast(err.message || 'Erreur', 'error'); }
+}
+
+async function invCancelBatch(batchId) {
+    if (!confirm('Annuler cet import ?')) return;
+    try {
+        await API.put(`accounting/upload/${batchId}/cancel`);
+        toast('Import annule', 'success');
+        invRenderImport(document.getElementById('inv-tab-content'));
+    } catch (err) { toast(err.message || 'Erreur', 'error'); }
+}
+
+async function invDeleteBatch(batchId) {
+    if (!confirm('Supprimer cet import et toutes ses ecritures ?')) return;
+    try {
+        await API.delete(`accounting/batches/${batchId}`);
+        toast('Import supprime', 'success');
+        invRenderImport(document.getElementById('inv-tab-content'));
+    } catch (err) { toast(err.message || 'Erreur', 'error'); }
+}
+
+function invShowManualEntryForm() {
+    openModal('Nouvelle ecriture comptable', `
+        <form onsubmit="invSaveManualEntry(event)">
+            <div class="form-row" style="display:flex;gap:var(--space-3);flex-wrap:wrap">
+                <div class="form-group" style="flex:1;min-width:180px"><label class="form-label required">Date</label>
+                    <input type="date" id="entry-date" class="form-control" value="${new Date().toISOString().split('T')[0]}" required></div>
+                <div class="form-group" style="flex:1;min-width:180px"><label class="form-label required">Montant</label>
+                    <input type="number" id="entry-amount" class="form-control" step="0.01" required placeholder="0.00"></div>
+            </div>
+            <div class="form-group"><label class="form-label required">Libelle</label>
+                <input type="text" id="entry-label" class="form-control" required placeholder="Description de l'ecriture"></div>
+            <div class="form-group"><label class="form-label">Categorie</label>
+                <select id="entry-category" class="form-control">
+                    <option value="">-- Sans categorie --</option>
+                    ${invCategories.map(c => `<option value="${c.id}">${esc(c.account_number ? c.account_number + ' - ' : '')}${esc(c.name)}</option>`).join('')}
+                </select></div>
+            <div class="form-group"><label class="form-label">Type</label>
+                <select id="entry-type" class="form-control">
+                    <option value="debit">Charge (debit)</option>
+                    <option value="credit">Produit (credit)</option>
+                </select></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
+            </div>
+        </form>
+    `, 'modal-lg');
+}
+
+async function invSaveManualEntry(event) {
+    event.preventDefault();
+    try {
+        await API.post('accounting/entries', {
+            hotel_id: invCurrentHotel,
+            entry_date: document.getElementById('entry-date').value,
+            amount: parseFloat(document.getElementById('entry-amount').value),
+            label: document.getElementById('entry-label').value,
+            category_id: document.getElementById('entry-category').value || null,
+            entry_type: document.getElementById('entry-type').value,
+            source: 'manual'
+        });
+        toast('Ecriture enregistree', 'success');
+        closeModal();
+    } catch (err) { toast(err.message || 'Erreur', 'error'); }
+}
+
+function invShowTemplateForm(tplId) {
+    const tpl = tplId ? invImportTemplates.find(t => t.id === tplId) : null;
+    const config = tpl ? (typeof tpl.column_mapping === 'string' ? JSON.parse(tpl.column_mapping) : tpl.column_mapping) || {} : {};
+
+    openModal(tpl ? 'Modifier le template' : 'Nouveau template', `
+        <form onsubmit="invSaveTemplate(event, ${tplId || 'null'})">
+            <div class="form-group"><label class="form-label required">Nom du template</label>
+                <input type="text" id="tpl-name" class="form-control" value="${esc(tpl?.name || '')}" required placeholder="Ex: Export PMS Hotel X"></div>
+            <div class="form-row" style="display:flex;gap:var(--space-3);flex-wrap:wrap">
+                <div class="form-group" style="flex:1"><label class="form-label">Delimiteur</label>
+                    <select id="tpl-delimiter" class="form-control">
+                        <option value=";" ${(tpl?.delimiter || ';') === ';' ? 'selected' : ''}>Point-virgule (;)</option>
+                        <option value="," ${tpl?.delimiter === ',' ? 'selected' : ''}>Virgule (,)</option>
+                        <option value="\\t" ${tpl?.delimiter === '\\t' ? 'selected' : ''}>Tabulation</option>
+                    </select></div>
+                <div class="form-group" style="flex:1"><label class="form-label">Encodage</label>
+                    <select id="tpl-encoding" class="form-control">
+                        <option value="UTF-8" ${(tpl?.encoding || 'UTF-8') === 'UTF-8' ? 'selected' : ''}>UTF-8</option>
+                        <option value="ISO-8859-1" ${tpl?.encoding === 'ISO-8859-1' ? 'selected' : ''}>ISO-8859-1 (Latin)</option>
+                        <option value="Windows-1252" ${tpl?.encoding === 'Windows-1252' ? 'selected' : ''}>Windows-1252</option>
+                    </select></div>
+                <div class="form-group" style="flex:1"><label class="form-label">Lignes a ignorer</label>
+                    <input type="number" id="tpl-skip" class="form-control" value="${tpl?.skip_rows || 1}" min="0"></div>
+            </div>
+            <h4 style="margin:var(--space-3) 0 var(--space-2)">Colonnes (index depuis 0)</h4>
+            <div class="form-row" style="display:flex;gap:var(--space-3);flex-wrap:wrap">
+                <div class="form-group" style="flex:1"><label class="form-label">Date</label>
+                    <input type="number" id="tpl-col-date" class="form-control" value="${config.date_col ?? 0}" min="0"></div>
+                <div class="form-group" style="flex:1"><label class="form-label">Libelle</label>
+                    <input type="number" id="tpl-col-label" class="form-control" value="${config.label_col ?? 1}" min="0"></div>
+                <div class="form-group" style="flex:1"><label class="form-label">Montant</label>
+                    <input type="number" id="tpl-col-amount" class="form-control" value="${config.amount_col ?? 2}" min="0"></div>
+                <div class="form-group" style="flex:1"><label class="form-label">Categorie (optionnel)</label>
+                    <input type="number" id="tpl-col-cat" class="form-control" value="${config.category_col ?? ''}" min="0" placeholder="-"></div>
+            </div>
+            <div class="form-group"><label class="form-label">Format date</label>
+                <input type="text" id="tpl-date-fmt" class="form-control" value="${esc(config.date_format || 'dd/mm/yyyy')}" placeholder="dd/mm/yyyy"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
+            </div>
+        </form>
+    `, 'modal-lg');
+}
+
+async function invSaveTemplate(event, tplId) {
+    event.preventDefault();
+    const data = {
+        hotel_id: invCurrentHotel,
+        name: document.getElementById('tpl-name').value,
+        delimiter: document.getElementById('tpl-delimiter').value,
+        encoding: document.getElementById('tpl-encoding').value,
+        skip_rows: parseInt(document.getElementById('tpl-skip').value) || 0,
+        column_mapping: JSON.stringify({
+            date_col: parseInt(document.getElementById('tpl-col-date').value) || 0,
+            label_col: parseInt(document.getElementById('tpl-col-label').value) || 0,
+            amount_col: parseInt(document.getElementById('tpl-col-amount').value) || 0,
+            category_col: document.getElementById('tpl-col-cat').value !== '' ? parseInt(document.getElementById('tpl-col-cat').value) : null,
+            date_format: document.getElementById('tpl-date-fmt').value || 'dd/mm/yyyy'
+        })
+    };
+    try {
+        if (tplId) await API.put(`accounting/templates/${tplId}`, data);
+        else await API.post('accounting/templates', data);
+        toast('Template enregistre', 'success');
+        closeModal();
+        invRenderImport(document.getElementById('inv-tab-content'));
+    } catch (err) { toast(err.message || 'Erreur', 'error'); }
 }
 
 // ============================================================
