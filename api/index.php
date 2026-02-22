@@ -15596,6 +15596,48 @@ try {
                     }
                     json_out($result);
                 }
+                // POST /accounting/email-config/generate — générer email pour un hôtel existant (admin)
+                if ($method === 'POST' && $subaction === 'generate') {
+                    if (!in_array($userRole, ['admin', 'groupe_manager'])) json_error('Réservé aux administrateurs', 403);
+                    $data = get_input();
+                    $hotelId = (int)($data['hotel_id'] ?? 0);
+                    if (!$hotelId || !in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
+                    // Vérifier si email existe déjà
+                    $existing = db()->queryOne("SELECT * FROM hotel_import_email_config WHERE hotel_id = ?", [$hotelId]);
+                    if ($existing) {
+                        json_out(['success' => true, 'email' => $existing['email_address'], 'message' => 'Email déjà existant']);
+                    }
+                    // Récupérer le slug de l'hôtel
+                    $hotel = db()->queryOne("SELECT id, name, booking_slug FROM hotels WHERE id = ?", [$hotelId]);
+                    if (!$hotel) json_error('Hôtel introuvable', 404);
+                    $slug = $hotel['booking_slug'];
+                    if (!$slug) {
+                        // Générer un slug à partir du nom
+                        $slug = strtolower(trim(preg_replace('/[^a-z0-9]+/i', '-', $hotel['name']), '-'));
+                        if (empty($slug)) $slug = 'hotel-' . $hotelId;
+                        // Vérifier unicité
+                        $counter = 0;
+                        $baseSlug = $slug;
+                        while (db()->queryOne("SELECT id FROM hotels WHERE booking_slug = ? AND id != ?", [$slug, $hotelId])) {
+                            $counter++;
+                            $slug = $baseSlug . '-' . $counter;
+                        }
+                        db()->execute("UPDATE hotels SET booking_slug = ? WHERE id = ?", [$slug, $hotelId]);
+                    }
+                    $email = 'import-' . $slug . '@acl-gestion.com';
+                    // Vérifier unicité email
+                    $emailExists = db()->queryOne("SELECT id FROM hotel_import_email_config WHERE email_address = ?", [$email]);
+                    if ($emailExists) {
+                        $email = 'import-' . $slug . '-' . $hotelId . '@acl-gestion.com';
+                    }
+                    db()->insert('hotel_import_email_config', [
+                        'hotel_id' => $hotelId,
+                        'email_address' => $email,
+                        'is_active' => 1,
+                        'created_at' => date('Y-m-d H:i:s')
+                    ]);
+                    json_out(['success' => true, 'email' => $email, 'message' => 'Email généré avec succès']);
+                }
             }
 
             // --- Drill-down: factures + écritures par catégorie/mois ---
