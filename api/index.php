@@ -15239,8 +15239,8 @@ try {
                     $hotelId = (int)($data['hotel_id'] ?? 0);
                     if (!in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
                     $insertId = db()->insert(
-                        "INSERT INTO accounting_import_templates (hotel_id, name, description, delimiter, encoding, skip_rows, date_format, col_date, col_label, col_amount, col_amount_ht, col_amount_tva, col_amount_ttc, col_category, default_category_id, default_account_class, category_mapping, amount_is_cents, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW())",
-                        [$hotelId, $data['name'], $data['description'] ?? null, $data['delimiter'] ?? ';', $data['encoding'] ?? 'UTF-8', (int)($data['skip_rows'] ?? 0), $data['date_format'] ?? 'd/m/Y', isset($data['col_date']) ? (int)$data['col_date'] : null, isset($data['col_label']) ? (int)$data['col_label'] : null, isset($data['col_amount']) ? (int)$data['col_amount'] : null, isset($data['col_amount_ht']) ? (int)$data['col_amount_ht'] : null, isset($data['col_amount_tva']) ? (int)$data['col_amount_tva'] : null, isset($data['col_amount_ttc']) ? (int)$data['col_amount_ttc'] : null, isset($data['col_category']) ? (int)$data['col_category'] : null, !empty($data['default_category_id']) ? (int)$data['default_category_id'] : null, $data['default_account_class'] ?? '7', !empty($data['category_mapping']) ? json_encode($data['category_mapping']) : null, !empty($data['amount_is_cents']) ? 1 : 0]
+                        "INSERT INTO accounting_import_templates (hotel_id, name, description, csv_delimiter, encoding, skip_rows, date_format, col_date, col_label, col_amount, col_amount_ht, col_amount_tva, col_amount_ttc, col_category, default_category_id, default_account_class, category_mapping, amount_is_cents, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW())",
+                        [$hotelId, $data['name'], $data['description'] ?? null, $data['csv_delimiter'] ?? $data['delimiter'] ?? ';', $data['encoding'] ?? 'UTF-8', (int)($data['skip_rows'] ?? 0), $data['date_format'] ?? 'd/m/Y', isset($data['col_date']) ? (int)$data['col_date'] : null, isset($data['col_label']) ? (int)$data['col_label'] : null, isset($data['col_amount']) ? (int)$data['col_amount'] : null, isset($data['col_amount_ht']) ? (int)$data['col_amount_ht'] : null, isset($data['col_amount_tva']) ? (int)$data['col_amount_tva'] : null, isset($data['col_amount_ttc']) ? (int)$data['col_amount_ttc'] : null, isset($data['col_category']) ? (int)$data['col_category'] : null, !empty($data['default_category_id']) ? (int)$data['default_category_id'] : null, $data['default_account_class'] ?? '7', !empty($data['category_mapping']) ? json_encode($data['category_mapping']) : null, !empty($data['amount_is_cents']) ? 1 : 0]
                     );
                     json_out(['id' => $insertId, 'message' => 'Template créé'], 201);
                 }
@@ -15250,7 +15250,7 @@ try {
                     if (!$tpl || !in_array($tpl['hotel_id'], $userHotelIds)) json_error('Template non trouvé', 404);
                     $data = get_input();
                     $sets = []; $params = [];
-                    foreach (['name','description','delimiter','encoding','date_format','default_account_class'] as $f) {
+                    foreach (['name','description','csv_delimiter','encoding','date_format','default_account_class'] as $f) {
                         if (isset($data[$f])) { $sets[] = "$f = ?"; $params[] = $data[$f]; }
                     }
                     foreach (['skip_rows','col_date','col_label','col_amount','col_amount_ht','col_amount_tva','col_amount_ttc','col_category','default_category_id'] as $f) {
@@ -15286,7 +15286,7 @@ try {
                 if ($templateId) {
                     $tpl = db()->queryOne("SELECT * FROM accounting_import_templates WHERE id = ? AND hotel_id = ?", [$templateId, $hotelId]);
                 }
-                $delimiter = $tpl['delimiter'] ?? ';';
+                $delimiter = $tpl['csv_delimiter'] ?? ';';
                 $skipRows = (int)($tpl['skip_rows'] ?? 0);
                 $dateFormat = $tpl['date_format'] ?? 'd/m/Y';
                 $colDate = isset($tpl['col_date']) ? (int)$tpl['col_date'] : 0;
