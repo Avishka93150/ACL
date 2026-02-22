@@ -2517,9 +2517,18 @@ try {
                         $slug
                     ]
                 );
-                json_out(['success' => true, 'id' => $id], 201);
+                // Auto-générer email import pour ce nouvel hôtel
+                try {
+                    $importEmail = 'import-' . $slug . '@acl-gestion.com';
+                    db()->execute(
+                        "INSERT IGNORE INTO hotel_import_email_config (hotel_id, email_address, is_active, created_at) VALUES (?, ?, 1, NOW())",
+                        [$id, $importEmail]
+                    );
+                } catch (Exception $e) { /* table peut ne pas encore exister */ }
+
+                json_out(['success' => true, 'id' => $id, 'import_email' => $importEmail ?? null], 201);
             }
-            
+
             if ($method === 'PUT' && $id && is_numeric($id) && !$action) {
                 $user = require_auth();
                 if (!hasPermission($user['role'], 'hotels.edit')) json_error('Permission refusée', 403);
@@ -13386,109 +13395,174 @@ try {
                 json_out(['stats' => $stats]);
             }
 
-            // --- GET /invoices/income-statement (compte de résultat des dépenses) ---
+            // --- GET /invoices/income-statement (P&L complet : Produits + Charges + Résultat Net) ---
             if ($method === 'GET' && $id === 'income-statement') {
                 if (!hasPermission($userRole, 'invoices.view')) json_error('Accès refusé', 403);
                 $hotelId = (int)($_GET['hotel_id'] ?? 0);
                 $year = (int)($_GET['year'] ?? date('Y'));
                 $hotelFilter = $hotelId && in_array($hotelId, $userHotelIds) ? "AND si.hotel_id = $hotelId" : "AND si.hotel_id IN ($hotelList)";
+                $aeHotelFilter = $hotelId && in_array($hotelId, $userHotelIds) ? "AND ae.hotel_id = $hotelId" : "AND ae.hotel_id IN ($hotelList)";
 
-                // Dépenses par compte comptable et par mois (détaillé)
                 $data = [];
                 $prevYearData = [];
+                $prevYearTotals = [];
                 try {
-                    // Données par catégorie/compte avec montants HT et TTC par mois
-                    $data = db()->query(
+                    // Source 1: Factures fournisseurs (Classe 6 - Charges)
+                    $invoiceData = db()->query(
                         "SELECT cc.id as category_id, cc.name as category_name, cc.color,
-                                cc.account_number, cc.account_class, cc.parent_id,
+                                cc.account_number, COALESCE(cc.account_class, '6') as account_class, cc.parent_id,
+                                cc.group_label, cc.sort_order,
                                 MONTH(si.invoice_date) as month,
                                 SUM(si.total_ht) as total_ht,
                                 SUM(si.total_tva) as total_tva,
                                 SUM(si.total_ttc) as total_ttc,
-                                COUNT(si.id) as invoice_count
+                                COUNT(si.id) as entry_count,
+                                'invoice' as data_source
                          FROM supplier_invoices si
                          LEFT JOIN suppliers s ON si.supplier_id = s.id
                          LEFT JOIN contract_categories cc ON s.category_id = cc.id
                          WHERE YEAR(si.invoice_date) = ? AND si.status IN ('approved','pending_payment','payment_initiated','paid')
                            $hotelFilter
-                         GROUP BY cc.id, cc.name, cc.color, cc.account_number, cc.account_class, cc.parent_id, MONTH(si.invoice_date)
-                         ORDER BY cc.account_number, cc.name, month",
+                         GROUP BY cc.id, cc.name, cc.color, cc.account_number, cc.account_class, cc.parent_id, cc.group_label, cc.sort_order, MONTH(si.invoice_date)
+                         ORDER BY cc.sort_order, cc.account_number, cc.name, month",
                         [$year]
                     );
 
-                    // Année précédente pour comparaison
-                    $prevYearData = db()->query(
-                        "SELECT cc.id as category_id,
+                    // Source 2: Écritures comptables (Classes 6 ET 7)
+                    $entriesData = [];
+                    try {
+                        $entriesData = db()->query(
+                            "SELECT cc.id as category_id, cc.name as category_name, cc.color,
+                                    cc.account_number, COALESCE(cc.account_class, ae.account_class) as account_class, cc.parent_id,
+                                    cc.group_label, cc.sort_order,
+                                    MONTH(ae.entry_date) as month,
+                                    SUM(ae.amount_ht) as total_ht,
+                                    SUM(ae.amount_tva) as total_tva,
+                                    SUM(ae.amount_ttc) as total_ttc,
+                                    COUNT(ae.id) as entry_count,
+                                    'entry' as data_source
+                             FROM accounting_entries ae
+                             LEFT JOIN contract_categories cc ON ae.category_id = cc.id
+                             WHERE YEAR(ae.entry_date) = ?
+                               $aeHotelFilter
+                             GROUP BY cc.id, cc.name, cc.color, cc.account_number, cc.account_class, cc.parent_id, cc.group_label, cc.sort_order, ae.account_class, MONTH(ae.entry_date)
+                             ORDER BY cc.sort_order, cc.account_number, cc.name, month",
+                            [$year]
+                        );
+                    } catch (Exception $e) { /* table peut ne pas exister */ }
+
+                    $data = array_merge($invoiceData, $entriesData);
+
+                    // N-1 : Factures
+                    $prevInvoices = db()->query(
+                        "SELECT cc.id as category_id, COALESCE(cc.account_class, '6') as account_class,
                                 MONTH(si.invoice_date) as month,
-                                SUM(si.total_ht) as total_ht,
-                                SUM(si.total_ttc) as total_ttc
+                                SUM(si.total_ht) as total_ht, SUM(si.total_ttc) as total_ttc
                          FROM supplier_invoices si
                          LEFT JOIN suppliers s ON si.supplier_id = s.id
                          LEFT JOIN contract_categories cc ON s.category_id = cc.id
                          WHERE YEAR(si.invoice_date) = ? AND si.status IN ('approved','pending_payment','payment_initiated','paid')
                            $hotelFilter
-                         GROUP BY cc.id, MONTH(si.invoice_date)",
+                         GROUP BY cc.id, cc.account_class, MONTH(si.invoice_date)",
                         [$year - 1]
                     );
 
-                    // Totaux annuels de l'année précédente par catégorie
-                    $prevYearTotals = db()->query(
-                        "SELECT cc.id as category_id,
-                                SUM(si.total_ht) as total_ht,
-                                SUM(si.total_ttc) as total_ttc
+                    // N-1 : Ecritures
+                    $prevEntries = [];
+                    try {
+                        $prevEntries = db()->query(
+                            "SELECT cc.id as category_id, COALESCE(cc.account_class, ae.account_class) as account_class,
+                                    MONTH(ae.entry_date) as month,
+                                    SUM(ae.amount_ht) as total_ht, SUM(ae.amount_ttc) as total_ttc
+                             FROM accounting_entries ae
+                             LEFT JOIN contract_categories cc ON ae.category_id = cc.id
+                             WHERE YEAR(ae.entry_date) = ?
+                               $aeHotelFilter
+                             GROUP BY cc.id, cc.account_class, ae.account_class, MONTH(ae.entry_date)",
+                            [$year - 1]
+                        );
+                    } catch (Exception $e) {}
+
+                    $prevYearData = array_merge($prevInvoices, $prevEntries);
+
+                    // N-1 totaux par catégorie
+                    $prevInvTotals = db()->query(
+                        "SELECT cc.id as category_id, COALESCE(cc.account_class, '6') as account_class,
+                                SUM(si.total_ht) as total_ht, SUM(si.total_ttc) as total_ttc
                          FROM supplier_invoices si
                          LEFT JOIN suppliers s ON si.supplier_id = s.id
                          LEFT JOIN contract_categories cc ON s.category_id = cc.id
                          WHERE YEAR(si.invoice_date) = ? AND si.status IN ('approved','pending_payment','payment_initiated','paid')
                            $hotelFilter
-                         GROUP BY cc.id",
+                         GROUP BY cc.id, cc.account_class",
                         [$year - 1]
                     );
+                    $prevEntTotals = [];
+                    try {
+                        $prevEntTotals = db()->query(
+                            "SELECT cc.id as category_id, COALESCE(cc.account_class, ae.account_class) as account_class,
+                                    SUM(ae.amount_ht) as total_ht, SUM(ae.amount_ttc) as total_ttc
+                             FROM accounting_entries ae
+                             LEFT JOIN contract_categories cc ON ae.category_id = cc.id
+                             WHERE YEAR(ae.entry_date) = ?
+                               $aeHotelFilter
+                             GROUP BY cc.id, cc.account_class, ae.account_class",
+                            [$year - 1]
+                        );
+                    } catch (Exception $e) {}
+                    $prevYearTotals = array_merge($prevInvTotals, $prevEntTotals);
+
                 } catch (Exception $e) {}
 
-                // Export CSV si demandé
+                // Export CSV
                 if (!empty($_GET['export']) && $_GET['export'] === 'csv') {
-                    $months = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+                    $months = ['Jan','Fev','Mar','Avr','Mai','Jun','Jul','Aou','Sep','Oct','Nov','Dec'];
                     $csv = "\xEF\xBB\xBF";
-                    $csv .= "Compte;Catégorie;" . implode(';', $months) . ";Total HT;Total TTC;N-1 TTC;Variation\n";
+                    $csv .= "Classe;Groupe;Compte;Categorie;" . implode(';', $months) . ";Total HT;Total TTC;N-1 TTC;Variation\n";
 
+                    // Agréger par catégorie
                     $categories = [];
                     foreach ($data as $row) {
-                        $key = $row['category_id'] ?: 'sans';
+                        $key = ($row['category_id'] ?: 'sans') . '_' . ($row['account_class'] ?: '6');
                         if (!isset($categories[$key])) {
                             $categories[$key] = [
-                                'name' => $row['category_name'] ?: 'Non catégorisé',
+                                'name' => $row['category_name'] ?: 'Non categorise',
                                 'account' => $row['account_number'] ?: '',
+                                'class' => $row['account_class'] ?: '6',
+                                'group' => $row['group_label'] ?: '',
                                 'months_ht' => array_fill(1, 12, 0),
                                 'months_ttc' => array_fill(1, 12, 0)
                             ];
                         }
-                        $categories[$key]['months_ht'][(int)$row['month']] = (float)$row['total_ht'];
-                        $categories[$key]['months_ttc'][(int)$row['month']] = (float)$row['total_ttc'];
+                        $categories[$key]['months_ht'][(int)$row['month']] += (float)$row['total_ht'];
+                        $categories[$key]['months_ttc'][(int)$row['month']] += (float)$row['total_ttc'];
                     }
 
                     $prevTotalsMap = [];
-                    foreach ($prevYearTotals ?? [] as $pt) {
-                        $prevTotalsMap[$pt['category_id'] ?: 'sans'] = (float)$pt['total_ttc'];
+                    foreach ($prevYearTotals as $pt) {
+                        $pk = ($pt['category_id'] ?: 'sans') . '_' . ($pt['account_class'] ?: '6');
+                        $prevTotalsMap[$pk] = ($prevTotalsMap[$pk] ?? 0) + (float)$pt['total_ttc'];
                     }
+
+                    // Produits d'abord, charges ensuite
+                    uasort($categories, function($a, $b) { return ($a['class'] === '7' ? 0 : 1) - ($b['class'] === '7' ? 0 : 1); });
 
                     foreach ($categories as $key => $cat) {
                         $totalHt = array_sum($cat['months_ht']);
                         $totalTtc = array_sum($cat['months_ttc']);
                         $prevTotal = $prevTotalsMap[$key] ?? 0;
                         $variation = $prevTotal > 0 ? round(($totalTtc - $prevTotal) / $prevTotal * 100, 1) : 0;
-                        $csv .= $cat['account'] . ';' . $cat['name'] . ';';
+                        $classLabel = $cat['class'] === '7' ? 'Produits' : 'Charges';
+                        $csv .= $classLabel . ';' . $cat['group'] . ';' . $cat['account'] . ';' . $cat['name'] . ';';
                         for ($m = 1; $m <= 12; $m++) {
                             $csv .= number_format($cat['months_ttc'][$m], 2, ',', ' ') . ';';
                         }
-                        $csv .= number_format($totalHt, 2, ',', ' ') . ';';
-                        $csv .= number_format($totalTtc, 2, ',', ' ') . ';';
-                        $csv .= number_format($prevTotal, 2, ',', ' ') . ';';
-                        $csv .= ($variation >= 0 ? '+' : '') . $variation . "%\n";
+                        $csv .= number_format($totalHt, 2, ',', ' ') . ';' . number_format($totalTtc, 2, ',', ' ') . ';';
+                        $csv .= number_format($prevTotal, 2, ',', ' ') . ';' . ($variation >= 0 ? '+' : '') . $variation . "%\n";
                     }
 
                     header('Content-Type: text/csv; charset=utf-8');
-                    header('Content-Disposition: attachment; filename="compte_resultat_' . $year . '.csv"');
+                    header('Content-Disposition: attachment; filename="pnl_' . $year . '.csv"');
                     echo $csv;
                     exit;
                 }
@@ -13496,7 +13570,7 @@ try {
                 json_out([
                     'data' => $data,
                     'previous_year' => $prevYearData,
-                    'previous_year_totals' => $prevYearTotals ?? [],
+                    'previous_year_totals' => $prevYearTotals,
                     'year' => $year
                 ]);
             }
@@ -15139,6 +15213,440 @@ try {
             db()->execute("UPDATE supplier_invoices SET " . implode(', ', $sets) . " WHERE id = ?", $params);
 
             json_out(['received' => true, 'status' => $newStatus]);
+            break;
+
+        // ===================== ACCOUNTING (Import CSV + P&L) =====================
+        case 'accounting':
+            require_auth();
+            $user = get_current_user();
+            $userRole = $user['role'];
+            $userHotelIds = $user['hotel_ids'] ?? [];
+            $hotelList = implode(',', array_map('intval', $userHotelIds));
+
+            // --- Templates CRUD ---
+            if ($action === 'templates') {
+                if ($method === 'GET' && !$id) {
+                    if (!hasPermission($userRole, 'accounting.view')) json_error('Accès refusé', 403);
+                    $hotelId = (int)($_GET['hotel_id'] ?? 0);
+                    if (!$hotelId || !in_array($hotelId, $userHotelIds)) $hotelId = $userHotelIds[0] ?? 0;
+                    $templates = db()->query("SELECT * FROM accounting_import_templates WHERE hotel_id = ? AND is_active = 1 ORDER BY name", [$hotelId]);
+                    json_out(['templates' => $templates]);
+                }
+                if ($method === 'POST' && !$id) {
+                    if (!hasPermission($userRole, 'accounting.manage')) json_error('Accès refusé', 403);
+                    $data = get_input();
+                    if (empty($data['name'])) json_error('Nom requis');
+                    $hotelId = (int)($data['hotel_id'] ?? 0);
+                    if (!in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
+                    $insertId = db()->insert(
+                        "INSERT INTO accounting_import_templates (hotel_id, name, description, delimiter, encoding, skip_rows, date_format, col_date, col_label, col_amount, col_amount_ht, col_amount_tva, col_amount_ttc, col_category, default_category_id, default_account_class, category_mapping, amount_is_cents, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW())",
+                        [$hotelId, $data['name'], $data['description'] ?? null, $data['delimiter'] ?? ';', $data['encoding'] ?? 'UTF-8', (int)($data['skip_rows'] ?? 0), $data['date_format'] ?? 'd/m/Y', isset($data['col_date']) ? (int)$data['col_date'] : null, isset($data['col_label']) ? (int)$data['col_label'] : null, isset($data['col_amount']) ? (int)$data['col_amount'] : null, isset($data['col_amount_ht']) ? (int)$data['col_amount_ht'] : null, isset($data['col_amount_tva']) ? (int)$data['col_amount_tva'] : null, isset($data['col_amount_ttc']) ? (int)$data['col_amount_ttc'] : null, isset($data['col_category']) ? (int)$data['col_category'] : null, !empty($data['default_category_id']) ? (int)$data['default_category_id'] : null, $data['default_account_class'] ?? '7', !empty($data['category_mapping']) ? json_encode($data['category_mapping']) : null, !empty($data['amount_is_cents']) ? 1 : 0]
+                    );
+                    json_out(['id' => $insertId, 'message' => 'Template créé'], 201);
+                }
+                if ($method === 'PUT' && $id) {
+                    if (!hasPermission($userRole, 'accounting.manage')) json_error('Accès refusé', 403);
+                    $tpl = db()->queryOne("SELECT * FROM accounting_import_templates WHERE id = ?", [$id]);
+                    if (!$tpl || !in_array($tpl['hotel_id'], $userHotelIds)) json_error('Template non trouvé', 404);
+                    $data = get_input();
+                    $sets = []; $params = [];
+                    foreach (['name','description','delimiter','encoding','date_format','default_account_class'] as $f) {
+                        if (isset($data[$f])) { $sets[] = "$f = ?"; $params[] = $data[$f]; }
+                    }
+                    foreach (['skip_rows','col_date','col_label','col_amount','col_amount_ht','col_amount_tva','col_amount_ttc','col_category','default_category_id'] as $f) {
+                        if (array_key_exists($f, $data)) { $sets[] = "$f = ?"; $params[] = $data[$f] !== null && $data[$f] !== '' ? (int)$data[$f] : null; }
+                    }
+                    if (isset($data['category_mapping'])) { $sets[] = "category_mapping = ?"; $params[] = json_encode($data['category_mapping']); }
+                    if (isset($data['amount_is_cents'])) { $sets[] = "amount_is_cents = ?"; $params[] = $data['amount_is_cents'] ? 1 : 0; }
+                    if ($sets) { $sets[] = "updated_at = NOW()"; $params[] = $id; db()->execute("UPDATE accounting_import_templates SET " . implode(', ', $sets) . " WHERE id = ?", $params); }
+                    json_out(['success' => true]);
+                }
+                if ($method === 'DELETE' && $id) {
+                    if (!hasPermission($userRole, 'accounting.manage')) json_error('Accès refusé', 403);
+                    $tpl = db()->queryOne("SELECT * FROM accounting_import_templates WHERE id = ?", [$id]);
+                    if (!$tpl || !in_array($tpl['hotel_id'], $userHotelIds)) json_error('Template non trouvé', 404);
+                    db()->execute("UPDATE accounting_import_templates SET is_active = 0, updated_at = NOW() WHERE id = ?", [$id]);
+                    json_out(['success' => true]);
+                }
+            }
+
+            // --- Upload CSV → Preview ---
+            elseif ($action === 'upload' && $method === 'POST' && !$id) {
+                if (!hasPermission($userRole, 'accounting.import')) json_error('Accès refusé', 403);
+                $templateId = (int)($_POST['template_id'] ?? 0);
+                $hotelId = (int)($_POST['hotel_id'] ?? 0);
+                if (!in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
+
+                if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) json_error('Fichier CSV requis');
+                $ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
+                if (!in_array($ext, ['csv', 'txt'])) json_error('Format non autorisé (CSV/TXT uniquement)');
+
+                // Charger template
+                $tpl = null;
+                if ($templateId) {
+                    $tpl = db()->queryOne("SELECT * FROM accounting_import_templates WHERE id = ? AND hotel_id = ?", [$templateId, $hotelId]);
+                }
+                $delimiter = $tpl['delimiter'] ?? ';';
+                $skipRows = (int)($tpl['skip_rows'] ?? 0);
+                $dateFormat = $tpl['date_format'] ?? 'd/m/Y';
+                $colDate = isset($tpl['col_date']) ? (int)$tpl['col_date'] : 0;
+                $colLabel = isset($tpl['col_label']) ? (int)$tpl['col_label'] : 1;
+                $colAmount = isset($tpl['col_amount']) ? (int)$tpl['col_amount'] : null;
+                $colAmountHt = isset($tpl['col_amount_ht']) ? (int)$tpl['col_amount_ht'] : null;
+                $colAmountTva = isset($tpl['col_amount_tva']) ? (int)$tpl['col_amount_tva'] : null;
+                $colAmountTtc = isset($tpl['col_amount_ttc']) ? (int)$tpl['col_amount_ttc'] : null;
+                $colCategory = isset($tpl['col_category']) ? (int)$tpl['col_category'] : null;
+                $defaultCatId = !empty($tpl['default_category_id']) ? (int)$tpl['default_category_id'] : null;
+                $defaultClass = $tpl['default_account_class'] ?? '7';
+                $catMapping = !empty($tpl['category_mapping']) ? json_decode($tpl['category_mapping'], true) : [];
+                $amountIsCents = !empty($tpl['amount_is_cents']);
+                $encoding = $tpl['encoding'] ?? 'UTF-8';
+
+                // Sauvegarder le fichier
+                $uploadDir = __DIR__ . '/../uploads/accounting/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0775, true);
+                $fileName = uniqid('csv_') . '.' . $ext;
+                $filePath = $uploadDir . $fileName;
+                move_uploaded_file($_FILES['file']['tmp_name'], $filePath);
+
+                // Parser CSV
+                $content = file_get_contents($filePath);
+                if (strtoupper($encoding) !== 'UTF-8') {
+                    $content = mb_convert_encoding($content, 'UTF-8', $encoding);
+                }
+                $lines = explode("\n", str_replace("\r\n", "\n", $content));
+                $parsedRows = [];
+                $errors = [];
+                $totalAmount = 0;
+
+                // Charger toutes les catégories pour le mapping
+                $allCats = db()->query("SELECT id, name, account_number, account_class FROM contract_categories WHERE (hotel_id = 0 OR hotel_id = ?) AND is_active = 1", [$hotelId]);
+                $catByName = []; $catById = [];
+                foreach ($allCats as $c) { $catByName[strtolower(trim($c['name']))] = $c; $catById[$c['id']] = $c; }
+
+                for ($i = $skipRows; $i < count($lines); $i++) {
+                    $line = trim($lines[$i]);
+                    if (empty($line)) continue;
+                    $cols = str_getcsv($line, $delimiter);
+
+                    // Extraire date
+                    $rawDate = trim($cols[$colDate] ?? '');
+                    $entryDate = null;
+                    if ($rawDate) {
+                        $dt = DateTime::createFromFormat($dateFormat, $rawDate);
+                        if ($dt) $entryDate = $dt->format('Y-m-d');
+                        else { $errors[] = "Ligne " . ($i + 1) . ": date invalide '$rawDate'"; continue; }
+                    } else { continue; }
+
+                    // Extraire label
+                    $label = trim($cols[$colLabel] ?? 'Écriture importée');
+
+                    // Extraire montants
+                    $amountHt = 0; $amountTva = 0; $amountTtc = 0;
+                    if ($colAmount !== null) {
+                        $raw = str_replace([' ', "\xc2\xa0"], '', $cols[$colAmount] ?? '0');
+                        $raw = str_replace(',', '.', $raw);
+                        $amt = (float)$raw;
+                        if ($amountIsCents) $amt /= 100;
+                        $amountTtc = $amt;
+                        $amountHt = $amt;
+                    } else {
+                        if ($colAmountHt !== null) { $raw = str_replace([' ', "\xc2\xa0", ','], ['', '', '.'], $cols[$colAmountHt] ?? '0'); $amountHt = (float)$raw; if ($amountIsCents) $amountHt /= 100; }
+                        if ($colAmountTva !== null) { $raw = str_replace([' ', "\xc2\xa0", ','], ['', '', '.'], $cols[$colAmountTva] ?? '0'); $amountTva = (float)$raw; if ($amountIsCents) $amountTva /= 100; }
+                        if ($colAmountTtc !== null) { $raw = str_replace([' ', "\xc2\xa0", ','], ['', '', '.'], $cols[$colAmountTtc] ?? '0'); $amountTtc = (float)$raw; if ($amountIsCents) $amountTtc /= 100; }
+                        if (!$amountTtc && $amountHt) $amountTtc = $amountHt + $amountTva;
+                        if (!$amountHt && $amountTtc) $amountHt = $amountTtc - $amountTva;
+                    }
+
+                    // Trouver catégorie
+                    $categoryId = $defaultCatId;
+                    $categoryName = '';
+                    $accountClass = $defaultClass;
+                    if ($colCategory !== null && isset($cols[$colCategory])) {
+                        $csvCat = trim($cols[$colCategory]);
+                        if ($csvCat) {
+                            // Chercher dans le mapping
+                            if (isset($catMapping[$csvCat])) {
+                                $categoryId = (int)$catMapping[$csvCat];
+                            } elseif (isset($catMapping[strtolower($csvCat)])) {
+                                $categoryId = (int)$catMapping[strtolower($csvCat)];
+                            } else {
+                                // Chercher par nom dans les catégories
+                                $lowerCat = strtolower($csvCat);
+                                if (isset($catByName[$lowerCat])) {
+                                    $categoryId = (int)$catByName[$lowerCat]['id'];
+                                }
+                            }
+                        }
+                    }
+                    if ($categoryId && isset($catById[$categoryId])) {
+                        $categoryName = $catById[$categoryId]['name'];
+                        $accountClass = $catById[$categoryId]['account_class'] ?? $defaultClass;
+                    }
+
+                    $totalAmount += $amountTtc;
+                    $parsedRows[] = [
+                        'line_number' => $i + 1,
+                        'entry_date' => $entryDate,
+                        'label' => $label,
+                        'amount_ht' => round($amountHt, 2),
+                        'amount_tva' => round($amountTva, 2),
+                        'amount_ttc' => round($amountTtc, 2),
+                        'category_id' => $categoryId,
+                        'category_name' => $categoryName,
+                        'account_class' => $accountClass
+                    ];
+                }
+
+                // Créer batch
+                $batchId = db()->insert(
+                    "INSERT INTO accounting_import_batches (hotel_id, template_id, file_name, file_path, source, row_count, total_amount, status, imported_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,NOW())",
+                    [$hotelId, $templateId ?: null, $_FILES['file']['name'], 'uploads/accounting/' . $fileName, 'upload', count($parsedRows), round($totalAmount, 2), 'previewed', $user['id']]
+                );
+
+                json_out([
+                    'batch_id' => $batchId,
+                    'file_name' => $_FILES['file']['name'],
+                    'row_count' => count($parsedRows),
+                    'total_amount' => round($totalAmount, 2),
+                    'rows' => $parsedRows,
+                    'errors' => $errors
+                ]);
+            }
+
+            // --- Confirm/Cancel upload ---
+            elseif ($action === 'upload' && $id && $subaction === 'confirm' && $method === 'PUT') {
+                if (!hasPermission($userRole, 'accounting.import')) json_error('Accès refusé', 403);
+                $batch = db()->queryOne("SELECT * FROM accounting_import_batches WHERE id = ?", [$id]);
+                if (!$batch || !in_array($batch['hotel_id'], $userHotelIds)) json_error('Batch non trouvé', 404);
+                if ($batch['status'] !== 'previewed') json_error('Ce batch a déjà été traité');
+
+                $data = get_input();
+                $rows = $data['rows'] ?? [];
+                if (empty($rows)) json_error('Aucune ligne à importer');
+
+                $inserted = 0;
+                foreach ($rows as $row) {
+                    db()->execute(
+                        "INSERT INTO accounting_entries (hotel_id, batch_id, category_id, entry_date, label, amount_ht, amount_tva, amount_ttc, account_class, source, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,NOW())",
+                        [$batch['hotel_id'], $batch['id'], $row['category_id'] ?: null, $row['entry_date'], $row['label'], $row['amount_ht'], $row['amount_tva'], $row['amount_ttc'], $row['account_class'], 'csv_import', $user['id']]
+                    );
+                    $inserted++;
+                }
+
+                db()->execute("UPDATE accounting_import_batches SET status = 'confirmed', row_count = ?, total_amount = ?, confirmed_at = NOW() WHERE id = ?",
+                    [$inserted, array_sum(array_column($rows, 'amount_ttc')), $batch['id']]);
+
+                json_out(['success' => true, 'inserted' => $inserted]);
+            }
+            elseif ($action === 'upload' && $id && $subaction === 'cancel' && $method === 'PUT') {
+                if (!hasPermission($userRole, 'accounting.import')) json_error('Accès refusé', 403);
+                $batch = db()->queryOne("SELECT * FROM accounting_import_batches WHERE id = ?", [$id]);
+                if (!$batch || !in_array($batch['hotel_id'], $userHotelIds)) json_error('Batch non trouvé', 404);
+                db()->execute("UPDATE accounting_import_batches SET status = 'cancelled' WHERE id = ?", [$id]);
+                json_out(['success' => true]);
+            }
+
+            // --- Batches (historique imports) ---
+            elseif ($action === 'batches') {
+                if ($method === 'GET' && !$id) {
+                    if (!hasPermission($userRole, 'accounting.view')) json_error('Accès refusé', 403);
+                    $hotelId = (int)($_GET['hotel_id'] ?? 0);
+                    if (!$hotelId || !in_array($hotelId, $userHotelIds)) $hotelId = $userHotelIds[0] ?? 0;
+                    $batches = db()->query(
+                        "SELECT b.*, u.name as imported_by_name, t.name as template_name
+                         FROM accounting_import_batches b
+                         LEFT JOIN users u ON b.imported_by = u.id
+                         LEFT JOIN accounting_import_templates t ON b.template_id = t.id
+                         WHERE b.hotel_id = ? ORDER BY b.created_at DESC LIMIT 50",
+                        [$hotelId]
+                    );
+                    json_out(['batches' => $batches]);
+                }
+                if ($method === 'GET' && $id) {
+                    if (!hasPermission($userRole, 'accounting.view')) json_error('Accès refusé', 403);
+                    $batch = db()->queryOne("SELECT * FROM accounting_import_batches WHERE id = ?", [$id]);
+                    if (!$batch || !in_array($batch['hotel_id'], $userHotelIds)) json_error('Batch non trouvé', 404);
+                    $entries = db()->query(
+                        "SELECT ae.*, cc.name as category_name, cc.account_number
+                         FROM accounting_entries ae
+                         LEFT JOIN contract_categories cc ON ae.category_id = cc.id
+                         WHERE ae.batch_id = ? ORDER BY ae.entry_date, ae.id",
+                        [$id]
+                    );
+                    json_out(['batch' => $batch, 'entries' => $entries]);
+                }
+                if ($method === 'DELETE' && $id) {
+                    if (!hasPermission($userRole, 'accounting.delete')) json_error('Accès refusé', 403);
+                    $batch = db()->queryOne("SELECT * FROM accounting_import_batches WHERE id = ?", [$id]);
+                    if (!$batch || !in_array($batch['hotel_id'], $userHotelIds)) json_error('Batch non trouvé', 404);
+                    db()->execute("DELETE FROM accounting_entries WHERE batch_id = ?", [$id]);
+                    db()->execute("DELETE FROM accounting_import_batches WHERE id = ?", [$id]);
+                    json_out(['success' => true]);
+                }
+            }
+
+            // --- Entries CRUD (saisie manuelle + listing) ---
+            elseif ($action === 'entries') {
+                if ($method === 'GET' && !$id) {
+                    if (!hasPermission($userRole, 'accounting.view')) json_error('Accès refusé', 403);
+                    $hotelId = (int)($_GET['hotel_id'] ?? 0);
+                    if (!$hotelId || !in_array($hotelId, $userHotelIds)) $hotelId = $userHotelIds[0] ?? 0;
+                    $where = "ae.hotel_id = ?"; $params = [$hotelId];
+                    if (!empty($_GET['month'])) { $where .= " AND DATE_FORMAT(ae.entry_date, '%Y-%m') = ?"; $params[] = $_GET['month']; }
+                    if (!empty($_GET['category_id'])) { $where .= " AND ae.category_id = ?"; $params[] = (int)$_GET['category_id']; }
+                    if (!empty($_GET['account_class'])) { $where .= " AND ae.account_class = ?"; $params[] = $_GET['account_class']; }
+                    if (!empty($_GET['source'])) { $where .= " AND ae.source = ?"; $params[] = $_GET['source']; }
+                    $page = max(1, (int)($_GET['page'] ?? 1));
+                    $perPage = 50;
+                    $offset = ($page - 1) * $perPage;
+                    $total = db()->count("SELECT COUNT(*) FROM accounting_entries ae WHERE $where", $params);
+                    $entries = db()->query(
+                        "SELECT ae.*, cc.name as category_name, cc.account_number, cc.color, u.name as created_by_name
+                         FROM accounting_entries ae
+                         LEFT JOIN contract_categories cc ON ae.category_id = cc.id
+                         LEFT JOIN users u ON ae.created_by = u.id
+                         WHERE $where ORDER BY ae.entry_date DESC, ae.id DESC LIMIT $perPage OFFSET $offset",
+                        $params
+                    );
+                    json_out(['entries' => $entries, 'total' => $total, 'page' => $page, 'per_page' => $perPage]);
+                }
+                if ($method === 'POST' && !$id) {
+                    if (!hasPermission($userRole, 'accounting.import')) json_error('Accès refusé', 403);
+                    $data = get_input();
+                    if (empty($data['entry_date']) || empty($data['label'])) json_error('Date et libellé requis');
+                    $hotelId = (int)($data['hotel_id'] ?? 0);
+                    if (!in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
+                    $insertId = db()->insert(
+                        "INSERT INTO accounting_entries (hotel_id, category_id, entry_date, label, amount_ht, amount_tva, amount_ttc, account_class, source, notes, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,NOW())",
+                        [$hotelId, !empty($data['category_id']) ? (int)$data['category_id'] : null, $data['entry_date'], $data['label'], (float)($data['amount_ht'] ?? 0), (float)($data['amount_tva'] ?? 0), (float)($data['amount_ttc'] ?? 0), $data['account_class'] ?? '7', 'manual', $data['notes'] ?? null, $user['id']]
+                    );
+                    json_out(['id' => $insertId, 'message' => 'Écriture créée'], 201);
+                }
+                if ($method === 'PUT' && $id) {
+                    if (!hasPermission($userRole, 'accounting.import')) json_error('Accès refusé', 403);
+                    $entry = db()->queryOne("SELECT * FROM accounting_entries WHERE id = ?", [$id]);
+                    if (!$entry || !in_array($entry['hotel_id'], $userHotelIds)) json_error('Écriture non trouvée', 404);
+                    $data = get_input();
+                    $sets = []; $params = [];
+                    foreach (['entry_date','label','notes','account_class'] as $f) {
+                        if (isset($data[$f])) { $sets[] = "$f = ?"; $params[] = $data[$f]; }
+                    }
+                    foreach (['amount_ht','amount_tva','amount_ttc'] as $f) {
+                        if (isset($data[$f])) { $sets[] = "$f = ?"; $params[] = (float)$data[$f]; }
+                    }
+                    if (array_key_exists('category_id', $data)) { $sets[] = "category_id = ?"; $params[] = $data['category_id'] ? (int)$data['category_id'] : null; }
+                    if ($sets) { $sets[] = "updated_at = NOW()"; $params[] = $id; db()->execute("UPDATE accounting_entries SET " . implode(', ', $sets) . " WHERE id = ?", $params); }
+                    json_out(['success' => true]);
+                }
+                if ($method === 'DELETE' && $id) {
+                    if (!hasPermission($userRole, 'accounting.delete')) json_error('Accès refusé', 403);
+                    $entry = db()->queryOne("SELECT * FROM accounting_entries WHERE id = ?", [$id]);
+                    if (!$entry || !in_array($entry['hotel_id'], $userHotelIds)) json_error('Écriture non trouvée', 404);
+                    db()->execute("DELETE FROM accounting_entries WHERE id = ?", [$id]);
+                    json_out(['success' => true]);
+                }
+            }
+
+            // --- Email config ---
+            elseif ($action === 'email-config') {
+                if ($method === 'GET') {
+                    if (!hasPermission($userRole, 'accounting.view')) json_error('Accès refusé', 403);
+                    $hotelId = (int)($_GET['hotel_id'] ?? 0);
+                    if (!$hotelId || !in_array($hotelId, $userHotelIds)) $hotelId = $userHotelIds[0] ?? 0;
+                    $config = db()->queryOne("SELECT * FROM hotel_import_email_config WHERE hotel_id = ?", [$hotelId]);
+                    if ($config) unset($config['imap_password']); // Ne jamais retourner le mot de passe
+                    json_out(['config' => $config]);
+                }
+                if ($method === 'PUT') {
+                    if (!hasPermission($userRole, 'accounting.manage')) json_error('Accès refusé', 403);
+                    $data = get_input();
+                    $hotelId = (int)($data['hotel_id'] ?? 0);
+                    if (!in_array($hotelId, $userHotelIds)) json_error('Hôtel non autorisé', 403);
+                    $existing = db()->queryOne("SELECT * FROM hotel_import_email_config WHERE hotel_id = ?", [$hotelId]);
+                    if ($existing) {
+                        $sets = []; $params = [];
+                        foreach (['imap_host','imap_folder'] as $f) {
+                            if (isset($data[$f])) { $sets[] = "$f = ?"; $params[] = $data[$f]; }
+                        }
+                        if (isset($data['imap_port'])) { $sets[] = "imap_port = ?"; $params[] = (int)$data['imap_port']; }
+                        if (isset($data['imap_user'])) { $sets[] = "imap_user = ?"; $params[] = $data['imap_user']; }
+                        if (!empty($data['imap_password'])) { $sets[] = "imap_password = ?"; $params[] = function_exists('encryptData') ? encryptData($data['imap_password']) : $data['imap_password']; }
+                        if (isset($data['default_template_id'])) { $sets[] = "default_template_id = ?"; $params[] = $data['default_template_id'] ? (int)$data['default_template_id'] : null; }
+                        if (isset($data['auto_confirm'])) { $sets[] = "auto_confirm = ?"; $params[] = $data['auto_confirm'] ? 1 : 0; }
+                        if (isset($data['is_active'])) { $sets[] = "is_active = ?"; $params[] = $data['is_active'] ? 1 : 0; }
+                        if ($sets) { $sets[] = "updated_at = NOW()"; $params[] = $hotelId; db()->execute("UPDATE hotel_import_email_config SET " . implode(', ', $sets) . " WHERE hotel_id = ?", $params); }
+                    }
+                    json_out(['success' => true]);
+                }
+                if ($method === 'POST' && $subaction === 'test') {
+                    if (!hasPermission($userRole, 'accounting.manage')) json_error('Accès refusé', 403);
+                    $data = get_input();
+                    if (empty($data['imap_host']) || empty($data['imap_user'])) json_error('Hôte et utilisateur requis');
+                    $result = ['success' => false, 'message' => 'Extension IMAP non disponible sur ce serveur'];
+                    if (function_exists('imap_open')) {
+                        $mailbox = '{' . $data['imap_host'] . ':' . ($data['imap_port'] ?? 993) . '/imap/ssl}' . ($data['imap_folder'] ?? 'INBOX');
+                        $conn = @imap_open($mailbox, $data['imap_user'], $data['imap_password'] ?? '');
+                        if ($conn) {
+                            $result = ['success' => true, 'message' => 'Connexion IMAP réussie', 'mailbox_count' => imap_num_msg($conn)];
+                            imap_close($conn);
+                        } else {
+                            $result = ['success' => false, 'message' => 'Échec connexion IMAP: ' . imap_last_error()];
+                        }
+                    }
+                    json_out($result);
+                }
+            }
+
+            // --- Drill-down: factures + écritures par catégorie/mois ---
+            elseif ($action === 'category-invoices') {
+                if (!hasPermission($userRole, 'accounting.view')) json_error('Accès refusé', 403);
+                $hotelId = (int)($_GET['hotel_id'] ?? 0);
+                $categoryId = (int)($_GET['category_id'] ?? 0);
+                $year = (int)($_GET['year'] ?? date('Y'));
+                $month = (int)($_GET['month'] ?? 0);
+
+                if (!$hotelId || !in_array($hotelId, $userHotelIds)) $hotelId = $userHotelIds[0] ?? 0;
+
+                $invoices = [];
+                $entries = [];
+
+                // Factures fournisseurs pour cette catégorie/mois
+                if ($categoryId && $month) {
+                    try {
+                        $invoices = db()->query(
+                            "SELECT si.id, si.invoice_number, si.invoice_date, si.total_ht, si.total_tva, si.total_ttc, si.status,
+                                    s.company_name as supplier_name
+                             FROM supplier_invoices si
+                             LEFT JOIN suppliers s ON si.supplier_id = s.id
+                             WHERE si.hotel_id = ? AND s.category_id = ? AND YEAR(si.invoice_date) = ? AND MONTH(si.invoice_date) = ?
+                               AND si.status IN ('approved','pending_payment','payment_initiated','paid')
+                             ORDER BY si.invoice_date",
+                            [$hotelId, $categoryId, $year, $month]
+                        );
+                    } catch (Exception $e) {}
+                }
+
+                // Écritures comptables pour cette catégorie/mois
+                if ($month) {
+                    $aeWhere = "ae.hotel_id = ? AND YEAR(ae.entry_date) = ? AND MONTH(ae.entry_date) = ?";
+                    $aeParams = [$hotelId, $year, $month];
+                    if ($categoryId) { $aeWhere .= " AND ae.category_id = ?"; $aeParams[] = $categoryId; }
+                    $entries = db()->query(
+                        "SELECT ae.*, cc.name as category_name, cc.account_number
+                         FROM accounting_entries ae
+                         LEFT JOIN contract_categories cc ON ae.category_id = cc.id
+                         WHERE $aeWhere ORDER BY ae.entry_date",
+                        $aeParams
+                    );
+                }
+
+                json_out(['invoices' => $invoices, 'entries' => $entries]);
+            }
+
+            else {
+                json_out(['message' => 'Endpoint accounting non trouvé'], 404);
+            }
             break;
 
         default:
